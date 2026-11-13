@@ -2723,8 +2723,7 @@ co_rf_simple(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	/* needs 3 alive nodes after excluding 3 */
-	if (!test_runable(arg0, 6))
-		skip();
+	test_runable_or_skip(arg0, 6);
 
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -3138,8 +3137,7 @@ co_redun_lvl(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg0, 8))
-		skip();
+	test_runable_or_skip(arg0, 8);
 
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,

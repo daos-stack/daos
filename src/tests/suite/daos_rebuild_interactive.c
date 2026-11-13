@@ -72,8 +72,7 @@ int_rebuild_snap_update_recs(void **state)
 	int           i;
 	int           rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -138,8 +137,7 @@ int_rebuild_snap_punch_recs(void **state)
 	int           i;
 	int           rc;
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
@@ -226,8 +224,7 @@ int_rebuild_many_objects_with_failure(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	T_BEGIN();
 	D_ALLOC_ARRAY(oids, NUM_OBJS);
@@ -298,8 +295,7 @@ int_cont_open_in_drain(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0, arg->myrank);
@@ -352,8 +348,7 @@ int_drain_fail_and_retry_objects(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 	for (i = 0; i < OBJ_NR; i++) {
@@ -657,8 +652,7 @@ int_rebuild_dkeys_stop_failing(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	if (!test_runable(arg, 4))
-		return;
+	test_runable_or_skip(arg, 4);
 
 	T_BEGIN();
 
@@ -790,7 +784,7 @@ int_rebuild_stranded_lower_fseq_target(void **state)
 	 * (same constraint the rebuild_kill_multiple test uses).
 	 */
 	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 5)
-		return;
+		skip();
 
 	T_BEGIN();
 

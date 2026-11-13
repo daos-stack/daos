@@ -78,8 +78,7 @@ dtx_io_test_succ(void **state, daos_iod_type_t iod_type)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf, dts_dtx_iosize);
 	assert_non_null(update_buf);
@@ -133,8 +132,7 @@ dtx_io_test_fail(void **state, uint64_t fail_loc)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf1, dts_dtx_iosize);
 	assert_non_null(update_buf1);
@@ -251,8 +249,7 @@ dtx_fetch_committable(void **state, bool punch)
 	struct ioreq	 req;
 	int		 rc;
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf1, dts_dtx_iosize);
 	assert_non_null(update_buf1);
@@ -336,8 +333,7 @@ dtx_modify_committable(void **state, bool committable_punch, bool sync_update)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf1, dts_dtx_iosize);
 	assert_non_null(update_buf1);
@@ -420,8 +416,7 @@ dtx_batched_commit(void **state, int count)
 	int		 rc;
 	int		 i;
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf, size);
 	assert_non_null(update_buf);
@@ -540,8 +535,7 @@ dtx_14(void **state)
 
 	print_message("Resend with lost multiple replicated obj request\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	dtx_handle_resend(state, DAOS_DTX_LOST_RPC_REQUEST | DAOS_FAIL_ALWAYS,
 			  dts_dtx_class);
@@ -554,8 +548,7 @@ dtx_15(void **state)
 
 	print_message("Resend with lost multiple replicated obj reply\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	dtx_handle_resend(state, DAOS_DTX_LOST_RPC_REPLY | DAOS_FAIL_ALWAYS,
 			  dts_dtx_class);
@@ -575,8 +568,7 @@ dtx_16(void **state)
 
 	print_message("Resend after DTX aggregation\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf, dts_dtx_iosize);
 	assert_non_null(update_buf);
@@ -631,8 +623,7 @@ dtx_17(void **state)
 
 	print_message("DTX resync during open-close\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf, dts_dtx_iosize);
 	assert_non_null(update_buf);
@@ -735,8 +726,7 @@ dtx_19(void **state)
 
 	print_message("DTX resend during bulk data transfer - multiple reps\n");
 
-	if (!test_runable(arg, 2))
-		return;
+	test_runable_or_skip(arg, 2);
 
 	dtx_resend_delay(arg, OC_RP_2G1);
 }
@@ -757,8 +747,7 @@ dtx_20(void **state)
 
 	print_message("race between DTX refresh and DTX resync\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf, dts_dtx_iosize);
 	assert_non_null(update_buf);
@@ -860,8 +849,7 @@ dtx_21(void **state)
 
 	print_message("do not abort partially committed DTX\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf, dts_dtx_iosize);
 	assert_non_null(update_buf);
@@ -910,8 +898,7 @@ dtx_22(void **state)
 
 	print_message("iteration does not return aborted DTX\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, DAOS_OT_MULTI_UINT64, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
@@ -1002,8 +989,7 @@ dtx_23(void **state)
 
 	print_message("DTX23: Resend with lost reply from non-leader\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	D_ALLOC(update_buf, dts_dtx_iosize);
 	assert_non_null(update_buf);
@@ -1044,8 +1030,7 @@ dtx_24(void **state)
 
 	print_message("DTX24: DTX commit under space pressure with single container\n");
 
-	if (!test_runable(arg, dts_dtx_replica_cnt))
-		return;
+	test_runable_or_skip(arg, dts_dtx_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_dtx_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -1124,8 +1109,7 @@ dtx_25(void **state)
 
 	print_message("DTX25: DTX commit under space pressure with multiple containers\n");
 
-	if (!test_runable(arg, 3))
-		return;
+	test_runable_or_skip(arg, 3);
 
 	redun_prop = daos_prop_alloc(1);
 	assert_non_null(redun_prop);

@@ -33,13 +33,13 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	d_rank_t		extra_kill_ranks[4] = { -1 };
 	int			rc;
 
-	if (oclass == OC_EC_2P1G1 && !test_runable(arg, 4))
-		return;
-	if (oclass == OC_EC_4P2G1 && !test_runable(arg, 8))
-		return;
+	if (oclass == OC_EC_2P1G1)
+		test_runable_or_skip(arg, 4);
+	if (oclass == OC_EC_4P2G1)
+		test_runable_or_skip(arg, 8);
 
 	if (svc_nreplicas < 5)
-		return;
+		skip();
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
@@ -115,8 +115,7 @@ rebuild_mixed_stripes(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 7))
-		return;
+	test_runable_or_skip(arg, 7);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -178,8 +177,7 @@ rebuild_ec_multi_stripes(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 7))
-		return;
+	test_runable_or_skip(arg, 7);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -815,8 +813,7 @@ rebuild_multiple_group_ec_object(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 8))
-		return;
+	test_runable_or_skip(arg, 8);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G8, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -926,8 +923,7 @@ rebuild_ec_dkey_enumeration(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 8))
-		return;
+	test_runable_or_skip(arg, 8);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -959,8 +955,7 @@ rebuild_ec_parity_multi_group(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 8))
-		return;
+	test_runable_or_skip(arg, 8);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G8, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -996,8 +991,7 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 	int		rc;
 	int		i;
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
@@ -1072,8 +1066,7 @@ rebuild_ec_parity_overwrite(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 8))
-		return;
+	test_runable_or_skip(arg, 8);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -1118,8 +1111,7 @@ rebuild_ec_then_aggregation(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 8))
-		return;
+	test_runable_or_skip(arg, 8);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	data = (char *)malloc(CELL_SIZE);
@@ -1177,8 +1169,7 @@ rebuild_ec_multiple_shards(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	data = (char *)malloc(stripe_size);
 	verify_data = (char *)malloc(stripe_size);
@@ -1262,8 +1253,7 @@ rebuild_ec_multiple_failure_tgts(void **state)
 
 	print_message("BEGIN %s\n", __FUNCTION__);
 
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -1334,11 +1324,10 @@ rebuild_ec_parity_overwrite_fail_parity_internal(void **state, int *kill_shards,
 	int		stripe_size = 4 * CELL_SIZE;
 	int		i;
 
-	if (!test_runable(arg, 8))
-		return;
+	test_runable_or_skip(arg, 8);
 
 	if (svc_nreplicas < 5)
-		return;
+		skip();
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -1430,8 +1419,7 @@ rebuild_ec_combined_ops(void **state)
 	int		rc;
 
 	print_message("BEGIN %s\n", __FUNCTION__);
-	if (!test_runable(arg, 6))
-		return;
+	test_runable_or_skip(arg, 6);
 
 	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
 	assert_int_equal(rc, 0);
@@ -1844,10 +1832,9 @@ rebuild_ec_reint_parity_epoch_inflation(void **state)
 	char            stage[64];
 
 	print_message("BEGIN %s\n", __FUNCTION__);
-	if (!test_runable(arg, 8))
-		return;
+	test_runable_or_skip(arg, 8);
 	if (svc_nreplicas < 5)
-		return;
+		skip();
 
 	D_ALLOC_PTR(ctx);
 	assert_non_null(ctx);

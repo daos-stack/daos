@@ -415,7 +415,17 @@ daos_prop_t *get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
+/*
+ * Collective across PAR_COMM_WORLD. Use the boolean check for optional subcases;
+ * the macro skips the whole cmocka test at its call site when prerequisites are not met.
+ */
 bool test_runable(test_arg_t *arg, unsigned int required_nodes);
+#define test_runable_or_skip(arg, required_nodes)                                                  \
+	do {                                                                                       \
+		if (!test_runable((arg), (required_nodes)))                                        \
+			skip();                                                                    \
+	} while (0)
+
 int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks);
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
