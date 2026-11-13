@@ -935,6 +935,213 @@ func TestControl_PoolEvict(t *testing.T) {
 	}
 }
 
+func TestControl_PoolDiscard(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolDiscardReq
+		expErr error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"empty pool id": {
+			req: &PoolDiscardReq{
+				Ranks: []ranklist.Rank{2},
+			},
+			expErr: errors.New("empty pool id"),
+		},
+		"no ranks": {
+			req: &PoolDiscardReq{
+				ID: test.MockUUID(),
+			},
+			expErr: errors.New("no ranks in request"),
+		},
+		"local failure": {
+			req: &PoolDiscardReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{2},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolDiscardReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{2},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"discard refused by leader": {
+			req: &PoolDiscardReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{2},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolDiscardResp{
+					Status: int32(daos.MiscError),
+				}),
+			},
+			expErr: errors.New("pool discard failed"),
+		},
+		"success": {
+			req: &PoolDiscardReq{
+				ID:         test.MockUUID(),
+				Ranks:      []ranklist.Rank{1, 2},
+				TargetIdx:  []uint32{0, 1},
+				QuiesceSec: 180,
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolDiscardResp{}),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolDiscard(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestControl_PoolDiscardQuery(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolDiscardQueryReq
+		expResp *PoolDiscardQueryResp
+		expErr  error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"empty pool id": {
+			req: &PoolDiscardQueryReq{
+				Ranks: []ranklist.Rank{2},
+			},
+			expErr: errors.New("empty pool id"),
+		},
+		"no ranks": {
+			req: &PoolDiscardQueryReq{
+				ID: test.MockUUID(),
+			},
+			expErr: errors.New("no ranks in request"),
+		},
+		"local failure": {
+			req: &PoolDiscardQueryReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{2},
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolDiscardQueryReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{2},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"query refused by leader": {
+			req: &PoolDiscardQueryReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{2},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolDiscardQueryResp{
+					Status: int32(daos.MiscError),
+				}),
+			},
+			expErr: errors.New("pool discard query failed"),
+		},
+		"success": {
+			req: &PoolDiscardQueryReq{
+				ID:    test.MockUUID(),
+				Ranks: []ranklist.Rank{1, 2, 3},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolDiscardQueryResp{
+					States: []*mgmtpb.PoolDiscardQueryResp_RankState{
+						{
+							Rank:  1,
+							Phase: mgmtpb.PoolDiscardQueryResp_RankState_DISCARDING,
+						},
+						{
+							Rank:       2,
+							Phase:      mgmtpb.PoolDiscardQueryResp_RankState_DONE,
+							DoneAgeSec: 42,
+						},
+						{
+							Rank:   3,
+							Phase:  mgmtpb.PoolDiscardQueryResp_RankState_FAILED,
+							Status: int32(daos.MiscError),
+						},
+					},
+				}),
+			},
+			expResp: &PoolDiscardQueryResp{
+				States: []*PoolDiscardRankState{
+					{
+						Rank:  1,
+						Phase: PoolDiscardDiscarding,
+					},
+					{
+						Rank:       2,
+						Phase:      PoolDiscardDone,
+						DoneAgeSec: 42,
+					},
+					{
+						Rank:   3,
+						Phase:  PoolDiscardFailed,
+						Status: int32(daos.MiscError),
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := test.Context(t)
+			mi := NewMockInvoker(log, mic)
+
+			gotResp, gotErr := PoolDiscardQuery(ctx, mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func strVal(s string) daos.PoolPropertyValue {
 	v := daos.PoolPropertyValue{}
 	v.SetString(s)

@@ -104,6 +104,8 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_drain);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_extend);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_reintegrate);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_discard);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_discard_query);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_set_prop);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_get_prop);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_get_acl);
@@ -2277,6 +2279,338 @@ test_drpc_reint_bad_uuid(void **state)
 }
 
 /*
+ * Pool discard test setup
+ */
+static int
+drpc_pool_discard_setup(void **state)
+{
+	mock_ds_mgmt_pool_discard_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool discard tests
+ */
+static void
+pack_pool_discard_req(Drpc__Call *call, Mgmt__PoolDiscardReq *req)
+{
+	size_t   len;
+	uint8_t *body;
+
+	len = mgmt__pool_discard_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_discard_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len  = len;
+}
+
+static void
+setup_discard_drpc_call(Drpc__Call *call, char *uuid, size_t n_ranks, size_t n_target_idx,
+			uint32_t quiesce_sec)
+{
+	Mgmt__PoolDiscardReq req = MGMT__POOL_DISCARD_REQ__INIT;
+
+	req.id           = uuid;
+	req.n_ranks      = n_ranks;
+	req.ranks        = TEST_RANKS;
+	req.n_target_idx = n_target_idx;
+	req.target_idx   = TEST_IDXS;
+	req.quiesce_sec  = quiesce_sec;
+	pack_pool_discard_req(call, &req);
+}
+
+static void
+expect_drpc_discard_resp_with_status(Drpc__Response *resp, int exp_status)
+{
+	Mgmt__PoolDiscardResp *pd_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pd_resp = mgmt__pool_discard_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(pd_resp);
+	assert_int_equal(pd_resp->status, exp_status);
+
+	mgmt__pool_discard_resp__free_unpacked(pd_resp, NULL);
+}
+
+static void
+test_drpc_pool_discard_bad_uuid(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+
+	setup_discard_drpc_call(&call, "BAD", 2, 3, 180);
+
+	ds_mgmt_drpc_pool_discard(&call, &resp);
+
+	expect_drpc_discard_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_discard_no_ranks(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+
+	setup_discard_drpc_call(&call, TEST_UUID, 0, 0, 180);
+
+	ds_mgmt_drpc_pool_discard(&call, &resp);
+
+	expect_drpc_discard_resp_with_status(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_discard_mgmt_svc_fails(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+
+	setup_discard_drpc_call(&call, TEST_UUID, 2, 3, 180);
+	ds_mgmt_pool_discard_return = -DER_MISC;
+
+	ds_mgmt_drpc_pool_discard(&call, &resp);
+
+	expect_drpc_discard_resp_with_status(&resp, ds_mgmt_pool_discard_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_discard_success(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+	uuid_t         exp_uuid;
+	size_t         i;
+
+	setup_discard_drpc_call(&call, TEST_UUID, 2, 3, 180);
+
+	ds_mgmt_drpc_pool_discard(&call, &resp);
+
+	expect_drpc_discard_resp_with_status(&resp, 0);
+
+	assert_int_equal(uuid_parse(TEST_UUID, exp_uuid), 0);
+	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_discard_uuid), 0);
+	assert_int_equal(ds_mgmt_pool_discard_quiesce_sec, 180);
+
+	/* Every requested rank gets every requested target index. */
+	assert_int_equal(ds_mgmt_pool_discard_ntargets, 2 * 3);
+	for (i = 0; i < 2 * 3; i++) {
+		assert_int_equal(ds_mgmt_pool_discard_addrs[i].pta_rank, TEST_RANKS[i / 3]);
+		assert_int_equal(ds_mgmt_pool_discard_addrs[i].pta_target, TEST_IDXS[i % 3]);
+	}
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_discard_all_targets(void **state)
+{
+	Drpc__Call     call = DRPC__CALL__INIT;
+	Drpc__Response resp = DRPC__RESPONSE__INIT;
+	size_t         i;
+
+	/* No target indexes given: every rank gets one wildcard address. */
+	setup_discard_drpc_call(&call, TEST_UUID, 2, 0, 0);
+
+	ds_mgmt_drpc_pool_discard(&call, &resp);
+
+	expect_drpc_discard_resp_with_status(&resp, 0);
+
+	assert_int_equal(ds_mgmt_pool_discard_quiesce_sec, 0);
+	assert_int_equal(ds_mgmt_pool_discard_ntargets, 2);
+	for (i = 0; i < 2; i++) {
+		assert_int_equal(ds_mgmt_pool_discard_addrs[i].pta_rank, TEST_RANKS[i]);
+		assert_int_equal(ds_mgmt_pool_discard_addrs[i].pta_target, (uint32_t)-1);
+	}
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
+ * Pool discard query test setup
+ */
+static int
+drpc_pool_discard_query_setup(void **state)
+{
+	mock_ds_mgmt_pool_discard_query_setup();
+	return 0;
+}
+
+/*
+ * dRPC pool discard query tests
+ */
+static void
+pack_pool_discard_query_req(Drpc__Call *call, Mgmt__PoolDiscardQueryReq *req)
+{
+	size_t   len;
+	uint8_t *body;
+
+	len = mgmt__pool_discard_query_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_discard_query_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len  = len;
+}
+
+static void
+setup_discard_query_drpc_call(Drpc__Call *call, char *uuid, size_t n_ranks)
+{
+	Mgmt__PoolDiscardQueryReq req = MGMT__POOL_DISCARD_QUERY_REQ__INIT;
+
+	req.id      = uuid;
+	req.n_ranks = n_ranks;
+	req.ranks   = TEST_RANKS;
+	pack_pool_discard_query_req(call, &req);
+}
+
+static Mgmt__PoolDiscardQueryResp *
+get_drpc_discard_query_resp_with_status(Drpc__Response *resp, int exp_status)
+{
+	Mgmt__PoolDiscardQueryResp *pdq_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	pdq_resp = mgmt__pool_discard_query_resp__unpack(NULL, resp->body.len, resp->body.data);
+	assert_non_null(pdq_resp);
+	assert_int_equal(pdq_resp->status, exp_status);
+
+	return pdq_resp;
+}
+
+static void
+test_drpc_pool_discard_query_bad_uuid(void **state)
+{
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolDiscardQueryResp *pdq_resp;
+
+	setup_discard_query_drpc_call(&call, "BAD", 3);
+
+	ds_mgmt_drpc_pool_discard_query(&call, &resp);
+
+	pdq_resp = get_drpc_discard_query_resp_with_status(&resp, -DER_INVAL);
+	assert_int_equal(pdq_resp->n_states, 0);
+
+	mgmt__pool_discard_query_resp__free_unpacked(pdq_resp, NULL);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_discard_query_no_ranks(void **state)
+{
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolDiscardQueryResp *pdq_resp;
+
+	setup_discard_query_drpc_call(&call, TEST_UUID, 0);
+
+	ds_mgmt_drpc_pool_discard_query(&call, &resp);
+
+	pdq_resp = get_drpc_discard_query_resp_with_status(&resp, -DER_INVAL);
+	assert_int_equal(pdq_resp->n_states, 0);
+
+	mgmt__pool_discard_query_resp__free_unpacked(pdq_resp, NULL);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_discard_query_mgmt_svc_fails(void **state)
+{
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolDiscardQueryResp *pdq_resp;
+
+	setup_discard_query_drpc_call(&call, TEST_UUID, 3);
+	ds_mgmt_pool_discard_query_return = -DER_MISC;
+
+	ds_mgmt_drpc_pool_discard_query(&call, &resp);
+
+	pdq_resp =
+	    get_drpc_discard_query_resp_with_status(&resp, ds_mgmt_pool_discard_query_return);
+	assert_int_equal(pdq_resp->n_states, 0);
+
+	mgmt__pool_discard_query_resp__free_unpacked(pdq_resp, NULL);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_discard_query_success(void **state)
+{
+	/*
+	 * The engine-internal phase values equal the wire enum by
+	 * construction (see the D_CASSERTs in the handler), so the pb
+	 * constants can seed the mocked engine-side states directly.
+	 */
+	struct pool_discard_rank_state mock_states[] = {
+	    {
+		.pdrs_rank  = 0,
+		.pdrs_phase = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DISCARDING,
+	    },
+	    {
+		.pdrs_rank         = 1,
+		.pdrs_phase        = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__DONE,
+		.pdrs_done_age_sec = 42,
+	    },
+	    {
+		.pdrs_rank   = 2,
+		.pdrs_phase  = MGMT__POOL_DISCARD_QUERY_RESP__RANK_STATE__PHASE__FAILED,
+		.pdrs_status = -DER_NO_PERM,
+	    },
+	};
+	Drpc__Call                  call = DRPC__CALL__INIT;
+	Drpc__Response              resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolDiscardQueryResp *pdq_resp;
+	uuid_t                      exp_uuid;
+	size_t                      i;
+
+	setup_discard_query_drpc_call(&call, TEST_UUID, 3);
+	ds_mgmt_pool_discard_query_states_out = mock_states;
+
+	ds_mgmt_drpc_pool_discard_query(&call, &resp);
+
+	pdq_resp = get_drpc_discard_query_resp_with_status(&resp, 0);
+
+	assert_int_equal(uuid_parse(TEST_UUID, exp_uuid), 0);
+	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_discard_query_uuid), 0);
+	assert_int_equal(ds_mgmt_pool_discard_query_nranks, 3);
+
+	assert_int_equal(pdq_resp->n_states, 3);
+	for (i = 0; i < 3; i++) {
+		assert_non_null(pdq_resp->states[i]);
+		assert_int_equal(pdq_resp->states[i]->rank, mock_states[i].pdrs_rank);
+		assert_int_equal(pdq_resp->states[i]->phase, mock_states[i].pdrs_phase);
+		assert_int_equal(pdq_resp->states[i]->done_age_sec,
+				 mock_states[i].pdrs_done_age_sec);
+		assert_int_equal(pdq_resp->states[i]->status, mock_states[i].pdrs_status);
+	}
+
+	mgmt__pool_discard_query_resp__free_unpacked(pdq_resp, NULL);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * Pool evict test setup
  */
 static int
@@ -3532,6 +3866,10 @@ test_drpc_check_act_success(void **state)
 
 #define REINT_TEST(x)           cmocka_unit_test(x)
 
+#define POOL_DISCARD_TEST(x)       cmocka_unit_test_setup(x, drpc_pool_discard_setup)
+
+#define POOL_DISCARD_QUERY_TEST(x) cmocka_unit_test_setup(x, drpc_pool_discard_query_setup)
+
 #define POOL_CREATE_TEST(x)	cmocka_unit_test(x)
 
 #define POOL_EVICT_TEST(x)	cmocka_unit_test_setup(x, \
@@ -3618,6 +3956,15 @@ main(void)
 	    POOL_EXTEND_TEST(test_drpc_extend_mgmt_svc_fails),
 	    POOL_EXTEND_TEST(test_drpc_extend_success),
 	    REINT_TEST(test_drpc_reint_bad_uuid),
+	    POOL_DISCARD_TEST(test_drpc_pool_discard_bad_uuid),
+	    POOL_DISCARD_TEST(test_drpc_pool_discard_no_ranks),
+	    POOL_DISCARD_TEST(test_drpc_pool_discard_mgmt_svc_fails),
+	    POOL_DISCARD_TEST(test_drpc_pool_discard_success),
+	    POOL_DISCARD_TEST(test_drpc_pool_discard_all_targets),
+	    POOL_DISCARD_QUERY_TEST(test_drpc_pool_discard_query_bad_uuid),
+	    POOL_DISCARD_QUERY_TEST(test_drpc_pool_discard_query_no_ranks),
+	    POOL_DISCARD_QUERY_TEST(test_drpc_pool_discard_query_mgmt_svc_fails),
+	    POOL_DISCARD_QUERY_TEST(test_drpc_pool_discard_query_success),
 	    QUERY_TEST(test_drpc_pool_query_bad_uuid),
 	    QUERY_TEST(test_drpc_pool_query_mgmt_svc_fails),
 	    QUERY_TEST(test_drpc_pool_query_rebuild_idle_success),

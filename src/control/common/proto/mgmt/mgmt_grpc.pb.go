@@ -38,6 +38,8 @@ const (
 	MgmtSvc_PoolDrain_FullMethodName                = "/mgmt.MgmtSvc/PoolDrain"
 	MgmtSvc_PoolExtend_FullMethodName               = "/mgmt.MgmtSvc/PoolExtend"
 	MgmtSvc_PoolReintegrate_FullMethodName          = "/mgmt.MgmtSvc/PoolReintegrate"
+	MgmtSvc_PoolDiscard_FullMethodName              = "/mgmt.MgmtSvc/PoolDiscard"
+	MgmtSvc_PoolDiscardQuery_FullMethodName         = "/mgmt.MgmtSvc/PoolDiscardQuery"
 	MgmtSvc_PoolQuery_FullMethodName                = "/mgmt.MgmtSvc/PoolQuery"
 	MgmtSvc_PoolQueryTarget_FullMethodName          = "/mgmt.MgmtSvc/PoolQueryTarget"
 	MgmtSvc_PoolSetProp_FullMethodName              = "/mgmt.MgmtSvc/PoolSetProp"
@@ -121,6 +123,10 @@ type MgmtSvcClient interface {
 	PoolExtend(ctx context.Context, in *PoolExtendReq, opts ...grpc.CallOption) (*PoolExtendResp, error)
 	// Reintegrate a pool target.
 	PoolReintegrate(ctx context.Context, in *PoolReintReq, opts ...grpc.CallOption) (*PoolReintResp, error)
+	// Discard DOWN/DOWNOUT ranks of a DAOS pool (preparation before reintegration)
+	PoolDiscard(ctx context.Context, in *PoolDiscardReq, opts ...grpc.CallOption) (*PoolDiscardResp, error)
+	// Query the per-rank progress of a pool discard
+	PoolDiscardQuery(ctx context.Context, in *PoolDiscardQueryReq, opts ...grpc.CallOption) (*PoolDiscardQueryResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(ctx context.Context, in *PoolQueryReq, opts ...grpc.CallOption) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -323,6 +329,26 @@ func (c *mgmtSvcClient) PoolReintegrate(ctx context.Context, in *PoolReintReq, o
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PoolReintResp)
 	err := c.cc.Invoke(ctx, MgmtSvc_PoolReintegrate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolDiscard(ctx context.Context, in *PoolDiscardReq, opts ...grpc.CallOption) (*PoolDiscardResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolDiscardResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolDiscard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolDiscardQuery(ctx context.Context, in *PoolDiscardQueryReq, opts ...grpc.CallOption) (*PoolDiscardQueryResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PoolDiscardQueryResp)
+	err := c.cc.Invoke(ctx, MgmtSvc_PoolDiscardQuery_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -851,6 +877,10 @@ type MgmtSvcServer interface {
 	PoolExtend(context.Context, *PoolExtendReq) (*PoolExtendResp, error)
 	// Reintegrate a pool target.
 	PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error)
+	// Discard DOWN/DOWNOUT ranks of a DAOS pool (preparation before reintegration)
+	PoolDiscard(context.Context, *PoolDiscardReq) (*PoolDiscardResp, error)
+	// Query the per-rank progress of a pool discard
+	PoolDiscardQuery(context.Context, *PoolDiscardQueryReq) (*PoolDiscardQueryResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error)
 	// PoolQueryTarget queries a DAOS storage target.
@@ -988,6 +1018,12 @@ func (UnimplementedMgmtSvcServer) PoolExtend(context.Context, *PoolExtendReq) (*
 }
 func (UnimplementedMgmtSvcServer) PoolReintegrate(context.Context, *PoolReintReq) (*PoolReintResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method PoolReintegrate not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolDiscard(context.Context, *PoolDiscardReq) (*PoolDiscardResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolDiscard not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolDiscardQuery(context.Context, *PoolDiscardQueryReq) (*PoolDiscardQueryResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method PoolDiscardQuery not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method PoolQuery not implemented")
@@ -1333,6 +1369,42 @@ func _MgmtSvc_PoolReintegrate_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).PoolReintegrate(ctx, req.(*PoolReintReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolDiscard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolDiscardReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolDiscard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolDiscard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolDiscard(ctx, req.(*PoolDiscardReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolDiscardQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolDiscardQueryReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolDiscardQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MgmtSvc_PoolDiscardQuery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolDiscardQuery(ctx, req.(*PoolDiscardQueryReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2265,6 +2337,14 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PoolReintegrate",
 			Handler:    _MgmtSvc_PoolReintegrate_Handler,
+		},
+		{
+			MethodName: "PoolDiscard",
+			Handler:    _MgmtSvc_PoolDiscard_Handler,
+		},
+		{
+			MethodName: "PoolDiscardQuery",
+			Handler:    _MgmtSvc_PoolDiscardQuery_Handler,
 		},
 		{
 			MethodName: "PoolQuery",

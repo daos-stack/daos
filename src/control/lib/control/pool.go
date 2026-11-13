@@ -1116,6 +1116,149 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolRanks
 	return getPoolRanksResp(ctx, rpcClient, req, poolReintegrateRank)
 }
 
+// PoolDiscardReq contains the inputs for a pool discard request: emptying
+// DOWN/DOWNOUT ranks and waiting out the NVMe garbage collection, as a
+// preparation step before their reintegration.
+type PoolDiscardReq struct {
+	poolRequest
+	ID         string          `json:"id"`
+	Ranks      []ranklist.Rank `json:"ranks"`
+	TargetIdx  []uint32        `json:"target_idx"`
+	QuiesceSec uint32          `json:"quiesce_sec"`
+}
+
+// PoolDiscard starts an admin-initiated discard of DOWN/DOWNOUT ranks. The
+// discard (and the follow-up NVMe GC quiesce) runs asynchronously on the
+// involved ranks; poll the progress with PoolDiscardQuery.
+func PoolDiscard(ctx context.Context, rpcClient UnaryInvoker, req *PoolDiscardReq) error {
+	if req == nil {
+		return errors.New("nil request")
+	}
+	if req.ID == "" {
+		return errors.New("empty pool id")
+	}
+	if len(req.Ranks) == 0 {
+		return errors.New("no ranks in request")
+	}
+
+	pbReq := &mgmtpb.PoolDiscardReq{
+		Sys:        req.getSystem(rpcClient),
+		Id:         req.ID,
+		Ranks:      ranklist.RanksToUint32(req.Ranks),
+		TargetIdx:  req.TargetIdx,
+		QuiesceSec: req.QuiesceSec,
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolDiscard(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Discard DAOS pool ranks request: %s\n", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	resp := new(mgmtpb.PoolDiscardResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return err
+	}
+	rpcClient.Debugf("Discard DAOS pool ranks response: %+v\n", *resp)
+
+	if s := daos.Status(resp.Status); s != daos.Success {
+		return errors.Wrap(s, "pool discard failed")
+	}
+	return nil
+}
+
+// Phase of the local discard flow of one rank (PoolDiscardRankState.Phase),
+// mirroring the wire enum (PoolDiscardQueryResp.RankState.Phase) so that the
+// client stays aligned with the server by construction.
+const (
+	// PoolDiscardNever indicates no discard has run since the engine started.
+	PoolDiscardNever = uint32(mgmtpb.PoolDiscardQueryResp_RankState_NEVER)
+	// PoolDiscardDiscarding indicates the VOS discard is in progress.
+	PoolDiscardDiscarding = uint32(mgmtpb.PoolDiscardQueryResp_RankState_DISCARDING)
+	// PoolDiscardQuiescing indicates the discard is done and the rank is
+	// waiting for the NVMe garbage collection to settle.
+	PoolDiscardQuiescing = uint32(mgmtpb.PoolDiscardQueryResp_RankState_QUIESCING)
+	// PoolDiscardDone indicates the last discard (incl. quiesce) succeeded.
+	PoolDiscardDone = uint32(mgmtpb.PoolDiscardQueryResp_RankState_DONE)
+	// PoolDiscardFailed indicates the last discard failed (see Status).
+	PoolDiscardFailed = uint32(mgmtpb.PoolDiscardQueryResp_RankState_FAILED)
+)
+
+// PoolDiscardRankState describes the local discard state of one rank.
+type PoolDiscardRankState struct {
+	Rank       ranklist.Rank `json:"rank"`
+	Phase      uint32        `json:"phase"`        // see the PoolDiscard* constants
+	DoneAgeSec uint64        `json:"done_age_sec"` // only valid when Phase is done
+	Status     int32         `json:"status"`       // DAOS error code; only valid when Phase is failed
+}
+
+// PoolDiscardQueryReq contains the inputs for a pool discard query.
+type PoolDiscardQueryReq struct {
+	poolRequest
+	ID    string          `json:"id"`
+	Ranks []ranklist.Rank `json:"ranks"`
+}
+
+// PoolDiscardQueryResp returns the per-rank discard progress.
+type PoolDiscardQueryResp struct {
+	States []*PoolDiscardRankState `json:"states"`
+}
+
+// PoolDiscardQuery collects the per-rank progress of an admin-initiated
+// discard.
+func PoolDiscardQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolDiscardQueryReq) (*PoolDiscardQueryResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+	if req.ID == "" {
+		return nil, errors.New("empty pool id")
+	}
+	if len(req.Ranks) == 0 {
+		return nil, errors.New("no ranks in request")
+	}
+
+	pbReq := &mgmtpb.PoolDiscardQueryReq{
+		Sys:   req.getSystem(rpcClient),
+		Id:    req.ID,
+		Ranks: ranklist.RanksToUint32(req.Ranks),
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolDiscardQuery(ctx, pbReq)
+	})
+
+	rpcClient.Debugf("Query DAOS pool discard request: %s\n", pbUtil.Debug(pbReq))
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	pbResp := new(mgmtpb.PoolDiscardQueryResp)
+	if err := convertMSResponse(ur, pbResp); err != nil {
+		return nil, err
+	}
+	rpcClient.Debugf("Query DAOS pool discard response: %+v\n", *pbResp)
+
+	if s := daos.Status(pbResp.Status); s != daos.Success {
+		return nil, errors.Wrap(s, "pool discard query failed")
+	}
+
+	resp := new(PoolDiscardQueryResp)
+	for _, s := range pbResp.States {
+		resp.States = append(resp.States, &PoolDiscardRankState{
+			Rank:       ranklist.Rank(s.Rank),
+			Phase:      uint32(s.Phase),
+			DoneAgeSec: s.DoneAgeSec,
+			Status:     s.Status,
+		})
+	}
+	return resp, nil
+}
+
 // ListPoolsReq contains the inputs for the list pools command.
 type ListPoolsReq struct {
 	unaryRequest

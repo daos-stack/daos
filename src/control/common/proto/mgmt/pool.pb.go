@@ -129,6 +129,64 @@ func (PoolServiceState) EnumDescriptor() ([]byte, []int) {
 	return file_mgmt_pool_proto_rawDescGZIP(), []int{1}
 }
 
+// Phase of the local discard flow of one rank. A completed
+// discard parks in DONE or FAILED until the engine restarts
+// (back to NEVER) or a new discard starts over.
+type PoolDiscardQueryResp_RankState_Phase int32
+
+const (
+	PoolDiscardQueryResp_RankState_NEVER      PoolDiscardQueryResp_RankState_Phase = 0 // no discard since the engine started
+	PoolDiscardQueryResp_RankState_DISCARDING PoolDiscardQueryResp_RankState_Phase = 1 // VOS discard in progress
+	PoolDiscardQueryResp_RankState_QUIESCING  PoolDiscardQueryResp_RankState_Phase = 2 // discard done, waiting for NVMe GC to settle
+	PoolDiscardQueryResp_RankState_DONE       PoolDiscardQueryResp_RankState_Phase = 3 // last discard succeeded; done_age_sec is valid
+	PoolDiscardQueryResp_RankState_FAILED     PoolDiscardQueryResp_RankState_Phase = 4 // last discard failed; status is valid
+)
+
+// Enum value maps for PoolDiscardQueryResp_RankState_Phase.
+var (
+	PoolDiscardQueryResp_RankState_Phase_name = map[int32]string{
+		0: "NEVER",
+		1: "DISCARDING",
+		2: "QUIESCING",
+		3: "DONE",
+		4: "FAILED",
+	}
+	PoolDiscardQueryResp_RankState_Phase_value = map[string]int32{
+		"NEVER":      0,
+		"DISCARDING": 1,
+		"QUIESCING":  2,
+		"DONE":       3,
+		"FAILED":     4,
+	}
+)
+
+func (x PoolDiscardQueryResp_RankState_Phase) Enum() *PoolDiscardQueryResp_RankState_Phase {
+	p := new(PoolDiscardQueryResp_RankState_Phase)
+	*p = x
+	return p
+}
+
+func (x PoolDiscardQueryResp_RankState_Phase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PoolDiscardQueryResp_RankState_Phase) Descriptor() protoreflect.EnumDescriptor {
+	return file_mgmt_pool_proto_enumTypes[2].Descriptor()
+}
+
+func (PoolDiscardQueryResp_RankState_Phase) Type() protoreflect.EnumType {
+	return &file_mgmt_pool_proto_enumTypes[2]
+}
+
+func (x PoolDiscardQueryResp_RankState_Phase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PoolDiscardQueryResp_RankState_Phase.Descriptor instead.
+func (PoolDiscardQueryResp_RankState_Phase) EnumDescriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{17, 0, 0}
+}
+
 type PoolRebuildStatus_State int32
 
 const (
@@ -174,11 +232,11 @@ func (x PoolRebuildStatus_State) String() string {
 }
 
 func (PoolRebuildStatus_State) Descriptor() protoreflect.EnumDescriptor {
-	return file_mgmt_pool_proto_enumTypes[2].Descriptor()
+	return file_mgmt_pool_proto_enumTypes[3].Descriptor()
 }
 
 func (PoolRebuildStatus_State) Type() protoreflect.EnumType {
-	return &file_mgmt_pool_proto_enumTypes[2]
+	return &file_mgmt_pool_proto_enumTypes[3]
 }
 
 func (x PoolRebuildStatus_State) Number() protoreflect.EnumNumber {
@@ -187,7 +245,7 @@ func (x PoolRebuildStatus_State) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PoolRebuildStatus_State.Descriptor instead.
 func (PoolRebuildStatus_State) EnumDescriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{20, 0}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{24, 0}
 }
 
 type PoolQueryTargetInfo_TargetState int32
@@ -235,11 +293,11 @@ func (x PoolQueryTargetInfo_TargetState) String() string {
 }
 
 func (PoolQueryTargetInfo_TargetState) Descriptor() protoreflect.EnumDescriptor {
-	return file_mgmt_pool_proto_enumTypes[3].Descriptor()
+	return file_mgmt_pool_proto_enumTypes[4].Descriptor()
 }
 
 func (PoolQueryTargetInfo_TargetState) Type() protoreflect.EnumType {
-	return &file_mgmt_pool_proto_enumTypes[3]
+	return &file_mgmt_pool_proto_enumTypes[4]
 }
 
 func (x PoolQueryTargetInfo_TargetState) Number() protoreflect.EnumNumber {
@@ -248,7 +306,7 @@ func (x PoolQueryTargetInfo_TargetState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PoolQueryTargetInfo_TargetState.Descriptor instead.
 func (PoolQueryTargetInfo_TargetState) EnumDescriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{30, 0}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{34, 0}
 }
 
 type PoolRevokeClientReq_EvictMode int32
@@ -284,11 +342,11 @@ func (x PoolRevokeClientReq_EvictMode) String() string {
 }
 
 func (PoolRevokeClientReq_EvictMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_mgmt_pool_proto_enumTypes[4].Descriptor()
+	return file_mgmt_pool_proto_enumTypes[5].Descriptor()
 }
 
 func (PoolRevokeClientReq_EvictMode) Type() protoreflect.EnumType {
-	return &file_mgmt_pool_proto_enumTypes[4]
+	return &file_mgmt_pool_proto_enumTypes[5]
 }
 
 func (x PoolRevokeClientReq_EvictMode) Number() protoreflect.EnumNumber {
@@ -297,7 +355,7 @@ func (x PoolRevokeClientReq_EvictMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PoolRevokeClientReq_EvictMode.Descriptor instead.
 func (PoolRevokeClientReq_EvictMode) EnumDescriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{43, 0}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{47, 0}
 }
 
 // PoolCreateReq supplies new pool parameters.
@@ -1364,6 +1422,261 @@ func (x *PoolReintResp) GetStatus() int32 {
 	return 0
 }
 
+// PoolDiscardReq starts an admin-initiated discard of DOWN/DOWNOUT ranks, a
+// preparation step before their data-sync reintegration. Asynchronous on the
+// involved ranks; poll the progress with PoolDiscardQuery.
+type PoolDiscardReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sys           string                 `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`                                      // DAOS system identifier
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`                                        // uuid or label of the pool
+	Ranks         []uint32               `protobuf:"varint,3,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`                          // ranks to discard
+	TargetIdx     []uint32               `protobuf:"varint,4,rep,packed,name=target_idx,json=targetIdx,proto3" json:"target_idx,omitempty"` // target indexes within each rank; empty = all
+	SvcRanks      []uint32               `protobuf:"varint,5,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"`    // List of pool service ranks
+	QuiesceSec    uint32                 `protobuf:"varint,6,opt,name=quiesce_sec,json=quiesceSec,proto3" json:"quiesce_sec,omitempty"`     // seconds to quiesce after the discard (NVMe GC settling)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolDiscardReq) Reset() {
+	*x = PoolDiscardReq{}
+	mi := &file_mgmt_pool_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDiscardReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDiscardReq) ProtoMessage() {}
+
+func (x *PoolDiscardReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDiscardReq.ProtoReflect.Descriptor instead.
+func (*PoolDiscardReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PoolDiscardReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *PoolDiscardReq) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PoolDiscardReq) GetRanks() []uint32 {
+	if x != nil {
+		return x.Ranks
+	}
+	return nil
+}
+
+func (x *PoolDiscardReq) GetTargetIdx() []uint32 {
+	if x != nil {
+		return x.TargetIdx
+	}
+	return nil
+}
+
+func (x *PoolDiscardReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
+	}
+	return nil
+}
+
+func (x *PoolDiscardReq) GetQuiesceSec() uint32 {
+	if x != nil {
+		return x.QuiesceSec
+	}
+	return 0
+}
+
+// PoolDiscardResp returns the acceptance state of the discard request.
+type PoolDiscardResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        int32                  `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // DAOS error code
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolDiscardResp) Reset() {
+	*x = PoolDiscardResp{}
+	mi := &file_mgmt_pool_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDiscardResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDiscardResp) ProtoMessage() {}
+
+func (x *PoolDiscardResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDiscardResp.ProtoReflect.Descriptor instead.
+func (*PoolDiscardResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *PoolDiscardResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+// PoolDiscardQueryReq requests the per-rank progress of an admin-initiated
+// discard.
+type PoolDiscardQueryReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sys           string                 `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`                                   // DAOS system identifier
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`                                     // uuid or label of the pool
+	Ranks         []uint32               `protobuf:"varint,3,rep,packed,name=ranks,proto3" json:"ranks,omitempty"`                       // ranks to query
+	SvcRanks      []uint32               `protobuf:"varint,4,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"` // List of pool service ranks
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolDiscardQueryReq) Reset() {
+	*x = PoolDiscardQueryReq{}
+	mi := &file_mgmt_pool_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDiscardQueryReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDiscardQueryReq) ProtoMessage() {}
+
+func (x *PoolDiscardQueryReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDiscardQueryReq.ProtoReflect.Descriptor instead.
+func (*PoolDiscardQueryReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *PoolDiscardQueryReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *PoolDiscardQueryReq) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PoolDiscardQueryReq) GetRanks() []uint32 {
+	if x != nil {
+		return x.Ranks
+	}
+	return nil
+}
+
+func (x *PoolDiscardQueryReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
+	}
+	return nil
+}
+
+// PoolDiscardQueryResp returns the per-rank discard progress.
+type PoolDiscardQueryResp struct {
+	state         protoimpl.MessageState            `protogen:"open.v1"`
+	Status        int32                             `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"` // DAOS error code
+	States        []*PoolDiscardQueryResp_RankState `protobuf:"bytes,2,rep,name=states,proto3" json:"states,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolDiscardQueryResp) Reset() {
+	*x = PoolDiscardQueryResp{}
+	mi := &file_mgmt_pool_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDiscardQueryResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDiscardQueryResp) ProtoMessage() {}
+
+func (x *PoolDiscardQueryResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDiscardQueryResp.ProtoReflect.Descriptor instead.
+func (*PoolDiscardQueryResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PoolDiscardQueryResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *PoolDiscardQueryResp) GetStates() []*PoolDiscardQueryResp_RankState {
+	if x != nil {
+		return x.States
+	}
+	return nil
+}
+
 // ListPoolsReq represents a request to list pools on a given DAOS system.
 type ListPoolsReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1374,7 +1687,7 @@ type ListPoolsReq struct {
 
 func (x *ListPoolsReq) Reset() {
 	*x = ListPoolsReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[14]
+	mi := &file_mgmt_pool_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1386,7 +1699,7 @@ func (x *ListPoolsReq) String() string {
 func (*ListPoolsReq) ProtoMessage() {}
 
 func (x *ListPoolsReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[14]
+	mi := &file_mgmt_pool_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1399,7 +1712,7 @@ func (x *ListPoolsReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPoolsReq.ProtoReflect.Descriptor instead.
 func (*ListPoolsReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{14}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListPoolsReq) GetSys() string {
@@ -1421,7 +1734,7 @@ type ListPoolsResp struct {
 
 func (x *ListPoolsResp) Reset() {
 	*x = ListPoolsResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[15]
+	mi := &file_mgmt_pool_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1433,7 +1746,7 @@ func (x *ListPoolsResp) String() string {
 func (*ListPoolsResp) ProtoMessage() {}
 
 func (x *ListPoolsResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[15]
+	mi := &file_mgmt_pool_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1446,7 +1759,7 @@ func (x *ListPoolsResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPoolsResp.ProtoReflect.Descriptor instead.
 func (*ListPoolsResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{15}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListPoolsResp) GetStatus() int32 {
@@ -1484,7 +1797,7 @@ type ListContReq struct {
 
 func (x *ListContReq) Reset() {
 	*x = ListContReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[16]
+	mi := &file_mgmt_pool_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1496,7 +1809,7 @@ func (x *ListContReq) String() string {
 func (*ListContReq) ProtoMessage() {}
 
 func (x *ListContReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[16]
+	mi := &file_mgmt_pool_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1509,7 +1822,7 @@ func (x *ListContReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListContReq.ProtoReflect.Descriptor instead.
 func (*ListContReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{16}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListContReq) GetSys() string {
@@ -1543,7 +1856,7 @@ type ListContResp struct {
 
 func (x *ListContResp) Reset() {
 	*x = ListContResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[17]
+	mi := &file_mgmt_pool_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1555,7 +1868,7 @@ func (x *ListContResp) String() string {
 func (*ListContResp) ProtoMessage() {}
 
 func (x *ListContResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[17]
+	mi := &file_mgmt_pool_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1568,7 +1881,7 @@ func (x *ListContResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListContResp.ProtoReflect.Descriptor instead.
 func (*ListContResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{17}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListContResp) GetStatus() int32 {
@@ -1598,7 +1911,7 @@ type PoolQueryReq struct {
 
 func (x *PoolQueryReq) Reset() {
 	*x = PoolQueryReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[18]
+	mi := &file_mgmt_pool_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1610,7 +1923,7 @@ func (x *PoolQueryReq) String() string {
 func (*PoolQueryReq) ProtoMessage() {}
 
 func (x *PoolQueryReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[18]
+	mi := &file_mgmt_pool_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1623,7 +1936,7 @@ func (x *PoolQueryReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolQueryReq.ProtoReflect.Descriptor instead.
 func (*PoolQueryReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{18}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PoolQueryReq) GetSys() string {
@@ -1669,7 +1982,7 @@ type StorageUsageStats struct {
 
 func (x *StorageUsageStats) Reset() {
 	*x = StorageUsageStats{}
-	mi := &file_mgmt_pool_proto_msgTypes[19]
+	mi := &file_mgmt_pool_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1681,7 +1994,7 @@ func (x *StorageUsageStats) String() string {
 func (*StorageUsageStats) ProtoMessage() {}
 
 func (x *StorageUsageStats) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[19]
+	mi := &file_mgmt_pool_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1694,7 +2007,7 @@ func (x *StorageUsageStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageUsageStats.ProtoReflect.Descriptor instead.
 func (*StorageUsageStats) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{19}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *StorageUsageStats) GetTotal() uint64 {
@@ -1755,7 +2068,7 @@ type PoolRebuildStatus struct {
 
 func (x *PoolRebuildStatus) Reset() {
 	*x = PoolRebuildStatus{}
-	mi := &file_mgmt_pool_proto_msgTypes[20]
+	mi := &file_mgmt_pool_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1767,7 +2080,7 @@ func (x *PoolRebuildStatus) String() string {
 func (*PoolRebuildStatus) ProtoMessage() {}
 
 func (x *PoolRebuildStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[20]
+	mi := &file_mgmt_pool_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1780,7 +2093,7 @@ func (x *PoolRebuildStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRebuildStatus.ProtoReflect.Descriptor instead.
 func (*PoolRebuildStatus) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{20}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PoolRebuildStatus) GetStatus() int32 {
@@ -1858,7 +2171,7 @@ type PoolQueryResp struct {
 
 func (x *PoolQueryResp) Reset() {
 	*x = PoolQueryResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[21]
+	mi := &file_mgmt_pool_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1870,7 +2183,7 @@ func (x *PoolQueryResp) String() string {
 func (*PoolQueryResp) ProtoMessage() {}
 
 func (x *PoolQueryResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[21]
+	mi := &file_mgmt_pool_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1883,7 +2196,7 @@ func (x *PoolQueryResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolQueryResp.ProtoReflect.Descriptor instead.
 func (*PoolQueryResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{21}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *PoolQueryResp) GetStatus() int32 {
@@ -2069,7 +2382,7 @@ type PoolProperty struct {
 
 func (x *PoolProperty) Reset() {
 	*x = PoolProperty{}
-	mi := &file_mgmt_pool_proto_msgTypes[22]
+	mi := &file_mgmt_pool_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2081,7 +2394,7 @@ func (x *PoolProperty) String() string {
 func (*PoolProperty) ProtoMessage() {}
 
 func (x *PoolProperty) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[22]
+	mi := &file_mgmt_pool_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2094,7 +2407,7 @@ func (x *PoolProperty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolProperty.ProtoReflect.Descriptor instead.
 func (*PoolProperty) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{22}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *PoolProperty) GetNumber() uint32 {
@@ -2173,7 +2486,7 @@ type PoolSetPropReq struct {
 
 func (x *PoolSetPropReq) Reset() {
 	*x = PoolSetPropReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[23]
+	mi := &file_mgmt_pool_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2185,7 +2498,7 @@ func (x *PoolSetPropReq) String() string {
 func (*PoolSetPropReq) ProtoMessage() {}
 
 func (x *PoolSetPropReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[23]
+	mi := &file_mgmt_pool_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2198,7 +2511,7 @@ func (x *PoolSetPropReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolSetPropReq.ProtoReflect.Descriptor instead.
 func (*PoolSetPropReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{23}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *PoolSetPropReq) GetSys() string {
@@ -2239,7 +2552,7 @@ type PoolSetPropResp struct {
 
 func (x *PoolSetPropResp) Reset() {
 	*x = PoolSetPropResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[24]
+	mi := &file_mgmt_pool_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2251,7 +2564,7 @@ func (x *PoolSetPropResp) String() string {
 func (*PoolSetPropResp) ProtoMessage() {}
 
 func (x *PoolSetPropResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[24]
+	mi := &file_mgmt_pool_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2264,7 +2577,7 @@ func (x *PoolSetPropResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolSetPropResp.ProtoReflect.Descriptor instead.
 func (*PoolSetPropResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{24}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *PoolSetPropResp) GetStatus() int32 {
@@ -2287,7 +2600,7 @@ type PoolGetPropReq struct {
 
 func (x *PoolGetPropReq) Reset() {
 	*x = PoolGetPropReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[25]
+	mi := &file_mgmt_pool_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2299,7 +2612,7 @@ func (x *PoolGetPropReq) String() string {
 func (*PoolGetPropReq) ProtoMessage() {}
 
 func (x *PoolGetPropReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[25]
+	mi := &file_mgmt_pool_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2312,7 +2625,7 @@ func (x *PoolGetPropReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolGetPropReq.ProtoReflect.Descriptor instead.
 func (*PoolGetPropReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{25}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *PoolGetPropReq) GetSys() string {
@@ -2354,7 +2667,7 @@ type PoolGetPropResp struct {
 
 func (x *PoolGetPropResp) Reset() {
 	*x = PoolGetPropResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[26]
+	mi := &file_mgmt_pool_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2366,7 +2679,7 @@ func (x *PoolGetPropResp) String() string {
 func (*PoolGetPropResp) ProtoMessage() {}
 
 func (x *PoolGetPropResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[26]
+	mi := &file_mgmt_pool_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2379,7 +2692,7 @@ func (x *PoolGetPropResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolGetPropResp.ProtoReflect.Descriptor instead.
 func (*PoolGetPropResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{26}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *PoolGetPropResp) GetStatus() int32 {
@@ -2409,7 +2722,7 @@ type PoolUpgradeReq struct {
 
 func (x *PoolUpgradeReq) Reset() {
 	*x = PoolUpgradeReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[27]
+	mi := &file_mgmt_pool_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2421,7 +2734,7 @@ func (x *PoolUpgradeReq) String() string {
 func (*PoolUpgradeReq) ProtoMessage() {}
 
 func (x *PoolUpgradeReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[27]
+	mi := &file_mgmt_pool_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2434,7 +2747,7 @@ func (x *PoolUpgradeReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolUpgradeReq.ProtoReflect.Descriptor instead.
 func (*PoolUpgradeReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{27}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *PoolUpgradeReq) GetSys() string {
@@ -2472,7 +2785,7 @@ type PoolQueryTargetReq struct {
 
 func (x *PoolQueryTargetReq) Reset() {
 	*x = PoolQueryTargetReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[28]
+	mi := &file_mgmt_pool_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2484,7 +2797,7 @@ func (x *PoolQueryTargetReq) String() string {
 func (*PoolQueryTargetReq) ProtoMessage() {}
 
 func (x *PoolQueryTargetReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[28]
+	mi := &file_mgmt_pool_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2497,7 +2810,7 @@ func (x *PoolQueryTargetReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolQueryTargetReq.ProtoReflect.Descriptor instead.
 func (*PoolQueryTargetReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{28}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PoolQueryTargetReq) GetSys() string {
@@ -2547,7 +2860,7 @@ type StorageTargetUsage struct {
 
 func (x *StorageTargetUsage) Reset() {
 	*x = StorageTargetUsage{}
-	mi := &file_mgmt_pool_proto_msgTypes[29]
+	mi := &file_mgmt_pool_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2559,7 +2872,7 @@ func (x *StorageTargetUsage) String() string {
 func (*StorageTargetUsage) ProtoMessage() {}
 
 func (x *StorageTargetUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[29]
+	mi := &file_mgmt_pool_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2572,7 +2885,7 @@ func (x *StorageTargetUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StorageTargetUsage.ProtoReflect.Descriptor instead.
 func (*StorageTargetUsage) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{29}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *StorageTargetUsage) GetTotal() uint64 {
@@ -2611,7 +2924,7 @@ type PoolQueryTargetInfo struct {
 
 func (x *PoolQueryTargetInfo) Reset() {
 	*x = PoolQueryTargetInfo{}
-	mi := &file_mgmt_pool_proto_msgTypes[30]
+	mi := &file_mgmt_pool_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2623,7 +2936,7 @@ func (x *PoolQueryTargetInfo) String() string {
 func (*PoolQueryTargetInfo) ProtoMessage() {}
 
 func (x *PoolQueryTargetInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[30]
+	mi := &file_mgmt_pool_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2636,7 +2949,7 @@ func (x *PoolQueryTargetInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolQueryTargetInfo.ProtoReflect.Descriptor instead.
 func (*PoolQueryTargetInfo) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{30}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *PoolQueryTargetInfo) GetState() PoolQueryTargetInfo_TargetState {
@@ -2678,7 +2991,7 @@ type PoolQueryTargetResp struct {
 
 func (x *PoolQueryTargetResp) Reset() {
 	*x = PoolQueryTargetResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[31]
+	mi := &file_mgmt_pool_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2690,7 +3003,7 @@ func (x *PoolQueryTargetResp) String() string {
 func (*PoolQueryTargetResp) ProtoMessage() {}
 
 func (x *PoolQueryTargetResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[31]
+	mi := &file_mgmt_pool_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2703,7 +3016,7 @@ func (x *PoolQueryTargetResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolQueryTargetResp.ProtoReflect.Descriptor instead.
 func (*PoolQueryTargetResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{31}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *PoolQueryTargetResp) GetStatus() int32 {
@@ -2733,7 +3046,7 @@ type PoolRebuildStartReq struct {
 
 func (x *PoolRebuildStartReq) Reset() {
 	*x = PoolRebuildStartReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[32]
+	mi := &file_mgmt_pool_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2745,7 +3058,7 @@ func (x *PoolRebuildStartReq) String() string {
 func (*PoolRebuildStartReq) ProtoMessage() {}
 
 func (x *PoolRebuildStartReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[32]
+	mi := &file_mgmt_pool_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2758,7 +3071,7 @@ func (x *PoolRebuildStartReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRebuildStartReq.ProtoReflect.Descriptor instead.
 func (*PoolRebuildStartReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{32}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *PoolRebuildStartReq) GetSys() string {
@@ -2796,7 +3109,7 @@ type PoolRebuildStopReq struct {
 
 func (x *PoolRebuildStopReq) Reset() {
 	*x = PoolRebuildStopReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[33]
+	mi := &file_mgmt_pool_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2808,7 +3121,7 @@ func (x *PoolRebuildStopReq) String() string {
 func (*PoolRebuildStopReq) ProtoMessage() {}
 
 func (x *PoolRebuildStopReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[33]
+	mi := &file_mgmt_pool_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2821,7 +3134,7 @@ func (x *PoolRebuildStopReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRebuildStopReq.ProtoReflect.Descriptor instead.
 func (*PoolRebuildStopReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{33}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *PoolRebuildStopReq) GetSys() string {
@@ -2866,7 +3179,7 @@ type PoolSelfHealEvalReq struct {
 
 func (x *PoolSelfHealEvalReq) Reset() {
 	*x = PoolSelfHealEvalReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[34]
+	mi := &file_mgmt_pool_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2878,7 +3191,7 @@ func (x *PoolSelfHealEvalReq) String() string {
 func (*PoolSelfHealEvalReq) ProtoMessage() {}
 
 func (x *PoolSelfHealEvalReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[34]
+	mi := &file_mgmt_pool_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2891,7 +3204,7 @@ func (x *PoolSelfHealEvalReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolSelfHealEvalReq.ProtoReflect.Descriptor instead.
 func (*PoolSelfHealEvalReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{34}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *PoolSelfHealEvalReq) GetSys() string {
@@ -2934,7 +3247,7 @@ type PoolGetCAReq struct {
 
 func (x *PoolGetCAReq) Reset() {
 	*x = PoolGetCAReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[35]
+	mi := &file_mgmt_pool_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2946,7 +3259,7 @@ func (x *PoolGetCAReq) String() string {
 func (*PoolGetCAReq) ProtoMessage() {}
 
 func (x *PoolGetCAReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[35]
+	mi := &file_mgmt_pool_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2959,7 +3272,7 @@ func (x *PoolGetCAReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolGetCAReq.ProtoReflect.Descriptor instead.
 func (*PoolGetCAReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{35}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *PoolGetCAReq) GetSys() string {
@@ -2994,7 +3307,7 @@ type PoolGetCAResp struct {
 
 func (x *PoolGetCAResp) Reset() {
 	*x = PoolGetCAResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[36]
+	mi := &file_mgmt_pool_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3006,7 +3319,7 @@ func (x *PoolGetCAResp) String() string {
 func (*PoolGetCAResp) ProtoMessage() {}
 
 func (x *PoolGetCAResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[36]
+	mi := &file_mgmt_pool_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3019,7 +3332,7 @@ func (x *PoolGetCAResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolGetCAResp.ProtoReflect.Descriptor instead.
 func (*PoolGetCAResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{36}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *PoolGetCAResp) GetStatus() int32 {
@@ -3057,7 +3370,7 @@ type PoolAddCAReq struct {
 
 func (x *PoolAddCAReq) Reset() {
 	*x = PoolAddCAReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[37]
+	mi := &file_mgmt_pool_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3069,7 +3382,7 @@ func (x *PoolAddCAReq) String() string {
 func (*PoolAddCAReq) ProtoMessage() {}
 
 func (x *PoolAddCAReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[37]
+	mi := &file_mgmt_pool_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3082,7 +3395,7 @@ func (x *PoolAddCAReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolAddCAReq.ProtoReflect.Descriptor instead.
 func (*PoolAddCAReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{37}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *PoolAddCAReq) GetSys() string {
@@ -3131,7 +3444,7 @@ type PoolAddCAResp struct {
 
 func (x *PoolAddCAResp) Reset() {
 	*x = PoolAddCAResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[38]
+	mi := &file_mgmt_pool_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3143,7 +3456,7 @@ func (x *PoolAddCAResp) String() string {
 func (*PoolAddCAResp) ProtoMessage() {}
 
 func (x *PoolAddCAResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[38]
+	mi := &file_mgmt_pool_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3156,7 +3469,7 @@ func (x *PoolAddCAResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolAddCAResp.ProtoReflect.Descriptor instead.
 func (*PoolAddCAResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{38}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *PoolAddCAResp) GetStatus() int32 {
@@ -3194,7 +3507,7 @@ type PoolRemoveCAReq struct {
 
 func (x *PoolRemoveCAReq) Reset() {
 	*x = PoolRemoveCAReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[39]
+	mi := &file_mgmt_pool_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3206,7 +3519,7 @@ func (x *PoolRemoveCAReq) String() string {
 func (*PoolRemoveCAReq) ProtoMessage() {}
 
 func (x *PoolRemoveCAReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[39]
+	mi := &file_mgmt_pool_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3219,7 +3532,7 @@ func (x *PoolRemoveCAReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRemoveCAReq.ProtoReflect.Descriptor instead.
 func (*PoolRemoveCAReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{39}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *PoolRemoveCAReq) GetSys() string {
@@ -3268,7 +3581,7 @@ type PoolRemoveCAResp struct {
 
 func (x *PoolRemoveCAResp) Reset() {
 	*x = PoolRemoveCAResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[40]
+	mi := &file_mgmt_pool_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3280,7 +3593,7 @@ func (x *PoolRemoveCAResp) String() string {
 func (*PoolRemoveCAResp) ProtoMessage() {}
 
 func (x *PoolRemoveCAResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[40]
+	mi := &file_mgmt_pool_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3293,7 +3606,7 @@ func (x *PoolRemoveCAResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRemoveCAResp.ProtoReflect.Descriptor instead.
 func (*PoolRemoveCAResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{40}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *PoolRemoveCAResp) GetStatus() int32 {
@@ -3329,7 +3642,7 @@ type PoolGetCertWatermarksReq struct {
 
 func (x *PoolGetCertWatermarksReq) Reset() {
 	*x = PoolGetCertWatermarksReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[41]
+	mi := &file_mgmt_pool_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3341,7 +3654,7 @@ func (x *PoolGetCertWatermarksReq) String() string {
 func (*PoolGetCertWatermarksReq) ProtoMessage() {}
 
 func (x *PoolGetCertWatermarksReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[41]
+	mi := &file_mgmt_pool_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3354,7 +3667,7 @@ func (x *PoolGetCertWatermarksReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolGetCertWatermarksReq.ProtoReflect.Descriptor instead.
 func (*PoolGetCertWatermarksReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{41}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *PoolGetCertWatermarksReq) GetSys() string {
@@ -3389,7 +3702,7 @@ type PoolGetCertWatermarksResp struct {
 
 func (x *PoolGetCertWatermarksResp) Reset() {
 	*x = PoolGetCertWatermarksResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[42]
+	mi := &file_mgmt_pool_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3401,7 +3714,7 @@ func (x *PoolGetCertWatermarksResp) String() string {
 func (*PoolGetCertWatermarksResp) ProtoMessage() {}
 
 func (x *PoolGetCertWatermarksResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[42]
+	mi := &file_mgmt_pool_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3414,7 +3727,7 @@ func (x *PoolGetCertWatermarksResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolGetCertWatermarksResp.ProtoReflect.Descriptor instead.
 func (*PoolGetCertWatermarksResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{42}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *PoolGetCertWatermarksResp) GetStatus() int32 {
@@ -3452,7 +3765,7 @@ type PoolRevokeClientReq struct {
 
 func (x *PoolRevokeClientReq) Reset() {
 	*x = PoolRevokeClientReq{}
-	mi := &file_mgmt_pool_proto_msgTypes[43]
+	mi := &file_mgmt_pool_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3464,7 +3777,7 @@ func (x *PoolRevokeClientReq) String() string {
 func (*PoolRevokeClientReq) ProtoMessage() {}
 
 func (x *PoolRevokeClientReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[43]
+	mi := &file_mgmt_pool_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3477,7 +3790,7 @@ func (x *PoolRevokeClientReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRevokeClientReq.ProtoReflect.Descriptor instead.
 func (*PoolRevokeClientReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{43}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *PoolRevokeClientReq) GetSys() string {
@@ -3528,7 +3841,7 @@ type PoolRevokeClientResp struct {
 
 func (x *PoolRevokeClientResp) Reset() {
 	*x = PoolRevokeClientResp{}
-	mi := &file_mgmt_pool_proto_msgTypes[44]
+	mi := &file_mgmt_pool_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3540,7 +3853,7 @@ func (x *PoolRevokeClientResp) String() string {
 func (*PoolRevokeClientResp) ProtoMessage() {}
 
 func (x *PoolRevokeClientResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[44]
+	mi := &file_mgmt_pool_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3553,7 +3866,7 @@ func (x *PoolRevokeClientResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolRevokeClientResp.ProtoReflect.Descriptor instead.
 func (*PoolRevokeClientResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{44}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *PoolRevokeClientResp) GetStatus() int32 {
@@ -3591,6 +3904,74 @@ func (x *PoolRevokeClientResp) GetEvictScope() string {
 	return ""
 }
 
+type PoolDiscardQueryResp_RankState struct {
+	state         protoimpl.MessageState               `protogen:"open.v1"`
+	Rank          uint32                               `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
+	Phase         PoolDiscardQueryResp_RankState_Phase `protobuf:"varint,2,opt,name=phase,proto3,enum=mgmt.PoolDiscardQueryResp_RankState_Phase" json:"phase,omitempty"`
+	DoneAgeSec    uint64                               `protobuf:"varint,3,opt,name=done_age_sec,json=doneAgeSec,proto3" json:"done_age_sec,omitempty"` // seconds since completion; only valid when phase = DONE
+	Status        int32                                `protobuf:"varint,4,opt,name=status,proto3" json:"status,omitempty"`                             // DAOS error code; only valid when phase = FAILED
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PoolDiscardQueryResp_RankState) Reset() {
+	*x = PoolDiscardQueryResp_RankState{}
+	mi := &file_mgmt_pool_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PoolDiscardQueryResp_RankState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PoolDiscardQueryResp_RankState) ProtoMessage() {}
+
+func (x *PoolDiscardQueryResp_RankState) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_pool_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PoolDiscardQueryResp_RankState.ProtoReflect.Descriptor instead.
+func (*PoolDiscardQueryResp_RankState) Descriptor() ([]byte, []int) {
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{17, 0}
+}
+
+func (x *PoolDiscardQueryResp_RankState) GetRank() uint32 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
+func (x *PoolDiscardQueryResp_RankState) GetPhase() PoolDiscardQueryResp_RankState_Phase {
+	if x != nil {
+		return x.Phase
+	}
+	return PoolDiscardQueryResp_RankState_NEVER
+}
+
+func (x *PoolDiscardQueryResp_RankState) GetDoneAgeSec() uint64 {
+	if x != nil {
+		return x.DoneAgeSec
+	}
+	return 0
+}
+
+func (x *PoolDiscardQueryResp_RankState) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
 type ListPoolsResp_Pool struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uuid          string                 `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`                                     // uuid of pool
@@ -3604,7 +3985,7 @@ type ListPoolsResp_Pool struct {
 
 func (x *ListPoolsResp_Pool) Reset() {
 	*x = ListPoolsResp_Pool{}
-	mi := &file_mgmt_pool_proto_msgTypes[45]
+	mi := &file_mgmt_pool_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3616,7 +3997,7 @@ func (x *ListPoolsResp_Pool) String() string {
 func (*ListPoolsResp_Pool) ProtoMessage() {}
 
 func (x *ListPoolsResp_Pool) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[45]
+	mi := &file_mgmt_pool_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3629,7 +4010,7 @@ func (x *ListPoolsResp_Pool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPoolsResp_Pool.ProtoReflect.Descriptor instead.
 func (*ListPoolsResp_Pool) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{15, 0}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{19, 0}
 }
 
 func (x *ListPoolsResp_Pool) GetUuid() string {
@@ -3676,7 +4057,7 @@ type ListContResp_Cont struct {
 
 func (x *ListContResp_Cont) Reset() {
 	*x = ListContResp_Cont{}
-	mi := &file_mgmt_pool_proto_msgTypes[46]
+	mi := &file_mgmt_pool_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3688,7 +4069,7 @@ func (x *ListContResp_Cont) String() string {
 func (*ListContResp_Cont) ProtoMessage() {}
 
 func (x *ListContResp_Cont) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_pool_proto_msgTypes[46]
+	mi := &file_mgmt_pool_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3701,7 +4082,7 @@ func (x *ListContResp_Cont) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListContResp_Cont.ProtoReflect.Descriptor instead.
 func (*ListContResp_Cont) Descriptor() ([]byte, []int) {
-	return file_mgmt_pool_proto_rawDescGZIP(), []int{17, 0}
+	return file_mgmt_pool_proto_rawDescGZIP(), []int{21, 0}
 }
 
 func (x *ListContResp_Cont) GetUuid() string {
@@ -3811,7 +4192,40 @@ const file_mgmt_pool_proto_rawDesc = "" +
 	"tier_bytes\x18\x06 \x03(\x04R\ttierBytes\x12\x1b\n" +
 	"\tmem_ratio\x18\a \x01(\x02R\bmemRatio\"'\n" +
 	"\rPoolReintResp\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\x05R\x06status\" \n" +
+	"\x06status\x18\x01 \x01(\x05R\x06status\"\xa5\x01\n" +
+	"\x0ePoolDiscardReq\x12\x10\n" +
+	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x14\n" +
+	"\x05ranks\x18\x03 \x03(\rR\x05ranks\x12\x1d\n" +
+	"\n" +
+	"target_idx\x18\x04 \x03(\rR\ttargetIdx\x12\x1b\n" +
+	"\tsvc_ranks\x18\x05 \x03(\rR\bsvcRanks\x12\x1f\n" +
+	"\vquiesce_sec\x18\x06 \x01(\rR\n" +
+	"quiesceSec\")\n" +
+	"\x0fPoolDiscardResp\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\x05R\x06status\"j\n" +
+	"\x13PoolDiscardQueryReq\x12\x10\n" +
+	"\x03sys\x18\x01 \x01(\tR\x03sys\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x14\n" +
+	"\x05ranks\x18\x03 \x03(\rR\x05ranks\x12\x1b\n" +
+	"\tsvc_ranks\x18\x04 \x03(\rR\bsvcRanks\"\xd3\x02\n" +
+	"\x14PoolDiscardQueryResp\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\x05R\x06status\x12<\n" +
+	"\x06states\x18\x02 \x03(\v2$.mgmt.PoolDiscardQueryResp.RankStateR\x06states\x1a\xe4\x01\n" +
+	"\tRankState\x12\x12\n" +
+	"\x04rank\x18\x01 \x01(\rR\x04rank\x12@\n" +
+	"\x05phase\x18\x02 \x01(\x0e2*.mgmt.PoolDiscardQueryResp.RankState.PhaseR\x05phase\x12 \n" +
+	"\fdone_age_sec\x18\x03 \x01(\x04R\n" +
+	"doneAgeSec\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\x05R\x06status\"G\n" +
+	"\x05Phase\x12\t\n" +
+	"\x05NEVER\x10\x00\x12\x0e\n" +
+	"\n" +
+	"DISCARDING\x10\x01\x12\r\n" +
+	"\tQUIESCING\x10\x02\x12\b\n" +
+	"\x04DONE\x10\x03\x12\n" +
+	"\n" +
+	"\x06FAILED\x10\x04\" \n" +
 	"\fListPoolsReq\x12\x10\n" +
 	"\x03sys\x18\x01 \x01(\tR\x03sys\"\x83\x02\n" +
 	"\rListPoolsResp\x12\x16\n" +
@@ -4048,85 +4462,93 @@ func file_mgmt_pool_proto_rawDescGZIP() []byte {
 	return file_mgmt_pool_proto_rawDescData
 }
 
-var file_mgmt_pool_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_mgmt_pool_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
+var file_mgmt_pool_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_mgmt_pool_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_mgmt_pool_proto_goTypes = []any{
-	(StorageMediaType)(0),                // 0: mgmt.StorageMediaType
-	(PoolServiceState)(0),                // 1: mgmt.PoolServiceState
-	(PoolRebuildStatus_State)(0),         // 2: mgmt.PoolRebuildStatus.State
-	(PoolQueryTargetInfo_TargetState)(0), // 3: mgmt.PoolQueryTargetInfo.TargetState
-	(PoolRevokeClientReq_EvictMode)(0),   // 4: mgmt.PoolRevokeClientReq.EvictMode
-	(*PoolCreateReq)(nil),                // 5: mgmt.PoolCreateReq
-	(*PoolCreateResp)(nil),               // 6: mgmt.PoolCreateResp
-	(*PoolDestroyReq)(nil),               // 7: mgmt.PoolDestroyReq
-	(*PoolDestroyResp)(nil),              // 8: mgmt.PoolDestroyResp
-	(*PoolEvictReq)(nil),                 // 9: mgmt.PoolEvictReq
-	(*PoolEvictResp)(nil),                // 10: mgmt.PoolEvictResp
-	(*PoolExcludeReq)(nil),               // 11: mgmt.PoolExcludeReq
-	(*PoolExcludeResp)(nil),              // 12: mgmt.PoolExcludeResp
-	(*PoolDrainReq)(nil),                 // 13: mgmt.PoolDrainReq
-	(*PoolDrainResp)(nil),                // 14: mgmt.PoolDrainResp
-	(*PoolExtendReq)(nil),                // 15: mgmt.PoolExtendReq
-	(*PoolExtendResp)(nil),               // 16: mgmt.PoolExtendResp
-	(*PoolReintReq)(nil),                 // 17: mgmt.PoolReintReq
-	(*PoolReintResp)(nil),                // 18: mgmt.PoolReintResp
-	(*ListPoolsReq)(nil),                 // 19: mgmt.ListPoolsReq
-	(*ListPoolsResp)(nil),                // 20: mgmt.ListPoolsResp
-	(*ListContReq)(nil),                  // 21: mgmt.ListContReq
-	(*ListContResp)(nil),                 // 22: mgmt.ListContResp
-	(*PoolQueryReq)(nil),                 // 23: mgmt.PoolQueryReq
-	(*StorageUsageStats)(nil),            // 24: mgmt.StorageUsageStats
-	(*PoolRebuildStatus)(nil),            // 25: mgmt.PoolRebuildStatus
-	(*PoolQueryResp)(nil),                // 26: mgmt.PoolQueryResp
-	(*PoolProperty)(nil),                 // 27: mgmt.PoolProperty
-	(*PoolSetPropReq)(nil),               // 28: mgmt.PoolSetPropReq
-	(*PoolSetPropResp)(nil),              // 29: mgmt.PoolSetPropResp
-	(*PoolGetPropReq)(nil),               // 30: mgmt.PoolGetPropReq
-	(*PoolGetPropResp)(nil),              // 31: mgmt.PoolGetPropResp
-	(*PoolUpgradeReq)(nil),               // 32: mgmt.PoolUpgradeReq
-	(*PoolQueryTargetReq)(nil),           // 33: mgmt.PoolQueryTargetReq
-	(*StorageTargetUsage)(nil),           // 34: mgmt.StorageTargetUsage
-	(*PoolQueryTargetInfo)(nil),          // 35: mgmt.PoolQueryTargetInfo
-	(*PoolQueryTargetResp)(nil),          // 36: mgmt.PoolQueryTargetResp
-	(*PoolRebuildStartReq)(nil),          // 37: mgmt.PoolRebuildStartReq
-	(*PoolRebuildStopReq)(nil),           // 38: mgmt.PoolRebuildStopReq
-	(*PoolSelfHealEvalReq)(nil),          // 39: mgmt.PoolSelfHealEvalReq
-	(*PoolGetCAReq)(nil),                 // 40: mgmt.PoolGetCAReq
-	(*PoolGetCAResp)(nil),                // 41: mgmt.PoolGetCAResp
-	(*PoolAddCAReq)(nil),                 // 42: mgmt.PoolAddCAReq
-	(*PoolAddCAResp)(nil),                // 43: mgmt.PoolAddCAResp
-	(*PoolRemoveCAReq)(nil),              // 44: mgmt.PoolRemoveCAReq
-	(*PoolRemoveCAResp)(nil),             // 45: mgmt.PoolRemoveCAResp
-	(*PoolGetCertWatermarksReq)(nil),     // 46: mgmt.PoolGetCertWatermarksReq
-	(*PoolGetCertWatermarksResp)(nil),    // 47: mgmt.PoolGetCertWatermarksResp
-	(*PoolRevokeClientReq)(nil),          // 48: mgmt.PoolRevokeClientReq
-	(*PoolRevokeClientResp)(nil),         // 49: mgmt.PoolRevokeClientResp
-	(*ListPoolsResp_Pool)(nil),           // 50: mgmt.ListPoolsResp.Pool
-	(*ListContResp_Cont)(nil),            // 51: mgmt.ListContResp.Cont
+	(StorageMediaType)(0),                     // 0: mgmt.StorageMediaType
+	(PoolServiceState)(0),                     // 1: mgmt.PoolServiceState
+	(PoolDiscardQueryResp_RankState_Phase)(0), // 2: mgmt.PoolDiscardQueryResp.RankState.Phase
+	(PoolRebuildStatus_State)(0),              // 3: mgmt.PoolRebuildStatus.State
+	(PoolQueryTargetInfo_TargetState)(0),      // 4: mgmt.PoolQueryTargetInfo.TargetState
+	(PoolRevokeClientReq_EvictMode)(0),        // 5: mgmt.PoolRevokeClientReq.EvictMode
+	(*PoolCreateReq)(nil),                     // 6: mgmt.PoolCreateReq
+	(*PoolCreateResp)(nil),                    // 7: mgmt.PoolCreateResp
+	(*PoolDestroyReq)(nil),                    // 8: mgmt.PoolDestroyReq
+	(*PoolDestroyResp)(nil),                   // 9: mgmt.PoolDestroyResp
+	(*PoolEvictReq)(nil),                      // 10: mgmt.PoolEvictReq
+	(*PoolEvictResp)(nil),                     // 11: mgmt.PoolEvictResp
+	(*PoolExcludeReq)(nil),                    // 12: mgmt.PoolExcludeReq
+	(*PoolExcludeResp)(nil),                   // 13: mgmt.PoolExcludeResp
+	(*PoolDrainReq)(nil),                      // 14: mgmt.PoolDrainReq
+	(*PoolDrainResp)(nil),                     // 15: mgmt.PoolDrainResp
+	(*PoolExtendReq)(nil),                     // 16: mgmt.PoolExtendReq
+	(*PoolExtendResp)(nil),                    // 17: mgmt.PoolExtendResp
+	(*PoolReintReq)(nil),                      // 18: mgmt.PoolReintReq
+	(*PoolReintResp)(nil),                     // 19: mgmt.PoolReintResp
+	(*PoolDiscardReq)(nil),                    // 20: mgmt.PoolDiscardReq
+	(*PoolDiscardResp)(nil),                   // 21: mgmt.PoolDiscardResp
+	(*PoolDiscardQueryReq)(nil),               // 22: mgmt.PoolDiscardQueryReq
+	(*PoolDiscardQueryResp)(nil),              // 23: mgmt.PoolDiscardQueryResp
+	(*ListPoolsReq)(nil),                      // 24: mgmt.ListPoolsReq
+	(*ListPoolsResp)(nil),                     // 25: mgmt.ListPoolsResp
+	(*ListContReq)(nil),                       // 26: mgmt.ListContReq
+	(*ListContResp)(nil),                      // 27: mgmt.ListContResp
+	(*PoolQueryReq)(nil),                      // 28: mgmt.PoolQueryReq
+	(*StorageUsageStats)(nil),                 // 29: mgmt.StorageUsageStats
+	(*PoolRebuildStatus)(nil),                 // 30: mgmt.PoolRebuildStatus
+	(*PoolQueryResp)(nil),                     // 31: mgmt.PoolQueryResp
+	(*PoolProperty)(nil),                      // 32: mgmt.PoolProperty
+	(*PoolSetPropReq)(nil),                    // 33: mgmt.PoolSetPropReq
+	(*PoolSetPropResp)(nil),                   // 34: mgmt.PoolSetPropResp
+	(*PoolGetPropReq)(nil),                    // 35: mgmt.PoolGetPropReq
+	(*PoolGetPropResp)(nil),                   // 36: mgmt.PoolGetPropResp
+	(*PoolUpgradeReq)(nil),                    // 37: mgmt.PoolUpgradeReq
+	(*PoolQueryTargetReq)(nil),                // 38: mgmt.PoolQueryTargetReq
+	(*StorageTargetUsage)(nil),                // 39: mgmt.StorageTargetUsage
+	(*PoolQueryTargetInfo)(nil),               // 40: mgmt.PoolQueryTargetInfo
+	(*PoolQueryTargetResp)(nil),               // 41: mgmt.PoolQueryTargetResp
+	(*PoolRebuildStartReq)(nil),               // 42: mgmt.PoolRebuildStartReq
+	(*PoolRebuildStopReq)(nil),                // 43: mgmt.PoolRebuildStopReq
+	(*PoolSelfHealEvalReq)(nil),               // 44: mgmt.PoolSelfHealEvalReq
+	(*PoolGetCAReq)(nil),                      // 45: mgmt.PoolGetCAReq
+	(*PoolGetCAResp)(nil),                     // 46: mgmt.PoolGetCAResp
+	(*PoolAddCAReq)(nil),                      // 47: mgmt.PoolAddCAReq
+	(*PoolAddCAResp)(nil),                     // 48: mgmt.PoolAddCAResp
+	(*PoolRemoveCAReq)(nil),                   // 49: mgmt.PoolRemoveCAReq
+	(*PoolRemoveCAResp)(nil),                  // 50: mgmt.PoolRemoveCAResp
+	(*PoolGetCertWatermarksReq)(nil),          // 51: mgmt.PoolGetCertWatermarksReq
+	(*PoolGetCertWatermarksResp)(nil),         // 52: mgmt.PoolGetCertWatermarksResp
+	(*PoolRevokeClientReq)(nil),               // 53: mgmt.PoolRevokeClientReq
+	(*PoolRevokeClientResp)(nil),              // 54: mgmt.PoolRevokeClientResp
+	(*PoolDiscardQueryResp_RankState)(nil),    // 55: mgmt.PoolDiscardQueryResp.RankState
+	(*ListPoolsResp_Pool)(nil),                // 56: mgmt.ListPoolsResp.Pool
+	(*ListContResp_Cont)(nil),                 // 57: mgmt.ListContResp.Cont
 }
 var file_mgmt_pool_proto_depIdxs = []int32{
-	27, // 0: mgmt.PoolCreateReq.properties:type_name -> mgmt.PoolProperty
-	50, // 1: mgmt.ListPoolsResp.pools:type_name -> mgmt.ListPoolsResp.Pool
-	51, // 2: mgmt.ListContResp.containers:type_name -> mgmt.ListContResp.Cont
-	0,  // 3: mgmt.StorageUsageStats.media_type:type_name -> mgmt.StorageMediaType
-	2,  // 4: mgmt.PoolRebuildStatus.state:type_name -> mgmt.PoolRebuildStatus.State
-	2,  // 5: mgmt.PoolRebuildStatus.derived_state:type_name -> mgmt.PoolRebuildStatus.State
-	25, // 6: mgmt.PoolQueryResp.rebuild:type_name -> mgmt.PoolRebuildStatus
-	24, // 7: mgmt.PoolQueryResp.tier_stats:type_name -> mgmt.StorageUsageStats
-	1,  // 8: mgmt.PoolQueryResp.state:type_name -> mgmt.PoolServiceState
-	27, // 9: mgmt.PoolSetPropReq.properties:type_name -> mgmt.PoolProperty
-	27, // 10: mgmt.PoolGetPropReq.properties:type_name -> mgmt.PoolProperty
-	27, // 11: mgmt.PoolGetPropResp.properties:type_name -> mgmt.PoolProperty
-	0,  // 12: mgmt.StorageTargetUsage.media_type:type_name -> mgmt.StorageMediaType
-	3,  // 13: mgmt.PoolQueryTargetInfo.state:type_name -> mgmt.PoolQueryTargetInfo.TargetState
-	34, // 14: mgmt.PoolQueryTargetInfo.space:type_name -> mgmt.StorageTargetUsage
-	35, // 15: mgmt.PoolQueryTargetResp.infos:type_name -> mgmt.PoolQueryTargetInfo
-	4,  // 16: mgmt.PoolRevokeClientReq.evict_mode:type_name -> mgmt.PoolRevokeClientReq.EvictMode
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	32, // 0: mgmt.PoolCreateReq.properties:type_name -> mgmt.PoolProperty
+	55, // 1: mgmt.PoolDiscardQueryResp.states:type_name -> mgmt.PoolDiscardQueryResp.RankState
+	56, // 2: mgmt.ListPoolsResp.pools:type_name -> mgmt.ListPoolsResp.Pool
+	57, // 3: mgmt.ListContResp.containers:type_name -> mgmt.ListContResp.Cont
+	0,  // 4: mgmt.StorageUsageStats.media_type:type_name -> mgmt.StorageMediaType
+	3,  // 5: mgmt.PoolRebuildStatus.state:type_name -> mgmt.PoolRebuildStatus.State
+	3,  // 6: mgmt.PoolRebuildStatus.derived_state:type_name -> mgmt.PoolRebuildStatus.State
+	30, // 7: mgmt.PoolQueryResp.rebuild:type_name -> mgmt.PoolRebuildStatus
+	29, // 8: mgmt.PoolQueryResp.tier_stats:type_name -> mgmt.StorageUsageStats
+	1,  // 9: mgmt.PoolQueryResp.state:type_name -> mgmt.PoolServiceState
+	32, // 10: mgmt.PoolSetPropReq.properties:type_name -> mgmt.PoolProperty
+	32, // 11: mgmt.PoolGetPropReq.properties:type_name -> mgmt.PoolProperty
+	32, // 12: mgmt.PoolGetPropResp.properties:type_name -> mgmt.PoolProperty
+	0,  // 13: mgmt.StorageTargetUsage.media_type:type_name -> mgmt.StorageMediaType
+	4,  // 14: mgmt.PoolQueryTargetInfo.state:type_name -> mgmt.PoolQueryTargetInfo.TargetState
+	39, // 15: mgmt.PoolQueryTargetInfo.space:type_name -> mgmt.StorageTargetUsage
+	40, // 16: mgmt.PoolQueryTargetResp.infos:type_name -> mgmt.PoolQueryTargetInfo
+	5,  // 17: mgmt.PoolRevokeClientReq.evict_mode:type_name -> mgmt.PoolRevokeClientReq.EvictMode
+	2,  // 18: mgmt.PoolDiscardQueryResp.RankState.phase:type_name -> mgmt.PoolDiscardQueryResp.RankState.Phase
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_mgmt_pool_proto_init() }
@@ -4134,7 +4556,7 @@ func file_mgmt_pool_proto_init() {
 	if File_mgmt_pool_proto != nil {
 		return
 	}
-	file_mgmt_pool_proto_msgTypes[22].OneofWrappers = []any{
+	file_mgmt_pool_proto_msgTypes[26].OneofWrappers = []any{
 		(*PoolProperty_Strval)(nil),
 		(*PoolProperty_Numval)(nil),
 		(*PoolProperty_Byteval)(nil),
@@ -4144,8 +4566,8 @@ func file_mgmt_pool_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mgmt_pool_proto_rawDesc), len(file_mgmt_pool_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   47,
+			NumEnums:      6,
+			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
