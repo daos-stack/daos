@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -4811,6 +4812,82 @@ io_tx_convert(void **state)
 	ioreq_fini(&req);
 }
 
+static int
+tx_convert_restart_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey, daos_iod_t *iod,
+			  d_sg_list_t *sgl)
+{
+	int rc;
+
+	/*
+	 * The first hit converts the conditional update to internal TX, the second hit makes the
+	 * existence check of the convert TX see stale pool map, then the TX will be restarted.
+	 * Do not use DAOS_FAIL_ALWAYS here, otherwise the convert TX will keep restarting.
+	 */
+	daos_fail_num_set(2);
+	daos_fail_loc_set(DAOS_FAIL_TX_CONVERT | DAOS_FAIL_SOME);
+	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, dkey, 1, iod, sgl, NULL);
+	daos_fail_loc_set(0);
+	daos_fail_num_set(0);
+
+	return rc;
+}
+
+static void
+io_tx_convert_restart(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	daos_key_t    dkey;
+	daos_iod_t    iod = {0};
+	daos_recx_t   recx;
+	d_sg_list_t   sgl;
+	d_iov_t       sg_iov;
+	char          buf[32];
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	dts_buf_render(buf, sizeof(buf));
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iov;
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	recx.rx_idx   = 0;
+	recx.rx_nr    = sizeof(buf);
+	iod.iod_nr    = 1;
+	iod.iod_size  = 1;
+	iod.iod_recxs = &recx;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+
+	print_message("cond dkey insert for non-existent dkey with convert TX restart\n");
+	rc = tx_convert_restart_update(oh, DAOS_COND_DKEY_INSERT, &dkey, &iod, &sgl);
+	assert_rc_equal(rc, 0);
+
+	print_message("cond dkey insert for existing dkey with convert TX restart\n");
+	rc = tx_convert_restart_update(oh, DAOS_COND_DKEY_INSERT, &dkey, &iod, &sgl);
+	assert_rc_equal(rc, -DER_EXIST);
+
+	print_message("per-akey cond insert for existing akey with convert TX restart\n");
+	iod.iod_flags = DAOS_COND_AKEY_INSERT;
+	rc            = tx_convert_restart_update(oh, DAOS_COND_PER_AKEY, &dkey, &iod, &sgl);
+	assert_rc_equal(rc, -DER_EXIST);
+
+	print_message("per-akey cond insert for non-existent akey with convert TX restart\n");
+	d_iov_set(&iod.iod_name, "akey_new", strlen("akey_new"));
+	rc = tx_convert_restart_update(oh, DAOS_COND_PER_AKEY, &dkey, &iod, &sgl);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static void
 obj_open_perf(void **state)
 {
@@ -5368,6 +5445,7 @@ io_57(void **state)
 	reintegrate_single_pool_rank(arg, 0, false);
 }
 
+/* clang-format off */
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -5482,7 +5560,10 @@ static const struct CMUnitTest io_tests[] = {
 	  io_56, async_disable, test_case_teardown},
 	{ "IO57: collective object query with rank_0 excluded",
 	  io_57, rebuild_sub_rf1_setup, test_teardown},
+	{ "IO58: tx convert restart with conditional update",
+	  io_tx_convert_restart, async_disable, test_case_teardown},
 };
+/* clang-format on */
 
 int
 obj_setup_internal(void **state)
