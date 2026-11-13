@@ -118,12 +118,16 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	struct xstream_arg *xa      = bndl->xa;
 	struct checker     *main_ck = &xa->ctrl->checker;
 	struct checker     *ck      = bndl->ck;
+	bool                fi_reenable;
+	const uint64_t      exp_fail_locs[] = {DLCK_FAULT_CONT_DOES_NOT_EXIST, 0};
 	daos_handle_t       coh;
 	int                 rc;
 
+	checker_fi_entry(exp_fail_locs, &fi_reenable);
 	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
 	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc,
 			   ck->ck_status.warnings_num);
+	checker_fi_exit(fi_reenable);
 	/** vos_cont_open_ex() is fully instrumented, so rc is already accounted for in the
 	 * checker's status. */
 	dlck_status_set(&xa->status, &ck->ck_status);
@@ -174,8 +178,16 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
 	struct checker *main_ck = &xa->ctrl->checker;
 	char           *path    = NULL;
-	daos_handle_t   poh;
-	int             rc;
+	bool            fi_reenable;
+	const uint64_t  exp_fail_locs[] = {DLCK_FAULT_POOL_NVME_HEALTH,
+					   DLCK_FAULT_POOL_OPEN_BIO,
+					   DLCK_FAULT_POOL_OPEN_UMEM,
+					   DLCK_FAULT_POOL_OPEN_MAGIC,
+					   DLCK_FAULT_POOL_OPEN_VERSION,
+					   DLCK_FAULT_POOL_OPEN_UUID,
+					   0};
+	daos_handle_t poh;
+	int           rc;
 
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PREALLOCATE)) { /** fault injection */
 		rc = daos_errno2der(daos_fail_value_get());
@@ -202,7 +214,9 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 		goto report;
 	}
 
+	checker_fi_entry(exp_fail_locs, &fi_reenable);
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
+	checker_fi_exit(fi_reenable);
 	/** vos_pool_open_metrics() is fully instrumented, so rc is already accounted for in the
 	 * checker's status. */
 	dlck_status_set(&xa->status, &ck->ck_status);
