@@ -286,10 +286,14 @@ enum dtx_flags {
 };
 
 enum dtx_check_intent {
-	DCI_DEFAULT = 0, /* Only check existence without additional action. */
-	DCI_RESENT  = 1, /* For check resent RPC. */
-	DCI_RESYNC  = 2, /* For DTX resync. */
-	DCI_REFRESH = 3, /* For DTX refresh. */
+	DCI_DEFAULT         = 0, /* Only check existence without additional action. */
+	DCI_REFRESH         = 1, /* For DTX refresh. */
+	DCI_RESENT_FOLLOWER = 2, /* For check resent RPC on non-leader. */
+	DCI_RESENT_LEADER   = 3, /* For check resent RPC on leader. */
+	DCI_RESYNC_FOLLOWER = 4, /* For DTX resync on non-leader. */
+	DCI_RESYNC_LEADER   = 5, /* For DTX resync on leader. */
+	DCI_RESYNC_COMMIT   = 6, /* Recheck DTX before commit. */
+	DCI_RESYNC_ABORT    = 7, /* Recheck DTX before abort. */
 };
 
 /* clang-format off */
@@ -361,6 +365,7 @@ int dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_
  *
  * \param coh		[IN]	Container open handle.
  * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param leader	[IN]	For DTX leader or not.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
@@ -378,8 +383,8 @@ int dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_
  *					sent has even succeed or not.
  *			Other negative value if error.
  */
-int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
-		      daos_epoch_t *epoch, uint32_t *pm_ver);
+int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti, bool leader, daos_epoch_t *epoch,
+		      uint32_t *pm_ver);
 
 static inline struct dtx_coll_entry *
 dtx_coll_entry_get(struct dtx_coll_entry *dce)
@@ -441,8 +446,32 @@ struct dtx_scan_args {
 	bool            for_orphan;
 };
 
+struct dtx_resync_entry {
+	d_list_t               dre_link;
+	daos_epoch_t           dre_epoch;
+	daos_unit_oid_t        dre_oid;
+	struct dtx_coll_entry *dre_dce;
+	uint32_t               dre_seq;
+	int                    dre_err;
+	uint32_t               dre_inline_mbs:1;
+	uint64_t               dre_dkey_hash;
+	struct dtx_entry       dre_dte;
+};
+
+static inline void
+dtx_dre_release(struct dtx_resync_entry *dre)
+{
+	d_list_del(&dre->dre_link);
+	if (--(dre->dre_dte.dte_refs) == 0) {
+		dtx_coll_entry_put(dre->dre_dce);
+		if (dre->dre_inline_mbs == 0)
+			D_FREE(dre->dre_dte.dte_mbs);
+		D_FREE(dre);
+	}
+}
+
 int dtx_cleanup_orphan(uuid_t po_uuid, uint32_t pm_ver);
-int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver, bool block);
+int dtx_resync(daos_handle_t po_hdl, struct ds_cont_child *cont, uint32_t ver);
 void dtx_resync_ult(void *arg);
 /* clang-format on */
 

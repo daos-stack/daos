@@ -14,6 +14,7 @@ timeouts:
   test_daos_container: 1000
   test_daos_epoch: 125
   test_daos_single_rdg_tx: 700
+  test_daos_distributed_tx: 900
   test_daos_verify_consistency: 105
   test_daos_io: 530
   test_daos_ec_io: 510
@@ -194,7 +195,7 @@ daos_tests:
     test_daos_management: 4
     test_daos_pool: 9
     test_daos_container: 18
-    test_daos_distributed_tx: 5
+    test_daos_distributed_tx: 6
     test_daos_rebuild_simple: 21
     test_daos_drain_simple: 8
     test_daos_extend_simple: 5
