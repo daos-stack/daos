@@ -355,6 +355,8 @@ static int
 vos_iter_validate_internal(struct vos_iterator *iter)
 {
 	daos_anchor_t     *anchor;
+	daos_anchor_t      saved;
+	vos_iter_entry_t   ent;
 	int                rc;
 	struct dtx_handle *old;
 	bool               is_sysdb = !!iter->it_for_sysdb;
@@ -386,16 +388,25 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		anchor = &iter->it_anchors->ia_sv;
 		break;
 	case VOS_ITER_RECX:
-		anchor = &iter->it_anchors->ia_sv;
+		anchor = &iter->it_anchors->ia_ev;
 		break;
 	default:
 		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
 	}
 
-	old = vos_dth_get(is_sysdb);
+	saved = *anchor;
+	old   = vos_dth_get(is_sysdb);
 	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
+	/* SV and sorted evtree probes move past a deleted or split entry without updating it */
+	if (rc == 0 && (iter->it_type == VOS_ITER_SINGLE || iter->it_type == VOS_ITER_RECX))
+		rc = iter->it_ops->iop_fetch(iter, &ent, anchor);
 	vos_dth_set(old, is_sysdb);
+
+	/* Probes land on the next entry if ours is gone */
+	if (rc == 0 && !vos_anchor_is_zero(&saved) &&
+	    memcmp(saved.da_buf, anchor->da_buf, sizeof(saved.da_buf)) != 0)
+		rc = -DER_NONEXIST;
 
 	if (rc == 0)
 		return 0;
@@ -723,6 +734,7 @@ advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
 	      int next_stage, uint32_t *probe_flags)
 {
 	int	rc = ITER_CONTINUE;
+	bool    gone = false;
 
 	if (acts & VOS_ITER_CB_EXIT)
 		D_GOTO(out, rc = ITER_EXIT);
@@ -730,6 +742,7 @@ advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
 	if (anchors->ia_probe_level != 0) {
 		anchors->ia_probe_level = 0;
 		acts |= VOS_ITER_CB_YIELD;
+		gone = true;
 	}
 
 	set_reprobe(type, acts, anchors, param->ip_flags);
@@ -743,7 +756,11 @@ advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
 		D_GOTO(out, rc = ITER_PROBE);
 	}
 
-	if (acts & (VOS_ITER_CB_SKIP | VOS_ITER_CB_DELETE)) {
+	if (gone) {
+		/* Our entry is gone; the GE re-probe lands on one not yet visited */
+		*probe_flags = 0;
+		*stage       = VOS_ITER_STAGE_FILTER;
+	} else if (acts & (VOS_ITER_CB_SKIP | VOS_ITER_CB_DELETE)) {
 		*probe_flags = VOS_ITER_PROBE_NEXT;
 		*stage = VOS_ITER_STAGE_FILTER;
 		rc = ITER_NEXT;
