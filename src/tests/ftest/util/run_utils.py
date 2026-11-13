@@ -321,6 +321,15 @@ class CommandResult():
         all_stderr = self.all_stderr
         return '\n'.join(filter(None, [all_stderr[key] for key in sorted(all_stderr)]))
 
+    @property
+    def return_code(self):
+        """Get the highest return code from the issued command.
+
+        Returns:
+            int: the highest return code from the issued command; -1 if no return codes were found
+        """
+        return max((data.returncode for data in self.output), default=-1)
+
     def log_output(self, log):
         """Log the command result.
 
