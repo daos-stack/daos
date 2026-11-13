@@ -1221,8 +1221,6 @@ rebuild_scanner(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
-
 	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
 	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
 	if (rc != 0)
@@ -1309,6 +1307,35 @@ rebuild_discard_wait_stop(void *arg)
 	return rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done;
 }
 
+static int
+rebuild_ec_agg_pause(void *data)
+{
+	struct rebuild_tgt_pool_tracker *rpt = data;
+	struct ds_pool_child            *child;
+
+	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (child == NULL)
+		return -DER_NONEXIST;
+
+	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
+	ds_pool_child_put(child);
+	return 0;
+}
+
+/* Wait until EC aggregation is paused on all engines, reported through rebuild IV. */
+static int
+rebuild_wait_global_ec_pause(struct rebuild_tgt_pool_tracker *rpt)
+{
+	ABT_mutex_lock(rpt->rt_lock);
+	while (!rpt->rt_global_ec_paused && !rpt->rt_abort && !rpt->rt_finishing) {
+		D_INFO(DF_RB " wait for global EC aggregation pause\n", DP_RB_RPT(rpt));
+		ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
+	}
+	ABT_mutex_unlock(rpt->rt_lock);
+
+	return rpt->rt_global_ec_paused ? 0 : -DER_SHUTDOWN;
+}
+
 /**
  * Wait for pool map and setup global status, then spawn scanners for all
  * service xsteams
@@ -1319,6 +1346,20 @@ rebuild_scan_leader(void *data)
 	struct rebuild_tgt_pool_tracker *rpt = data;
 	struct rebuild_pool_tls         *tls;
 	int                              rc;
+
+	/* Pause EC aggregation locally, rt_ec_paused is reported to the leader through IV */
+	rc = ds_pool_thread_collective(rpt->rt_pool_uuid,
+				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       rebuild_ec_agg_pause, rpt, 0);
+	if (rc) {
+		DL_ERROR(rc, DF_RB " failed to pause EC aggregation", DP_RB_RPT(rpt));
+		D_GOTO(out, rc);
+	}
+
+	/* Test only: delay reporting local EC pause to hold the global barrier */
+	while (daos_fail_check(DAOS_REBUILD_EC_PAUSE_HANG) && !rpt->rt_abort && !rpt->rt_finishing)
+		dss_sleep(1000);
+	rpt->rt_ec_paused = 1;
 
 	if (rpt->rt_pool->sp_gl_dtx_resync_version >= rpt->rt_rebuild_ver) {
 		D_DEBUG(DB_REBUILD, DF_RB " sp_gl_dtx_resync_version %d exceed rt_rebuild_ver %d.",
@@ -1375,6 +1416,12 @@ do_scan:
 			D_INFO(DF_RB " reintegration discard finished after %u seconds, "
 				     "start fail reclaim scan\n",
 			       DP_RB_RPT(rpt), wait_secs);
+	}
+
+	rc = rebuild_wait_global_ec_pause(rpt);
+	if (rc) {
+		DL_INFO(rc, DF_RB ": shutdown rebuild", DP_RB_RPT(rpt));
+		D_GOTO(out, rc);
 	}
 
 	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));

@@ -572,7 +572,7 @@ Each rebuild operation transitions through the following states, tracked in `rgt
 
 The scan ULT runs on each participating target, on the system XS (XS 0) for each pool child.
 
-1. **EC aggregation pause.** Before beginning VOS iteration, the scanner calls `ds_cont_child_wait_ec_agg_pause()` to ensure EC aggregation is paused. See §13 for the aggregation fence contract. **RB-03:** The timeout on this call is currently swallowed (returns `void`); see §18.
+1. **EC aggregation pause.** Before the scan collective, `rebuild_scan_leader` runs `ds_cont_child_wait_ec_agg_pause()` on every local target, sets `rt_ec_paused` (reported to the leader as `riv_ec_paused`), then waits for `riv_global_ec_paused` from the leader (set once every engine is paused or scan-done) before any VOS iteration starts. See §13 for the aggregation fence contract. **RB-03:** The timeout on this call is currently swallowed (returns `void`); see §18.
 
 2. **DTX orphan cleanup.** Calls `dtx_cleanup_orphan(pool_uuid, sp_dtx_resync_version)` to resolve any uncommitted distributed transactions that survived the DTX resync phase. See §8 for DTX coordination.
 
@@ -1060,7 +1060,7 @@ On **every** participating engine (not only the leader), the following ULTs run 
 
 | ULT function | XStream | Count | Creation | Responsibility |
 |---|---|---|---|---|
-| `rebuild_scanner` | Each VOS-XS[i] | 1 per active rebuild | `ds_pool_thread_collective` inside `rebuild_scan_leader` | **VOS iterator.** Pauses EC aggregation (`ds_cont_child_wait_ec_agg_pause`), cleans up orphan DTX entries, creates the per-TLS `rebuild_tree_hdl`, and then calls `vos_iterate` to enumerate all containers, objects, dkeys, and recxs in the local VOS pool. For each object that needs migrating to a remote target, inserts the OID into `rebuild_tree_hdl`. For objects that can be migrated locally, calls `rebuild_object_local` directly. |
+| `rebuild_scanner` | Each VOS-XS[i] | 1 per active rebuild | `ds_pool_thread_collective` inside `rebuild_scan_leader` | **VOS iterator.** Runs after the global EC aggregation pause barrier, cleans up orphan DTX entries, creates the per-TLS `rebuild_tree_hdl`, and then calls `vos_iterate` to enumerate all containers, objects, dkeys, and recxs in the local VOS pool. For each object that needs migrating to a remote target, inserts the OID into `rebuild_tree_hdl`. For objects that can be migrated locally, calls `rebuild_object_local` directly. |
 | `rebuild_objects_send_ult` | Same VOS-XS[i] as its `rebuild_scanner` | 1 per scanner (not created for `RB_OP_RECLAIM` / `RB_OP_FAIL_RECLAIM`) | `rebuild_scanner` via `dss_ult_create(..., DSS_XS_SELF, ...)` | **RPC dispatcher.** Runs concurrently with the scanner on the same VOS-XS. Continuously drains `rebuild_tree_hdl` by iterating containers and objects, batching up to `REBUILD_SEND_LIMIT` OIDs per call, and invoking `ds_object_migrate_send` to dispatch migration RPCs to destination engines. Exits when `rebuild_pool_scan_done == 1` and the tree is empty. |
 | `rebuild_obj_ult` | VOS-XS[tgt_index] of the destination target | 1 per object (local migration only) | `rebuild_object_local` via `dss_ult_create(..., DSS_XS_VOS, tgt_index, ...)` | **Local object mover.** Used only when the source and destination are on the same engine (intra-engine shard rebalance). Calls `ds_migrate_object` inline, inserting the object into the destination target's `migrate_pool_tls` tree. |
 
@@ -1338,7 +1338,7 @@ EC rebuild has additional constraints beyond replica rebuild:
 
 3. **Scan ordering.** The scanner must enumerate full stripes before partial ones to avoid parity being rebuilt with stale data.
 
-4. **EC aggregation pause.** The scanner calls `ds_cont_child_wait_ec_agg_pause()` before beginning VOS iteration. This ensures EC aggregation is not running concurrently with the scan, which could compute parity over partially-migrated stripes. **RB-03:** Timeout not propagated.
+4. **EC aggregation pause.** `rebuild_scan_leader` pauses EC aggregation locally (`ds_cont_child_wait_ec_agg_pause()`) and waits for the global pause barrier (`riv_ec_paused` / `riv_global_ec_paused` via rebuild IV) before beginning VOS iteration. This ensures EC aggregation is not running concurrently with the scan, which could compute parity over partially-migrated stripes. **RB-03:** Timeout not propagated.
 
 5. **EC aggregation sleep during rebuild.** Even outside the scan phase, EC aggregation ULTs sleep for 18 seconds between rounds when `ds_pool_is_rebuilding()` returns true (`srv_target.c:543`), reducing interference. VOS aggregation continues normally but respects the `spc_rebuild_fence`.
 
@@ -1664,7 +1664,7 @@ A correct implementation must pass tests covering the following scenarios:
 | Administrative stop during fail-reclaim | Integration | `src/tests/suite/daos_rebuild_interactive.c` |
 | Container destroy during rebuild | Integration | `src/tests/suite/daos_rebuild.c` (REBUILD6: `rebuild_destroy_container`) |
 | Rebuild of pool with 100+ snapshots (epoch ordering) | Integration | New test required |
-| Multi-pool simultaneous rebuild (inflight limit) | Integration | `src/tests/suite/daos_rebuild.c` |
+| Multi-pool simultaneous rebuild (in-flight limit) | Integration | `src/tests/suite/daos_rebuild.c` |
 | Maximum-inflight-RPC rebuild storm | Stress | New test required |
 | EC partial-stripe migration | Integration | `src/tests/suite/daos_rebuild_ec.c` |
 | Drain single target | Integration | `src/tests/suite/daos_drain_simple.c` |

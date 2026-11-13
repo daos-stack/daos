@@ -204,9 +204,10 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	dst_iv->riv_global_scan_done = src_iv->riv_global_scan_done;
 	dst_iv->riv_stable_epoch = src_iv->riv_stable_epoch;
 	dst_iv->riv_global_dtx_resyc_version = src_iv->riv_global_dtx_resyc_version;
+	dst_iv->riv_global_ec_paused         = src_iv->riv_global_ec_paused;
 
 	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done || dst_iv->riv_stable_epoch ||
-	    dst_iv->riv_global_dtx_resyc_version) {
+	    dst_iv->riv_global_dtx_resyc_version || dst_iv->riv_global_ec_paused) {
 		D_DEBUG(DB_REBUILD, DF_UUID"/%u/%u/"DF_U64" gsd/gd/stable/ver %d/%d/"DF_X64"/%u\n",
 			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
 			src_iv->riv_rebuild_gen, src_iv->riv_leader_term,
@@ -233,6 +234,14 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			       DP_UUID(src_iv->riv_pool_uuid), old_ver,
 			       dst_iv->riv_global_dtx_resyc_version, rpt->rt_rebuild_ver);
 			ABT_mutex_lock(rpt->rt_lock);
+			ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
+			ABT_mutex_unlock(rpt->rt_lock);
+		}
+		if (dst_iv->riv_global_ec_paused && !rpt->rt_global_ec_paused) {
+			D_INFO(DF_RB " global EC aggregation paused, signal wait cond\n",
+			       DP_RB_RPT(rpt));
+			ABT_mutex_lock(rpt->rt_lock);
+			rpt->rt_global_ec_paused = 1;
 			ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
 			ABT_mutex_unlock(rpt->rt_lock);
 		}

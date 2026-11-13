@@ -1908,6 +1908,57 @@ rebuild_ec_reint_parity_epoch_inflation(void **state)
 	print_message("END %s\n", __FUNCTION__);
 }
 
+#define EC_PAUSE_OBJ_NR 10
+
+/*
+ * Hold EC aggregation pause report on one engine, no engine should start scanning before the
+ * global EC aggregation pause barrier is reached.
+ */
+static void
+rebuild_ec_global_agg_pause(void **state)
+{
+	test_arg_t      *arg = *state;
+	daos_obj_id_t    oids[EC_PAUSE_OBJ_NR];
+	daos_pool_info_t pinfo = {0};
+	d_rank_t         excl_rank;
+	d_rank_t         fault_rank;
+	int              i;
+	int              rc;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	for (i = 0; i < EC_PAUSE_OBJ_NR; i++)
+		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	rebuild_io(arg, oids, EC_PAUSE_OBJ_NR);
+
+	excl_rank  = get_rank_by_oid_shard(arg, oids[0], 0);
+	fault_rank = get_rank_by_oid_shard(arg, oids[0], 1);
+
+	print_message("hold EC pause on rank %u, exclude rank %u\n", fault_rank, excl_rank);
+	test_set_engine_fail_loc(arg, fault_rank, DAOS_REBUILD_EC_PAUSE_HANG | DAOS_FAIL_ALWAYS);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, excl_rank, -1);
+	assert_success(rc);
+	test_rebuild_wait_to_start(&arg, 1);
+
+	/* other engines would have scanned and reported objects by now without the barrier */
+	sleep(30);
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
+	rc            = test_pool_get_info(arg, &pinfo, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("rebuild state %d toberb_obj " DF_U64 " obj " DF_U64 "\n",
+		      pinfo.pi_rebuild_st.rs_state, pinfo.pi_rebuild_st.rs_toberb_obj_nr,
+		      pinfo.pi_rebuild_st.rs_obj_nr);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_state, DRS_IN_PROGRESS);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_toberb_obj_nr, 0);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_obj_nr, 0);
+
+	test_set_engine_fail_loc(arg, fault_rank, 0);
+	test_rebuild_wait(&arg, 1);
+	rebuild_io_validate(arg, oids, EC_PAUSE_OBJ_NR);
+}
+
+/** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
     {"REBUILD0: rebuild partial update with data tgt fail", rebuild_partial_fail_data,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
@@ -2009,6 +2060,8 @@ static const struct CMUnitTest rebuild_tests[] = {
      rebuild_ec_6nodes_setup, test_teardown},
     {"REBUILD49: EC reint data loss through parity replica epoch inflation",
      rebuild_ec_reint_parity_epoch_inflation, rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD50: EC rebuild waits for global EC aggregation pause", rebuild_ec_global_agg_pause,
+     rebuild_ec_8nodes_setup, test_teardown},
 };
 
 int
