@@ -169,6 +169,14 @@ def define_ofi(reqs):
         "verbs",
     )
 
+    # BUILD_GPU_DIRECT enables GPU memory registration support in the transport
+    # prerequisites, for the toolkits whose prefix is set: CUDA (with gdrcopy for
+    # UCX) and/or AMD ROCm. They and compatible GPU drivers/runtime must be on
+    # the build system.
+    enable_gpu_direct = reqs.get_env('BUILD_GPU_DIRECT')
+    cuda_prefix = reqs.get_env('CUDA_PREFIX') if enable_gpu_direct else None
+    rocm_prefix = reqs.get_env('ROCM_PREFIX') if enable_gpu_direct else None
+
     # pylint: disable-next=wrong-spelling-in-comment,fixme
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
@@ -176,6 +184,13 @@ def define_ofi(reqs):
                  '--with-dlopen',
                  '--disable-static',
                  '--disable-silent-rules']
+
+    if enable_gpu_direct:
+        ofi_build.append('--enable-hook_hmem')
+    if cuda_prefix:
+        ofi_build.append(f'--with-cuda={cuda_prefix}')
+    if rocm_prefix:
+        ofi_build.append(f'--with-rocr={rocm_prefix}')
 
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
@@ -205,10 +220,19 @@ def define_ofi(reqs):
 
 def define_ucx(reqs):
     """UCX definitions"""
+    enable_gpu_direct = reqs.get_env('BUILD_GPU_DIRECT')
+    cuda_prefix = reqs.get_env('CUDA_PREFIX') if enable_gpu_direct else None
+    gdrcopy_prefix = reqs.get_env('GDRCOPY_PREFIX') if cuda_prefix else None
+    rocm_prefix = reqs.get_env('ROCM_PREFIX') if enable_gpu_direct else None
+
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
-                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
-                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--without-rocm',
+                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma',
+                     f'--with-cuda={cuda_prefix}' if cuda_prefix else '--without-cuda',
+                     f'--with-gdrcopy={gdrcopy_prefix}' if gdrcopy_prefix
+                     else '--without-gdrcopy',
+                     f'--with-rocm={rocm_prefix}' if rocm_prefix else '--without-rocm',
+                     '--with-verbs', '--without-knem',
                      '--without-xpmem', '--without-fuse3', '--without-ugni']
 
     if reqs.target_type == 'debug':
