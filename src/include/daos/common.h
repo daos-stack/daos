@@ -951,6 +951,9 @@ enum {
 #define DAOS_CHK_ORPHAN_POOL_SHARD        (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xbb)
 #define DAOS_CHK_REPORT_FAILURE            (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xbc)
 
+/* vos_fetch_begin() sees a gang address on a listed array extent, as in a corrupted VOS */
+#define DAOS_VOS_GANG_RECX                 (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xc0)
+
 #define DAOS_MGMT_FAIL_CREATE_QUERY       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xe0)
 
 /* WAL && checkpoint failure inject */

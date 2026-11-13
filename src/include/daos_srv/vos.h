@@ -922,7 +922,7 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  *
  * With VOS_OF_FETCH_CSUM, the fetch only lists the extents and their checksums and reads no data.
  * It takes a single iod (\a nr is 1), no shadows (\a shadows is NULL) and no
- * VOS_OF_FETCH_RECX_LIST: -DER_INVAL is returned otherwise, whatever the data.
+ * VOS_OF_FETCH_RECX_LIST. vos_ioh_recx_copy() copies the data of an extent it lists.
  *
  * TODO: add more detail descriptions for punched or missing records.
  *
@@ -941,7 +941,12 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  * \param[out] ioh	The returned handle for the I/O.
  * \param[in] dth	Pointer to the DTX handle.
  *
- * \return		Zero on success, negative value if error
+ * \retval	0		Success.
+ * \retval	-DER_INVAL	Invalid parameters. With VOS_OF_FETCH_CSUM, several iods, shadows
+ *				or VOS_OF_FETCH_RECX_LIST are refused, whatever the data. A listed
+ *				extent that has a gang address is refused too: only single values
+ *				have one, so the VOS is corrupted.
+ * \retval	-DER_*		Other errors.
  */
 int
 vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
@@ -1130,6 +1135,40 @@ vos_ioh2ci_nr(daos_handle_t ioh);
  */
 daos_epoch_t
 vos_ioh2sv_epoch(daos_handle_t ioh);
+
+/**
+ * Copy the data of a whole physical extent listed by a VOS_OF_FETCH_CSUM fetch.
+ *
+ * A VOS_OF_FETCH_CSUM fetch only lists the extents and their checksums: it does not read their
+ * data. This function copies the whole extent of the entry \a idx of the recx list
+ * (vos_ioh2recx_list()), i.e. the data its checksums (vos_ioh2ci()) were computed on, even where
+ * newer extents hide a part of it, so that the caller can verify the checksums. An extent split by
+ * newer ones is listed once per visible piece, and each of its entries copies the same bytes.
+ *
+ * A VOS_OF_FETCH_CSUM fetch takes a single iod, no shadows and no VOS_OF_FETCH_RECX_LIST (see
+ * vos_fetch_begin()), so that \a idx designates one entry of its recx list, and of its checksum
+ * info list.
+ *
+ * The handle is not modified: any entry can be copied, in any order, until vos_fetch_end(). The
+ * data is read from the media on each call, which may yield when it is stored on NVMe.
+ *
+ * \param ioh		[IN]	The I/O handle of a vos_fetch_begin() with VOS_OF_FETCH_CSUM.
+ * \param idx		[IN]	Index of the entry in the recx list, and in the checksum info list
+ *				if it is not empty.
+ * \param iov_out	[IN,OUT] Destination: iov_buf and iov_buf_len are set by the caller, the
+ *				 buffer shall hold re_recx.rx_nr * re_rec_size bytes of the entry.
+ *				 iov_len is set to the number of bytes copied, and left unchanged
+ *				 on error.
+ *
+ * \retval	0			Success.
+ * \retval	-DER_INVAL		The handle was not opened with VOS_OF_FETCH_CSUM,
+ *					\a idx is out of range (an SV fetch lists no extent), or
+ *					\a iov_out or its buffer is NULL.
+ * \retval	-DER_OVERFLOW		The destination buffer is too small.
+ * \retval	-DER_*			Other errors, e.g. the media read failed.
+ */
+int
+vos_ioh_recx_copy(daos_handle_t ioh, unsigned int idx, d_iov_t *iov_out);
 
 /**
  * Get the scatter/gather list associated with a given I/O descriptor.
