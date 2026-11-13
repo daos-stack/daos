@@ -6,7 +6,6 @@
 """
 import re
 import traceback
-from collections.abc import Iterable
 
 from daos_utils_base import DaosCommandBase
 from general_utils import dict_to_str, list_to_str
@@ -650,7 +649,7 @@ class DaosCommand(DaosCommandBase):
         #   "status": 0
         # }
         props = None
-        if isinstance(properties, Iterable):
+        if isinstance(properties, (list, tuple)):
             props = list_to_str(properties, ',')
         elif properties is not None:
             props = str(properties)

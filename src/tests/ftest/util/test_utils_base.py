@@ -17,6 +17,7 @@ def check_expected(logger, description, data):
     """Check if the expected values match the actual values.
 
     Args:
+        logger (logging.Logger): logger to use for debug output
         description (str): description of the data being checked
         data (dict): dictionary containing the actual and expected values
             in the format {name: (value, expected)}
