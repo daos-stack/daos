@@ -2,6 +2,7 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_servers: 2
+  test_clients: 1
 
 timeout: 600
 
