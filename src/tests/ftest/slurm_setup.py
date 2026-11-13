@@ -38,9 +38,7 @@ class SlurmSetup():
     PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd',
                     'slurm-example-configs']
     SLURM_CONF = '/etc/slurm/slurm.conf'
-    SLURMCTLD_LOG_FILE = '/var/log/slurm/slurmctld.log'
     SLURMCTLD_PID_FILE = '/var/spool/slurmctld/slurmctld.pid'
-    SLURMD_LOG_FILE = '/var/log/slurm/slurmd.log'
     SLURM_LOG_DIR = '/var/log/slurm'
 
     def __init__(self, log, nodes, control_node, sudo=False):
@@ -92,7 +90,7 @@ class SlurmSetup():
         """Update the slurm config.
 
         Args:
-            slurm_user (str): user to run Slurm as
+            slurm_user (str): user to define in the slurm config file
             partition (str): name of the slurm partition to include in the configuration
 
         Raises:
@@ -167,7 +165,7 @@ class SlurmSetup():
         """Start slurm.
 
         Args:
-            user (str): user account to run slurmctld as
+            user (str): user account to use with slurm
             debug (bool): whether or not to display slurm debug
 
         Raises:
@@ -187,19 +185,19 @@ class SlurmSetup():
 
         # Restart slurmctld on the control node
         self._restart_systemctl(
-            self.control, 'slurmctld', self.SLURMCTLD_LOG_FILE, self.SLURM_CONF)
+            self.control, 'slurmctld', '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
 
         # Restart slurmd on all nodes
         self._restart_systemctl(
-            self.all_nodes, 'slurmd', self.SLURMD_LOG_FILE, self.SLURM_CONF)
+            self.all_nodes, 'slurmd', '/var/log/slurm/slurmd.log', self.SLURM_CONF)
 
         # Update nodes to the idle state
         command = command_as_user(
             f'scontrol update nodename={str(self.nodes)} state=idle', self.root)
         result = run_remote(self.log, self.nodes, command)
         if not result.passed or debug:
-            self._display_debug(self.control, self.SLURMCTLD_LOG_FILE, self.SLURM_CONF)
-            self._display_debug(self.all_nodes, self.SLURMD_LOG_FILE, self.SLURM_CONF)
+            self._display_debug(self.control, '/var/log/slurm/slurmctld.log', self.SLURM_CONF)
+            self._display_debug(self.all_nodes, '/var/log/slurm/slurmd.log', self.SLURM_CONF)
         if not result.passed:
             raise SlurmSetupException(f'Error setting nodes to idle on {self.nodes}')
 
@@ -252,7 +250,7 @@ class SlurmSetup():
         """Update the slurm config file.
 
         Args:
-            slurm_user (str): user to run Slurm as
+            slurm_user (str): user to define in the slurm config file
             partition (str): name of the slurm partition to include in the configuration
 
         Raises:
@@ -282,11 +280,11 @@ class SlurmSetup():
         # Keep configured log paths consistent with the directories created for Slurm.
         self._modify_slurm_config_file(
             'slurmctld log file', self.all_nodes,
-            f's#^[[:space:]]*SlurmctldLogFile=.*#SlurmctldLogFile={self.SLURMCTLD_LOG_FILE}#',
+            's#^[[:space:]]*SlurmctldLogFile=.*#SlurmctldLogFile=/var/log/slurm/slurmctld.log#',
             self.root)
         self._modify_slurm_config_file(
             'slurmd log file', self.all_nodes,
-            f's#^[[:space:]]*SlurmdLogFile=.*#SlurmdLogFile={self.SLURMD_LOG_FILE}#',
+            's#^[[:space:]]*SlurmdLogFile=.*#SlurmdLogFile=/var/log/slurm/slurmd.log#',
             self.root)
 
         # Update the config file with the slurm control node
