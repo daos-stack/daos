@@ -218,14 +218,19 @@ crt_bulk_free(crt_bulk_t crt_bulk)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-		rc = crt_hgret_2_der(hg_ret);
+	if (bulk->hg_bulk_hdl != HG_BULK_NULL) {
+		hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
+			rc = crt_hgret_2_der(hg_ret);
+		}
 	}
 
-	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
-	if (bulk->crt_ctx)
+	/*
+	 * Decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL.
+	 * Deferred bulks that were never encoded did not take quota either.
+	 */
+	if (!bulk->deferred && bulk->crt_ctx)
 		put_quota_resource(bulk->crt_ctx, CRT_QUOTA_BULKS);
 out:
 	if (bulk != NULL) {
