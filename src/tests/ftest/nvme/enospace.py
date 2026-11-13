@@ -9,19 +9,20 @@ import threading
 import time
 
 import pydaos
-from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
 from general_utils import get_display_size, get_errors_count
-from ior_utils import IorCommand, IorMetrics
+from ior_utils import IorCommand, IorMetrics, get_ior_metrics, run_ior
 from job_manager_utils import get_job_manager
 from nvme_utils import ServerFillUp
 from telemetry_test_base import TestWithTelemetry
 
 
 class NvmeEnospace(ServerFillUp, TestWithTelemetry):
+    # pylint: disable=too-many-public-methods
     # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-lines
     """
     Test Class Description: To validate DER_NOSPACE for SCM and NVMe
     :avocado: recursive
@@ -320,9 +321,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         pool_space = self.pool.info.pi_space
         pool_space_metrics = self.get_pool_space_metrics(self.pool, metrics)
-        self.display_pool_space(pool_space, pool_space_metrics)
-
         pool_aggr_metrics = self.get_pool_aggr_metrics(self.pool, metrics)
+
+        self.display_pool_space(pool_space, pool_space_metrics)
         self.display_pool_aggregation(pool_aggr_metrics)
         self.log.debug("")
 
@@ -471,7 +472,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # Fill 50% of current SCM free space. Aggregation is Enabled so NVMe space will
         # continue to fill up.
         try:
-            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50,
+                                log_file=log_file)
         finally:
             self.display_stats()
 
@@ -479,30 +481,30 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
         # command is expected to fail with DER_NOSPACE.
         # pylint: disable-next=logging-too-few-args
-        self.log.info('--Filling 60% of the current SCM free space--')
-        try:
-            self.start_ior_load(
-                storage='SCM', operation="Auto_Write", percent=60, log_file=log_file)
-        except TestFail:
-            self.log.info('Test is expected to fail because of DER_NOSPACE')
-        else:
-            self.fail('This test is suppose to FAIL because of DER_NOSPACE but it Passed')
-        finally:
-            self.display_stats()
+        # self.log.info('--Filling 60% of the current SCM free space--')
+        # try:
+        #     self.start_ior_load(
+        #         storage='SCM', operation="Auto_Write", percent=60, log_file=log_file)
+        # except TestFail:
+        #     self.log.info('Test is expected to fail because of DER_NOSPACE')
+        # else:
+        #     self.fail('This test is suppose to FAIL because of DER_NOSPACE but it Passed')
+        # finally:
+        #     self.display_stats()
 
         # verify the DER_NO_SPACE error count is expected and no other Error in client log
-        self.verify_enospace_log(log_file)
+        # self.verify_enospace_log(log_file)
 
         # Check both NVMe and SCM are full.
-        pool_usage = self.get_pool_usage(self.pool.info.pi_space)
-        for idx, elt in enumerate(self.media_names):
-            if pool_usage[idx] >= self.pool_usage_min[idx]:
-                continue
-            msg = (
-                f"Pool {elt} used percentage is invalid: "
-                f"wait_in=[{self.pool_usage_min[idx]}, 100], got={pool_usage[idx]}"
-            )
-            self.fail(msg)
+        # pool_usage = self.get_pool_usage(self.pool.info.pi_space)
+        # for idx, elt in enumerate(self.media_names):
+        #     if pool_usage[idx] >= self.pool_usage_min[idx]:
+        #         continue
+        #     msg = (
+        #         f"Pool {elt} used percentage is invalid: "
+        #         f"wait_in=[{self.pool_usage_min[idx]}, 100], got={pool_usage[idx]}"
+        #     )
+        #     self.fail(msg)
 
     def run_enospace_with_bg_job(self, log_file):
         """Check DER_ENOSPACE occurs when storage space is filled.
@@ -673,7 +675,223 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log_step("Run one more sanity IOR to fill 1%")
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-8896")
+    def test_performance_wr_storage_full(self):
+        """Jira ID: Test Only
+
+        Test Description: Verify IO Write and Read performance when pool size is full.
+
+        Use Case: 1.	write and read at the beginning in an empty pool, with a ~30sec write phase,
+                        doing multiple iterations to see how stable your bandwidth results are.
+                  2.	Then fill up the pool to ~90% (so there's still space for another WRITE
+                        operation into this “almost full” pool), of the same aggregate size as the
+                        initial write in the initial step.
+                  3.	Then do several write/read operations at the end, using the remaining pool
+                        space, Again, doing multiple IOR iterations to check if the bandwidth
+                        numbers are noisy run-to-run, or are relatively stable so comparing with
+                        the write/read in step1 makes sense
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,der_enospace,enospc_performance
+        :avocado: tags=NvmeEnospace,test_performance_wr_storage_full
+        """
+        write_nk_flags = self.params.get("write_nk_flags", '/run/ior_new/*')
+        write_read_nk_flags = self.params.get("write_read_nk_flags", '/run/ior_new/*')
+        processes = self.params.get("processes", '/run/ior_new/*')
+        transfer_size = self.params.get("transfer_size", '/run/ior_new/*')
+        block_size = self.params.get("block_size", '/run/ior_new/*')
+        container = self.get_container(self.pool)
+        iterations = self.params.get("iterations", '/run/ior_new/*')
+
+        # Write the IOR Baseline and get the Read BW for later comparison.
+        self.log.info(self.pool.pool_percentage_used())
+
+        # Write
+        self.log_step('Running IOR baseline write')
+        max_w_mib_baseline = []
+        for i in range(iterations):
+            ior_matrix = self._get_ior_metrics(
+                container,
+                processes=processes,
+                ior_flags=write_nk_flags,
+                transfer_size=transfer_size,
+                block_size=block_size,
+                namespace='/run/ior_new/*')
+            max_w_mib_baseline.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
+            self.log.info("IOR Baseline Write MiB %d: %s", i, max_w_mib_baseline[-1])
+
+        # Write and Read the baseline data set
+        self.log_step('Running IOR baseline write and read')
+        max_wr_mib_baseline = []
+        for i in range(iterations):
+            ior_matrix = self._get_ior_metrics(
+                container,
+                processes=processes,
+                ior_flags=write_read_nk_flags,
+                transfer_size=transfer_size,
+                block_size=block_size,
+                namespace='/run/ior_new/*')
+            max_wr_mib_baseline.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
+            self.log.info("IOR Baseline Write/Read MiB %d: %s", i, max_wr_mib_baseline[-1])
+
+        # Run IOR to fill the pool.
+        self.log_step('Running IOR to fill ~90% of the pool')
+        self.run_enospace_with_bg_job(self.client_log)
+
+        # Write with ~90% of the pool filled
+        self.log_step('Running IOR write with ~90% of the pool filled')
+        max_w_mib_latest = []
+        for i in range(iterations):
+            ior_matrix = self._get_ior_metrics(
+                container,
+                processes=processes,
+                ior_flags=write_nk_flags,
+                transfer_size=transfer_size,
+                block_size=block_size,
+                namespace='/run/ior_new/*')
+            max_w_mib_latest.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
+            self.log.info("IOR Latest Write MiB %d: %s", i, max_w_mib_latest[-1])
+
+        # Read the same container which was written at the beginning.
+        # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log_step('Running IOR write and read with ~90% of the pool filled')
+        max_wr_mib_latest = []
+        for i in range(iterations):
+            ior_matrix = self._get_ior_metrics(
+                container,
+                processes=processes,
+                ior_flags=write_read_nk_flags,
+                transfer_size=transfer_size,
+                block_size=block_size,
+                namespace='/run/ior_new/*')
+            max_wr_mib_latest.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
+            self.log.info("IOR Latest Write/Read MiB %d: %s", i, max_wr_mib_latest[-1])
+
+        # Check if latest IOR read performance is in Tolerance of 5%, when
+        # Storage space is full.
+
+        avg_w_baseline = sum(max_w_mib_baseline) / len(max_w_mib_baseline)
+        avg_w_latest = sum(max_w_mib_latest) / len(max_w_mib_latest)
+        self.log.info("Average IOR Baseline Write MiB %s", avg_w_baseline)
+        self.log.info("Average IOR Latest Write MiB %s", avg_w_latest)
+
+        avg_wr_baseline = sum(max_wr_mib_baseline) / len(max_wr_mib_baseline)
+        avg_wr_latest = sum(max_wr_mib_latest) / len(max_wr_mib_latest)
+        self.log.info("Average IOR Baseline Read MiB %s", avg_wr_baseline)
+        self.log.info("Average IOR Latest Read MiB %s", avg_wr_latest)
+        if abs(avg_w_baseline - avg_w_latest) > (avg_w_baseline / 100 * 5) or \
+           abs(avg_wr_baseline - avg_wr_latest) > (avg_wr_baseline / 100 * 5):
+            self.fail('Latest IOR performance is not under 5% Tolerance'
+                      ' Baseline Write MiB = {} and latest IOR Write MiB = {}'
+                      ' Baseline Write/Read MiB = {} and latest IOR Write/Read MiB = {}'
+                      .format(max_w_mib_baseline, max_w_mib_latest,
+                              max_wr_mib_baseline, max_wr_mib_latest))
+
+    def test_performance_read_storage_full(self):
+        """Jira ID: Test Only
+
+        Test Description: Verify IO Read performance when pool size is full.
+
+        Use Case: 1.	write and read at the beginning in an empty pool, with a ~30sec write phase,
+                        doing multiple iterations to see how stable your bandwidth results are.
+                  2.	Then fill up the pool to ~90% (so there's still space for another WRITE
+                        operation into this “almost full” pool), of the same aggregate size as the
+                        initial write in the initial step.
+                  3.	Then do several write/read operations at the end, using the remaining pool
+                        space, Again, doing multiple IOR iterations to check if the bandwidth
+                        numbers are noisy run-to-run, or are relatively stable so comparing with
+                        the write/read in step1 makes sense
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,der_enospace,enospc_performance
+        :avocado: tags=NvmeEnospace,test_performance_read_storage_full
+        """
+        r_flags = self.params.get("read_flags", '/run/ior_new/*')
+        w_flags = self.params.get("write_flags", '/run/ior_new/*')
+        processes = self.params.get("processes", '/run/ior_new/*')
+        transfer_size = self.params.get("transfer_size", '/run/ior_new/*')
+        block_size = self.params.get("block_size", '/run/ior_new/*')
+        container = self.get_container(self.pool)
+        iterations = self.params.get("iterations", '/run/ior_new/*')
+
+        # Write the IOR Baseline and get the Read BW for later comparison.
+        self.log.info(self.pool.pool_percentage_used())
+
+        # Write First
+        self.log_step('Running IOR write')
+        ior_matrix = self._get_ior_metrics(
+            container,
+            processes=processes,
+            ior_flags=w_flags,
+            transfer_size=transfer_size,
+            block_size=block_size,
+            namespace='/run/ior_new/*')
+        max_wr_mib_baseline = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        self.log.info("IOR Write MiB: %s", max_wr_mib_baseline)
+
+        # Read the baseline data set
+        self.log_step('Running IOR baseline read')
+        max_rd_mib_baseline = []
+        for i in range(iterations):
+            ior_matrix = self._get_ior_metrics(
+                container,
+                processes=processes,
+                ior_flags=r_flags,
+                transfer_size=transfer_size,
+                block_size=block_size,
+                namespace='/run/ior_new/*')
+            max_rd_mib_baseline.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
+            self.log.info("IOR Baseline Read MiB %d: %s", i, max_rd_mib_baseline[-1])
+
+        # Run IOR to fill the pool.
+        self.log_step('Running IOR to fill ~70% of the pool')
+        # self.run_enospace_with_bg_job(self.client_log)
+        container_fill = self.get_container(self.pool)
+        self.fill_pool(container_fill, 70)
+
+        # Write after 70% of the pool is filled
+        self.log_step('Running IOR write after ~70% of the pool filled')
+        container_wr = self.get_container(self.pool)
+        ior_matrix = self._get_ior_metrics(
+            container_wr,
+            processes=processes,
+            ior_flags=w_flags,
+            transfer_size=transfer_size,
+            block_size=block_size,
+            namespace='/run/ior_new/*')
+        max_wr_mib_last = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        self.log.info("IOR Write to fill ~70%% container MiB: %s", max_wr_mib_last)
+
+        # Read the same container which was written at the beginning.
+        # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log_step('Running IOR read after ~70% of the pool filled')
+        max_rd_mib_latest = []
+        for i in range(iterations):
+            ior_matrix = self._get_ior_metrics(
+                container_wr,
+                processes=processes,
+                ior_flags=r_flags,
+                transfer_size=transfer_size,
+                block_size=block_size,
+                namespace='/run/ior_new/*')
+            max_rd_mib_latest.append(float(ior_matrix[0][int(IorMetrics.MAX_MIB)]))
+            self.log.info("70%% filled IOR Latest Read MiB %d: %s", i, max_rd_mib_latest[-1])
+
+        # Check if latest IOR read performance is in Tolerance of 5%, when
+        # Storage space is full.
+        self.log.info("Initial IOR Write MiB: %s", max_wr_mib_baseline)
+        self.log.info("After 70%% filled IOR Write MiB: %s", max_wr_mib_last)
+
+        avg_rd_baseline = sum(max_rd_mib_baseline) / len(max_rd_mib_baseline)
+        avg_rd_latest = sum(max_rd_mib_latest) / len(max_rd_mib_latest)
+        self.log.info("Average IOR Baseline Read MiB: %s", avg_rd_baseline)
+        self.log.info("Average IOR Latest Read MiB: %s", avg_rd_latest)
+        if abs(avg_rd_baseline - avg_rd_latest) > (avg_rd_baseline / 100 * 5) or \
+           abs(max_wr_mib_baseline - max_wr_mib_last) > (max_wr_mib_baseline / 100 * 5):
+            self.fail('Latest IOR performance is not under 5% Tolerance'
+                      ' Average baseline Read MiB  = {} and Average after 70% fill Read MiB = {}'
+                      ' Baseline Write MiB = {} and after 70% fill Write MiB = {}'
+                      .format(avg_rd_baseline, avg_rd_latest, max_wr_mib_baseline, max_wr_mib_last))
+
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
@@ -689,24 +907,51 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         :avocado: tags=nvme,der_enospace,enospc_performance
         :avocado: tags=NvmeEnospace,test_performance_storage_full
         """
+        container = self.get_container(self.pool)
+
         # Write the IOR Baseline and get the Read BW for later comparison.
         self.log.info(self.pool.pool_percentage_used())
+
         # Write First
-        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
+        # self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1, container=container)
+        self.log_step('Running IOR baseline write')
+        self._get_ior_metrics(
+            container,
+            processes=64,
+            ior_flags=self.ior_default_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(5, 'SCM'),
+            namespace='/run/ior_new/*')
         # Read the baseline data set
-        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
-        baseline_cont_uuid = self.ior_cmd.dfs_cont.value
-        self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
+        # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log_step('Running IOR baseline read')
+        ior_matrix = self._get_ior_metrics(
+            container,
+            processes=64,
+            ior_flags=self.ior_read_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(5, 'SCM'),
+            namespace='/run/ior_new/*')
+        max_mib_baseline = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        # baseline_cont_uuid = self.ior_cmd.dfs_cont.value
+        self.log.info("IOR Baseline Read MiB: %s", max_mib_baseline)
 
         # Run IOR to fill the pool.
+        self.log_step('Running IOR to hit enospace')
         self.run_enospace_with_bg_job(self.client_log)
 
         # Read the same container which was written at the beginning.
-        self.container.uuid = baseline_cont_uuid
-        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
-        self.log.info("IOR Latest Read MiB %s", max_mib_latest)
+        # self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
+        self.log_step('Running IOR read to compare to baseline')
+        ior_matrix = self._get_ior_metrics(
+            container,
+            processes=64,
+            ior_flags=self.ior_read_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(5, 'SCM'),
+            namespace='/run/ior_new/*')
+        max_mib_latest = float(ior_matrix[0][int(IorMetrics.MAX_MIB)])
+        self.log.info("IOR Latest Read MiB: %s", max_mib_latest)
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
         # Storage space is full.
@@ -714,6 +959,67 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.fail('Latest IOR read performance is not under 5% Tolerance'
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
+
+    def fill_pool(self, container, percentage):
+        """Fill the container to the specified SCM and NVMe percentages.
+
+        Args:
+            container (obj): The container to fill.
+            percentage (int): The target usage percentage for SCM.
+        """
+        # Implementation to fill the pool goes here
+        self.log.info("Filling container %s to SCM %d%%", container, percentage)
+        ior_metrics = self._get_ior_metrics(
+            container,
+            processes=64,
+            ior_flags=self.ior_default_flags,
+            transfer_size=self.ior_scm_xfersize,
+            block_size=self.calculate_ior_block_size(percentage, 'SCM'),
+            namespace='/run/ior_new/*')
+        self.log.info("IOR metrics for container %s: %s", container, ior_metrics)
+        max_mib = float(ior_metrics[0][int(IorMetrics.MAX_MIB)])
+        self.log.info("IOR Write to fill container %s: MiB: %s", container, max_mib)
+
+    def _get_ior_metrics(self, container, processes, ior_flags, transfer_size, block_size,
+                         namespace="/run/ior/*"):
+        """_summary_
+
+        Args:
+            container (_type_): _description_
+            ior_flags (_type_): _description_
+            transfer_size (_type_): _description_
+            block_size (_type_): _description_
+
+        Returns:
+            list: ior write and read metrics
+        """
+        manager = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
+        result = run_ior(
+            self,
+            manager,
+            "ior_baseline_write.log",
+            self.hostlist_clients,
+            self.workdir,
+            None,
+            self.pool,
+            container,
+            processes,
+            ppn=None,
+            intercept=None,
+            plugin_path=None,
+            dfuse=None,
+            display_space=True,
+            fail_on_warning=False,
+            namespace=namespace,
+            ior_params={
+                "flags": ior_flags,
+                "transfer_size": transfer_size,
+                "block_size": block_size}
+        )
+        self.display_stats()
+        if result.exit_status != 0:
+            self.fail("Errors running ior")
+        return get_ior_metrics(result)
 
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.

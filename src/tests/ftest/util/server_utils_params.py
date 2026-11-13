@@ -532,6 +532,7 @@ class EngineYamlParameters(YamlParameters):  # pylint: disable=too-many-instance
             "ABT_ENV_MAX_NUM_XSTREAMS=100",
             "ABT_MAX_NUM_XSTREAMS=100",
             "DAOS_MD_CAP=1024",
+            "DAOS_SCHED_PRIO_DISABLED=1",
             "DAOS_SCHED_WATCHDOG_ALL=1",
             "DD_MASK=mgmt,io,md,epc,rebuild",
         ]
