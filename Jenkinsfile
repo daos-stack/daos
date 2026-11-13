@@ -855,18 +855,17 @@ pipeline {
                                 script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
                                     ' utils/build/build_packages.sh --rpm-suffix=el9' +
                                     ' --build-range=daos rpms'
-                            // Go binaries need to be instrumented in order to work reliably
-                            // with valgrind. We do this in a separate build because we don't
-                            // want to ship the instrumented binaries.
+                            // NLT checks memory with ASan. We do this in a separate build
+                            // because we don't want to ship the instrumented binaries.
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
                                            scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
-                            sh label: 'Stash valgrind install tree for NLT',
-                                script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
-                            stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
+                                                      ' SANITIZERS=address TARGET_TYPE=release'))
+                            sh label: 'Stash sanitizer install tree for NLT',
+                                script: 'tar -C / -cf opt-daos-sanitizers.tar opt/daos'
+                            stash(name: 'opt-daos-sanitizers', includes: 'opt-daos-sanitizers.tar')
                         }
                     }
                     post {
@@ -1010,8 +1009,8 @@ pipeline {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
-                        // NLT memchecks the valgrind-tagged build, not the shared -race one.
-                        unstash 'opt-daos-valgrind'
+                        // NLT runs the ASan build, not the shared -race one.
+                        unstash 'opt-daos-sanitizers'
                         job_step_update(
                             unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
                                                                            def_val: '1').toInteger(),
@@ -1028,8 +1027,7 @@ pipeline {
                                                   /* groovylint-disable-next-line LineLength */
                                                   (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
                                                   ' all',
-                                     with_valgrind: 'memcheck',
-                                     valgrind_pattern: '*memcheck.xml',
+                                     with_valgrind: '',
                                      always_script: 'ci/unit/test_nlt_post.sh',
                                      testResults: 'nlt-junit.xml',
                                      unstash_opt: true,
@@ -1046,8 +1044,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['nlt_logs/', 'nlt-summary-nlt.md'],
                                          testResults: 'nlt-junit.xml',
-                                         valgrind_stash: 'nlt-memcheck',
-                                         valgrind_pattern: '*memcheck.xml',
+                                         with_valgrind: '',
                                          NLT: true
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
@@ -1412,8 +1409,7 @@ pipeline {
     } // stages
     post {
         always {
-            valgrindReportPublish valgrind_stashes: ['nlt-memcheck',
-                                                     'unit-memcheck']
+            valgrindReportPublish valgrind_stashes: ['unit-memcheck']
             job_status_update('final_status')
             jobStatusWrite(job_status_internal)
         }

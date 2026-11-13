@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -55,6 +56,7 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	}
 
 	fmt.Printf("%s, libdaos v%s\n", build.String(build.CLIUtilName), apiVersion())
+	checkLeaks()
 	os.Exit(0)
 	return nil
 }
@@ -88,6 +90,7 @@ func exitWithError(log logging.Logger, err error) {
 	if fault.HasResolution(err) {
 		log.Errorf("%s: %s", cmdName, fault.ShowResolutionFor(err))
 	}
+	checkLeaks()
 	os.Exit(1)
 }
 
@@ -207,6 +210,7 @@ func main() {
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
 			log.Info(fe.Error())
+			checkLeaks()
 			os.Exit(0)
 		}
 		exitWithError(log, err)

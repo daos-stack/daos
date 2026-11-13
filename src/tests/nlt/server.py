@@ -12,6 +12,7 @@ import copy
 import json
 import os
 import re
+import shutil
 import signal
 import stat
 import subprocess  # nosec
@@ -24,7 +25,7 @@ import yaml
 
 from .base import NLTestFail, NLTestTimeout, get_inc_id
 from .client import DaosCont, DaosPool, ValgrindHelper
-from .config import get_base_env
+from .config import get_base_env, il_preload, sanitizer_reports
 from .logging_utils import log_test
 
 
@@ -183,6 +184,13 @@ class DaosServer():
         server_env = get_base_env(clean=True)
 
         plain_env = os.environ.copy()
+
+        if self.conf.sanitizers:
+            # libasan intercepts dlopen(), so the engine's RUNPATH is not searched when loading
+            # its modules.
+            server_env['LD_LIBRARY_PATH'] = join(self.conf['PREFIX'], 'lib64', 'daos_srv')
+            # ASan frames overflow argobots' default 16KiB ULT stack.
+            server_env['ABT_THREAD_STACKSIZE'] = '32768'
 
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
@@ -347,11 +355,104 @@ class DaosServer():
             if start_timeout < 5:
                 start_timeout *= 2
 
-            self._check_timing("start", start, self.max_start_time)
+            try:
+                self._check_timing("start", start, self.max_start_time)
+            except NLTestTimeout:
+                self._dump_start_failure()
+                raise
         duration = time.perf_counter() - start
         self._add_test_case('start', duration=duration)
         print(f'Server started in {duration:.2f} seconds')
         self.fetch_pools()
+
+    def _engine_pids(self):
+        """Return the pids of the engines started by daos_server"""
+        parent_pid = self._sp.pid
+        procs = []
+        for proc_id in os.listdir('/proc/'):
+            if proc_id == 'self':
+                continue
+            status_file = f'/proc/{proc_id}/status'
+            if not os.path.exists(status_file):
+                continue
+            with open(status_file, 'r') as fd:
+                for line in fd.readlines():
+                    try:
+                        key, raw = line.split(':', maxsplit=1)
+                    except ValueError:
+                        continue
+                    value = raw.strip()
+                    if key == 'Name' and value != self.__process_name:
+                        break
+                    if key != 'PPid':
+                        continue
+                    if int(value) == parent_pid:
+                        procs.append(proc_id)
+                        break
+        return procs
+
+    @staticmethod
+    def _print_tail(name, lines=100):
+        print(f'==== last {lines} lines of {name} ====')
+        try:
+            with open(name, 'r', errors='replace') as fd:
+                for line in fd.readlines()[-lines:]:
+                    print(line.rstrip())
+        except OSError as error:
+            print(f'Unable to read {name}: {error}')
+
+    def _dump_start_failure(self):
+        """Print what the engines are doing, then kill the server.
+
+        A stuck engine keeps daos_server running, which keeps the CI ssh session open, so the
+        server is killed here to let NLT exit and the logs be collected.
+        """
+        self._print_tail(self.control_log.name)
+        print(f'==== engine exits and errors in {self.control_log.name} ====')
+        try:
+            with open(self.control_log.name, 'r', errors='replace') as fd:
+                for line in fd:
+                    if 'ERROR' in line or 'exited' in line:
+                        print(line.rstrip())
+        except OSError as error:
+            print(f'Unable to read {self.control_log.name}: {error}')
+        for log in self.server_logs:
+            self._print_tail(log.name)
+        for report in sanitizer_reports(join(self.conf.tmp_dir or '.', 'dnt_asan')):
+            self._print_tail(report, lines=200)
+
+        gdb = shutil.which('gdb')
+        for pid in self._engine_pids():
+            print(f'==== engine {pid} threads ====')
+            for tid in sorted(os.listdir(f'/proc/{pid}/task'), key=int):
+                try:
+                    with open(f'/proc/{pid}/task/{tid}/comm', 'r') as fd:
+                        comm = fd.read().strip()
+                    with open(f'/proc/{pid}/task/{tid}/wchan', 'r') as fd:
+                        wchan = fd.read().strip()
+                except OSError:
+                    continue
+                print(f'{tid} {comm} wchan={wchan}')
+            if gdb is None:
+                print('gdb not found, no engine stack traces')
+                continue
+            # The engine is not a descendant of gdb, so ptrace_scope=1 needs root.
+            cmd = ['sudo', '-n', gdb, '-batch', '-p', pid, '-ex', 'thread apply all bt']
+            try:
+                ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     timeout=300, check=False)
+                print(ret.stdout.decode('utf-8', errors='replace'))
+            except subprocess.TimeoutExpired:
+                print(f'gdb timed out on engine {pid}')
+
+        for pid in self._engine_pids():
+            os.kill(int(pid), signal.SIGKILL)
+        self._sp.kill()
+        self._sp.wait()
+        if self._agent:
+            self._stop_agent()
+        self._sp = None
+        self.running = False
 
     def _stop_agent(self):
         self._agent.send_signal(signal.SIGINT)
@@ -379,28 +480,7 @@ class DaosServer():
         # Check the correct number of processes are still running at this
         # point, in case anything has crashed.  daos_server does not
         # propagate errors, so check this here.
-        parent_pid = self._sp.pid
-        procs = []
-        for proc_id in os.listdir('/proc/'):
-            if proc_id == 'self':
-                continue
-            status_file = f'/proc/{proc_id}/status'
-            if not os.path.exists(status_file):
-                continue
-            with open(status_file, 'r') as fd:
-                for line in fd.readlines():
-                    try:
-                        key, raw = line.split(':', maxsplit=1)
-                    except ValueError:
-                        continue
-                    value = raw.strip()
-                    if key == 'Name' and value != self.__process_name:
-                        break
-                    if key != 'PPid':
-                        continue
-                    if int(value) == parent_pid:
-                        procs.append(proc_id)
-                        break
+        procs = self._engine_pids()
 
         if len(procs) != self.engines:
             # Mark this as a warning, but not a failure.  This is currently
@@ -580,10 +660,11 @@ class DaosServer():
         # If there are valgrind errors here then mark them for later reporting but
         # do not abort.  This allows a full-test run to report all valgrind issues
         # in a single test run.
-        if valgrind_hdl.use_valgrind and rc.returncode == 42:
-            print("Valgrind errors detected")
+        if valgrind_hdl.found_errors(rc.returncode):
+            print(f'{self.conf.memcheck_tool} errors detected')
             print(rc)
-            self.conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
+            self.conf.wf.add_test_case(' '.join(cmd),
+                                       failure=f'{self.conf.memcheck_tool} errors', output=rc)
             self.conf.valgrind_errors = True
             rc.returncode = 0
         assert rc.returncode == 0, rc
@@ -615,7 +696,7 @@ class DaosServer():
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         if report:
             cmd_env['D_IL_REPORT'] = '1'
-        cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+        cmd_env['LD_PRELOAD'] = il_preload(self.conf, 'libpil4dfs.so')
         cmd_env['D_IL_NO_BYPASS'] = '1'
         if container is not None:
             # Create a temporary directory for the mount point, this will be removed as it goes out

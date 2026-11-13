@@ -20,7 +20,7 @@ import yaml
 
 from .base import NLTestNoFi
 from .client import ValgrindHelper, create_cont, run_daos_cmd
-from .config import get_base_env, load_conf
+from .config import get_base_env, il_preload, load_conf
 from .dfuse import DFuse
 from .logging_utils import log_test, setup_log_test
 from .reporting import WarningsFactory
@@ -529,7 +529,7 @@ class AllocFailTest():
         # del cmd_env['DD_SUBSYS']
 
         if self.use_il:
-            cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
+            cmd_env['LD_PRELOAD'] = il_preload(self.conf, 'libioil.so')
 
         cwd = None
         tmp_dir = None
@@ -539,7 +539,7 @@ class AllocFailTest():
             tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
             cwd = tmp_dir.name
             cmd_env['DAOS_MOUNT_POINT'] = cwd
-            cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
+            cmd_env['LD_PRELOAD'] = il_preload(self.conf, 'libpil4dfs.so')
             cmd_env['D_IL_NO_BYPASS'] = '1'
             cmd_env['DAOS_POOL'] = self._use_pil4dfs.pool.id()
             cmd_env['DAOS_CONTAINER'] = self._use_pil4dfs.id()
