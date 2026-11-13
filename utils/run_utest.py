@@ -410,7 +410,8 @@ class Test():
             return os.path.dirname(cmocka_xml)
         return os.path.join(self.root_dir(), "test_results")
 
-    def subst(self, cmd, replacements, path_info):
+    @staticmethod
+    def subst(cmd, replacements, path_info):
         """Make any substitutions for variables in path_info"""
         if not replacements:
             return cmd
@@ -421,7 +422,7 @@ class Test():
                 try:
                     path = path_info[value]
                 except KeyError as exception:
-                    print(f"Invalid path_info key {value} in configuration for {self.name}")
+                    print(f"Invalid path_info key {value} in configuration")
                     raise exception
                 entry = entry.replace(key, path)
             new_cmd.append(entry)

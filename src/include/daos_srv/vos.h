@@ -920,6 +920,10 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  * The upper layer must explicitly call \a vos_fetch_end to finalize the
  * I/O and release resources.
  *
+ * With VOS_OF_FETCH_CSUM, the fetch only lists the extents and their checksums and reads no data.
+ * It takes a single iod (\a nr is 1), no shadows (\a shadows is NULL) and no
+ * VOS_OF_FETCH_RECX_LIST: -DER_INVAL is returned otherwise, whatever the data.
+ *
  * TODO: add more detail descriptions for punched or missing records.
  *
  * \param[in] coh	Container open handle
@@ -969,7 +973,7 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
  *			is provided.
- * \param flags [IN]	conditional flags
+ * \param flags [IN]	conditional flags.
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
