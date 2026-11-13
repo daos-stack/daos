@@ -47,11 +47,11 @@ static int
 setup(void **state)
 {
 	Checker = (struct checker){
-	    .ck_level        = 0,
-	    .ck_prefix       = "-> ",
-	    .ck_indent_set   = checker_indent_set,
-	    .ck_vprintf      = checker_vprintf,
-	    .ck_warnings_num = INITIAL_WARNINGS,
+	    .ck_level               = 0,
+	    .ck_prefix              = "-> ",
+	    .ck_indent_set          = checker_indent_set,
+	    .ck_vprintf             = checker_vprintf,
+	    .ck_status.warnings_num = INITIAL_WARNINGS,
 	};
 	mock_vfprintf_check_output = false;
 	*state                     = &Checker;
@@ -63,7 +63,7 @@ teardown(void **state)
 {
 	struct checker *ck = *state;
 
-	assert_int_equal(ck->ck_warnings_num, INITIAL_WARNINGS);
+	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS);
 	assert_string_equal(ck->ck_prefix, "-> ");
 	assert_int_equal(ck->ck_level, 0);
 	return 0;
@@ -168,7 +168,7 @@ test_CK_APPENDFL_ERR(void **state)
 	CK_APPENDFL_ERR(ck, "worker %d: %s", 42, "failed");
 }
 
-/* CK_APPENDFL_WARN: each formatted warning is printed and increments ck_warnings_num. */
+/* CK_APPENDFL_WARN: each formatted warning is printed and increments ck_status.warnings_num. */
 static void
 test_CK_APPENDFL_WARN(void **state)
 {
@@ -176,17 +176,17 @@ test_CK_APPENDFL_WARN(void **state)
 
 	EXPECT_VFPRINTF("warning: worker %d: %s\n", "warning: worker 42: retry\n");
 	CK_APPENDFL_WARN(ck, "worker %d: %s", 42, "retry");
-	assert_int_equal(ck->ck_warnings_num, INITIAL_WARNINGS + 1);
+	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 1);
 
 	EXPECT_VFPRINTF("warning: worker %d: %s\n", "warning: worker 43: skipped\n");
 	CK_APPENDFL_WARN(ck, "worker %d: %s", 43, "skipped");
-	assert_int_equal(ck->ck_warnings_num, INITIAL_WARNINGS + 2);
+	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 2);
 
 	/* Reset the counter before teardown. */
-	ck->ck_warnings_num = INITIAL_WARNINGS;
+	ck->ck_status.warnings_num = INITIAL_WARNINGS;
 }
 
-/* CK_APPENDFL_WARN: each warning without arguments increments ck_warnings_num. */
+/* CK_APPENDFL_WARN: each warning without arguments increments ck_status.warnings_num. */
 static void
 test_CK_APPENDFL_WARN_without_args(void **state)
 {
@@ -194,14 +194,14 @@ test_CK_APPENDFL_WARN_without_args(void **state)
 
 	EXPECT_VFPRINTF("warning: retry\n", "warning: retry\n");
 	CK_APPENDFL_WARN(ck, "retry");
-	assert_int_equal(ck->ck_warnings_num, INITIAL_WARNINGS + 1);
+	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 1);
 
 	EXPECT_VFPRINTF("warning: skipped\n", "warning: skipped\n");
 	CK_APPENDFL_WARN(ck, "skipped");
-	assert_int_equal(ck->ck_warnings_num, INITIAL_WARNINGS + 2);
+	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 2);
 
 	/* Reset the counter before teardown. */
-	ck->ck_warnings_num = INITIAL_WARNINGS;
+	ck->ck_status.warnings_num = INITIAL_WARNINGS;
 }
 
 /* CK_APPENDL: appends a message and a newline without ck_prefix. */
