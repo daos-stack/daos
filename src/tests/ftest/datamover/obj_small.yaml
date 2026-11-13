@@ -4,6 +4,7 @@ hosts:
 timeouts:
   test_dm_obj_small_dcp: 120
   test_dm_obj_small_cont_clone: 90
+  test_dm_obj_small_dsync: 180
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -21,6 +22,9 @@ pool:
 dcp:
   client_processes:
     np: 3
+dsync:
+  client_processes:
+    np: 3
 dataset:
   num_objs: 10
   num_dkeys: 10
@@ -28,3 +32,8 @@ dataset:
   num_akeys_array: 5
   akey_sizes: [1, 512, 1024]
   akey_extents: [32, 16, 8, 4, 2]
+  # punch records back out so the arrays are sparse. A trailing hole is the one
+  # case that shortens the reply of a fetch, which is what a copy driven by the
+  # enumerated extents rather than the io map trips over.
+  punch_extents: 1
+  punch_tail_extents: 1
