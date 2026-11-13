@@ -32,7 +32,7 @@ class DFuse():
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
                  caching=True, wbcache=True, multi_user=False, ro=False, dump_h=False,
-                 read_h=False, file_h=None, extra_args=None):
+                 read_h=False, file_h=None, extra_args=None, allow_idmap=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -50,6 +50,7 @@ class DFuse():
             self.pool = container.pool.id()
         self.conf = conf
         self.multi_user = multi_user
+        self.allow_idmap = allow_idmap
         self.cores = 0
         self._daos = daos
         self.caching = caching
@@ -124,6 +125,9 @@ class DFuse():
 
         if self.multi_user:
             cmd.append('--multi-user')
+
+        if self.allow_idmap:
+            cmd.append('--allow-idmap')
 
         if not self.cores:
             # Use a lower default thread-count for NLT due to running tests in parallel.
@@ -238,7 +242,8 @@ class DFuse():
             fatal_errors = True
             run_leak_test = False
         self._sp = None
-        log_test(self.conf, self.log_file, show_memleaks=run_leak_test, ignore_einval=ignore_einval)
+        log_test(self.conf, self.log_file, show_memleaks=run_leak_test, ignore_einval=ignore_einval,
+                 ignore_no_idmap=self.allow_idmap)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -252,7 +257,7 @@ class DFuse():
         ret = self._sp.wait()
         print(f'rc from dfuse {ret}')
         self._sp = None
-        log_test(self.conf, self.log_file)
+        log_test(self.conf, self.log_file, ignore_no_idmap=self.allow_idmap)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -417,11 +422,13 @@ class needs_dfuse_with_opt():
     wrapping_lock = threading.Lock()
 
     # pylint: disable=too-few-public-methods
-    def __init__(self, caching_variants=None, wbcache=True, dfuse_inval=True, ro=False):
+    def __init__(self, caching_variants=None, wbcache=True, dfuse_inval=True, ro=False,
+                 allow_idmap=False):
         self.caching_variants = caching_variants if caching_variants else [False, True]
         self.wbcache = wbcache
         self.dfuse_inval = dfuse_inval
         self.ro = ro
+        self.allow_idmap = allow_idmap
 
     def __call__(self, method):
         """Wrapper function"""
@@ -458,11 +465,17 @@ class needs_dfuse_with_opt():
             if self.ro:
                 args["ro"] = True
 
+            if self.allow_idmap:
+                args["allow_idmap"] = True
+
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
                               caching=caching,
                               wbcache=self.wbcache,
                               **args)
+            if self.allow_idmap:
+                # The test reads the log of dfuse while it runs.
+                obj.dfuse.log_flush = True
             obj.dfuse.start(v_hint=method.__name__)
             try:
                 rc = method(obj)
