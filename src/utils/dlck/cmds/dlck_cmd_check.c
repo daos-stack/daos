@@ -8,6 +8,8 @@
 #include <daos_srv/mgmt_tgt_common.h>
 #include <daos_srv/vos.h>
 
+#include <stdlib.h>
+
 #include "../dlck_args.h"
 #include "../dlck_bitmap.h"
 #include "../dlck_checker.h"
@@ -280,12 +282,19 @@ dlck_cmd_check(struct dlck_control *ctrl)
 {
 	D_ASSERT(ctrl != NULL);
 
-	struct checker     *ck                 = &ctrl->checker;
-	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
-	struct dlck_engine *engine             = NULL;
+	struct checker        *ck               = &ctrl->checker;
+	char                  *log_dir_template = NULL;
+	struct dlck_engine    *engine           = NULL;
 	struct checker_status *sts;
-	int                 rc;
+	int                    rc;
 
+	/** generate the log directory path template */
+	D_ASPRINTF(log_dir_template, "%s/dlck_check_XXXXXX", ctrl->common.log_dir);
+	if (log_dir_template == NULL) {
+		rc = -DER_NOMEM;
+		CK_PRINTFL_RC(ck, rc, "Cannot allocate log directory path");
+		return rc;
+	}
 	/** create a log directory */
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */
 		ctrl->log_dir = NULL;
@@ -296,7 +305,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	if (ctrl->log_dir == NULL) {
 		rc = daos_errno2der(errno);
 		CK_PRINTFL_RC(ck, rc, "Cannot create log directory");
-		return rc;
+		goto err_free_template;
 	}
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
@@ -304,7 +313,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	rc = dlck_engine_start(&ctrl->engine, &engine);
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
-		return rc;
+		goto err_free_template;
 	}
 
 	if (d_list_empty(&ctrl->files.list)) {
@@ -350,6 +359,7 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	/** Ignore an error for now to print the collected results. */
 	dlck_report_results(sts, ctrl->engine.targets, ck);
 	D_FREE(sts);
+	D_FREE(log_dir_template);
 
 	/** Return the first encountered error. */
 	return rc;
@@ -358,6 +368,8 @@ err_free_sts:
 	D_FREE(sts);
 err_stop_engine:
 	(void)dlck_engine_stop(engine);
+err_free_template:
+	D_FREE(log_dir_template);
 
 	return rc;
 }
