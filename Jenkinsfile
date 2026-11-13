@@ -19,6 +19,8 @@
 
 import groovy.transform.Field
 
+// SRE-4159: reproduce b2ce5ed2 with the original 2.8.1-4.3951.gb2ce5ed2 RPMs.
+
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
