@@ -35,7 +35,8 @@ class SlurmSetup():
         '/etc/slurm/slurmdbd.conf.example']
     MUNGE_DIR = '/etc/munge'
     MUNGE_KEY = '/etc/munge/munge.key'
-    PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd']
+    PACKAGE_LIST = ['slurm', 'slurm-slurmdbd', 'slurm-slurmctld', 'slurm-slurmd',
+                    'slurm-example-configs']
     SLURM_CONF = '/etc/slurm/slurm.conf'
     SLURM_LOG_DIR = '/var/log/slurm'
 
@@ -452,7 +453,7 @@ class SlurmSetup():
         self.log.debug('Restarting %s on %s', service, nodes)
         for action in ('restart', 'enable'):
             command = command_as_user(f'systemctl {action} {service}', self.root)
-            result = run_remote(self.log, self.all_nodes, command)
+            result = run_remote(self.log, nodes, command)
             if not result.passed:
                 self._display_debug(result.failed_hosts, debug_log, debug_config)
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
