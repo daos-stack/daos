@@ -168,6 +168,12 @@ class ValgrindHelper():
         else:
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
+        src_go_suppression_file = join('src', 'cart', 'utils', 'memcheck-go.supp')
+        if os.path.exists(src_go_suppression_file):
+            cmd.append(f'--suppressions={src_go_suppression_file}')
+        else:
+            cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-go.supp')}")
+
         return cmd
 
     def add_memcheck_env(self, env):

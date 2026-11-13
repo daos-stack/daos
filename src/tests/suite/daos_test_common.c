@@ -107,12 +107,11 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		print_message("setup: creating pool, SCM size=" DF_U64 " GB, NVMe size=" DF_U64
 			      " GB\n",
 			      (outpool->pool_size >> 30), nvme_size >> 30);
-		rc = dmg_pool_create(dmg_config_file,
-				     arg->uid, arg->gid, arg->group,
-				     rank_list, outpool->pool_size, nvme_size,
-				     prop, outpool->svc, outpool->pool_uuid);
+		rc = ctl_pool_create(dmg_config_file, arg->uid, arg->gid, arg->group, rank_list,
+				     outpool->pool_size, nvme_size, prop, outpool->svc,
+				     outpool->pool_uuid);
 		if (rc)
-			print_message("dmg_pool_create failed, rc: %d\n", rc);
+			print_message("ctl_pool_create failed, rc: %d\n", rc);
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
@@ -534,10 +533,9 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		print_message("daos_pool_disconnect failed, rc: %d\n", rc);
 	}
 
-	rc = dmg_pool_destroy(dmg_config_file,
-			      pool->pool_uuid, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, pool->pool_uuid, arg->group, 1);
 	if (rc && rc != -DER_TIMEDOUT)
-		print_message("dmg_pool_destroy failed, rc: %d\n", rc);
+		print_message("ctl_pool_destroy failed, rc: %d\n", rc);
 	if (rc == 0)
 		print_message("teardown: destroyed pool "DF_UUIDF"\n",
 			      DP_UUID(pool->pool_uuid));
@@ -1252,13 +1250,13 @@ int
 daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		   const char *value)
 {
-	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
+	return ctl_pool_set_prop(dmg_config_file, name, value, pool_uuid);
 }
 
 int
 daos_pool_get_prop(const uuid_t pool_uuid, const char *name, char **value_out)
 {
-	return dmg_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
+	return ctl_pool_get_prop(dmg_config_file, NULL, pool_uuid, name, value_out);
 }
 
 void
@@ -1274,7 +1272,7 @@ daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	print_message("\tstart rank %d (svc->rl_nr %d)!\n", rank, svc->rl_nr);
 
-	rc = dmg_system_start_rank(dmg_config_file, rank);
+	rc = ctl_system_start_rank(dmg_config_file, rank);
 	print_message(" dmg start: %d, rc %#x\n", rank, rc);
 	assert_rc_equal(rc, 0);
 }
@@ -1318,7 +1316,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
 	/* stop the rank */
-	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	rc = ctl_system_stop_rank(dmg_config_file, rank, true);
 	print_message(" dmg stop, rc %#x\n", rc);
 
 	assert_rc_equal(rc, 0);
@@ -1842,42 +1840,4 @@ test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_nu
 
 	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
 	assert_rc_equal(rc, 0);
-}
-
-/**
- * Duplicate unescaped \a value, escaping every ';' with '\\'. The caller is
- * responsible for freeing the returned string.
- *
- * \param[in]	value	self_heal value to escape
- */
-char *
-test_escape_self_heal(const char *value)
-{
-	size_t      len = 0;
-	char       *new_value;
-	const char *src;
-	char       *dst;
-
-	for (src = value; *src != '\0'; src++) {
-		D_ASSERT(*src != '\\');
-		len++;
-		if (*src == ';')
-			len++; /* for '\\' */
-	}
-
-	D_ALLOC(new_value, len + 1 /* '\0' */);
-	D_ASSERT(new_value != NULL);
-
-	dst = new_value;
-	for (src = value; *src != '\0'; src++) {
-		if (*src == ';') {
-			*dst++ = '\\';
-			*dst++ = ';';
-		} else {
-			*dst++ = *src;
-		}
-	}
-	*dst = '\0';
-
-	return new_value;
 }

@@ -21,7 +21,7 @@ rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/etc/daos/ \
       --filter="exclude *" "${test_log_dir}/configs/" || true
 mkdir -p "${test_log_dir}/logs"
 rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/tmp/ \
-      --filter="include suite_dmg.log" \
+      --filter="include libdaos_control.log" \
       --filter="include daos_*.log*" \
       --filter="exclude *" "${test_log_dir}/logs/" || true
 rsync -v -dpt -z -e "ssh ${SSH_KEY_ARGS}" jenkins@"${first_node}":/tmp/ \
