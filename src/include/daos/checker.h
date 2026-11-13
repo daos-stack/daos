@@ -48,9 +48,9 @@ struct checker {
 	void                  *ck_private;
 	struct checker_options ck_options;
 	/** state */
-	int                    ck_level;
+	uint8_t                ck_level;
 	char                  *ck_prefix;
-	int (*ck_indent_set)(struct checker *ck);
+	void (*ck_indent_set)(struct checker *ck);
 	/** output */
 	int (*ck_vprintf)(struct checker *ck, const char *fmt, va_list ap);
 	struct checker_status ck_status;
@@ -198,13 +198,8 @@ checker_print_indent_inc(struct checker *ck)
 		return;
 	}
 	D_ASSERTF(ck->ck_level < CHECKER_INDENT_MAX,
-		  "Cannot increase the indent level: %d >= %d (max)\n", ck->ck_level,
+		  "Cannot increase the indent level: %u >= %d (max)\n", ck->ck_level,
 		  CHECKER_INDENT_MAX);
-
-	if (ck->ck_level == CHECKER_INDENT_MAX) {
-		CK_PRINTF(ck, "Max indent reached.\n");
-		return;
-	}
 
 	ck->ck_level++;
 	ck->ck_indent_set(ck);
@@ -217,13 +212,8 @@ checker_print_indent_dec(struct checker *ck)
 		return;
 	}
 
-	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %d <= 0 (min)\n",
+	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %u == 0 (min)\n",
 		  ck->ck_level);
-
-	if (ck->ck_level == 0) {
-		CK_PRINTF(ck, "Min indent reached.\n");
-		return;
-	}
 
 	ck->ck_level--;
 	ck->ck_indent_set(ck);
