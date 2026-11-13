@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -217,6 +218,15 @@ int
 dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
 			tse_sched_t *tse, tse_task_t **task);
+/**
+ * Internal I/O flag: some sgl of the I/O is device (e.g. GPU) memory. Not part of the API: the
+ * library derives it from the memory attributes and ignores a value passed by the caller.
+ */
+#define DAOS_OBJ_IO_GPU_DIRECT (1ULL << 32)
+
+/** Return \a flags with DAOS_OBJ_IO_GPU_DIRECT set if any attribute is device memory. */
+uint64_t
+dc_obj_mem_attrs_flags(const daos_mem_attr_t *mem_attrs, unsigned int nr, uint64_t flags);
 int
 dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
 			 daos_key_t *dkey, uint32_t nr, uint32_t extra_flags,

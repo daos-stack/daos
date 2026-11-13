@@ -106,6 +106,26 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 	      unsigned int nevents, daos_event_t **events);
 
 /**
+ * Network domain of an event queue: where the memory of its I/O is registered with the network.
+ * Opaque. It belongs to its event queue and must not be used after that queue is destroyed.
+ */
+typedef void *daos_net_domain_t;
+
+/**
+ * Return the network domain of an event queue, for daos_mem_bind().
+ *
+ * \param[in] eqh	EQ handle, or DAOS_HDL_INVAL for the domain used by blocking calls
+ *			(those without an event).
+ * \param[out] domain	Returned network domain.
+ *
+ * \return		0 on success, -DER_NONEXIST if the event queue does not exist,
+ *			-DER_UNINIT if the library is not initialized, -DER_INVAL if \a domain
+ *			is NULL.
+ */
+int
+daos_eq_net_domain(daos_handle_t eqh, daos_net_domain_t *domain);
+
+/**
  * Initialize a new event for \a eq
  *
  * \param[in] ev	Event to initialize
