@@ -574,6 +574,12 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_uri_free != 0)
 		D_FREE(rpc_priv->crp_tgt_uri);
 
+	/* the RPC can outlive the group view detach (e.g. an
+	 * in-flight request aborted during crt_context_destroy);
+	 * release the reference taken when crp_grp_priv was set */
+	if (rpc_priv->crp_grp_priv != NULL)
+		crt_grp_priv_decref(rpc_priv->crp_grp_priv);
+
 	D_MUTEX_DESTROY(&rpc_priv->crp_mutex);
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
@@ -642,6 +648,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 		crt_rpc_priv_set_ep(rpc_priv, tgt_ep);
 
+		crt_grp_priv_addref(grp_priv);
 		rpc_priv->crp_grp_priv = grp_priv;
 	}
 
@@ -685,7 +692,10 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	if (grp_priv) {
 		rpc_priv = container_of(*req, struct crt_rpc_priv, crp_pub);
-		rpc_priv->crp_grp_priv = grp_priv;
+		if (rpc_priv->crp_grp_priv == NULL) {
+			crt_grp_priv_addref(grp_priv);
+			rpc_priv->crp_grp_priv = grp_priv;
+		}
 	}
 
 out:
@@ -716,6 +726,9 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
 
 	crt_rpc_priv_set_ep(rpc_priv, tgt_ep);
 
+	if (rpc_priv->crp_grp_priv != NULL)
+		crt_grp_priv_decref(rpc_priv->crp_grp_priv);
+	crt_grp_priv_addref(grp_priv);
 	rpc_priv->crp_grp_priv = grp_priv;
 
 	RPC_TRACE(DB_NET, rpc_priv, "ep set %u.%u.\n",

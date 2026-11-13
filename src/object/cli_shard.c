@@ -1005,10 +1005,18 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					continue;
 				}
 				data_size = replied_sizes[i];
-				D_ASSERTF(data_size <= size_in_iod,
-					  "data_size "DF_U64
-					  ", size_in_iod "DF_U64"\n",
-					  data_size, size_in_iod);
+				/* A late completion can arrive on a task
+				 * whose iod was already reset during
+				 * scheduler teardown (DAOS-19955).
+				 * Fail the op instead of asserting. */
+				if (data_size > size_in_iod) {
+					D_ERROR("late completion, "
+						"data_size "DF_U64
+						" > size_in_iod "DF_U64"\n",
+						data_size, size_in_iod);
+					rc = -DER_CANCELED;
+					break;
+				}
 				dc_sgl_out_set(&sgls[i], data_size);
 			}
 		}
