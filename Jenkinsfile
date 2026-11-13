@@ -831,11 +831,9 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.9'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: false,
+                                                                deps_build: true,
                                                                 parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-el9 " +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
                                                 ' --target build-ci' +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
                                                 ' --build-arg POINT_RELEASE=.7' +
@@ -844,27 +842,35 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh el9 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
+                            sh label: 'Collect dependency RPMs built into the image',
+                               script: '''
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
+                                           scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh el9 "' + env.DAOS_RELVAL + '"'
+                                                      ' TARGET_TYPE=release'))
+                            sh label: 'Build DAOS RPMs',
+                                script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
+                                    ' utils/build/build_packages.sh --rpm-suffix=el9' +
+                                    ' --build-range=daos rpms'
                             // Go binaries need to be instrumented in order to work reliably
                             // with valgrind. We do this in a separate build because we don't
                             // want to ship the instrumented binaries.
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
+                                           scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 PREFIX=/opt/daos TARGET_TYPE=release'))
+                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
                             sh label: 'Stash valgrind install tree for NLT',
                                 script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
                             stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
@@ -897,10 +903,8 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
-                                                                deps_build: false) +
-                                                ' --build-arg DAOS_PACKAGES_BUILD=no ' +
-                                                ' --build-arg DAOS_KEEP_SRC=yes ' +
+                                                                deps_build: true,
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME()}-leap15" +
                                                 ' --target build-ci' +
                                                 ' --build-arg POINT_RELEASE=.6' +
@@ -909,19 +913,26 @@ pipeline {
                     }
                     steps {
                         script {
-                            sh label: 'Install RPMs',
-                                script: './ci/rpm/install_deps.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
-                            sh label: 'Build deps',
-                                script: './ci/rpm/build_deps.sh'
+                            sh label: 'Collect dependency RPMs built into the image',
+                               script: '''
+                                       set -- /home/daos/rpms/deps/*.rpm
+                                       if [ -e "$1" ]; then
+                                           mkdir -p rpms/deps
+                                           cp -- "$@" rpms/deps/
+                                       fi
+                               '''
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
+                                           scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                            sh label: 'Generate RPMs',
-                                script: './ci/rpm/gen_rpms.sh suse.lp156 "' + env.DAOS_RELVAL + '"'
+                                                      ' TARGET_TYPE=release'))
+                            sh label: 'Build DAOS RPMs',
+                                script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
+                                    ' utils/build/build_packages.sh --rpm-suffix=suse.lp156' +
+                                    ' --build-range=daos rpms'
                         }
                     }
                     post {
@@ -1009,7 +1020,8 @@ pipeline {
                         // NLT memchecks the valgrind-tagged build, not the shared -race one.
                         unstash 'opt-daos-valgrind'
                         job_step_update(
-                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1').toInteger(),
+                            unitTest(timeout_time: 60 * cachedCommitPragma(pragma: 'NLT-repeat',
+                                                                           def_val: '1').toInteger(),
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
@@ -1018,6 +1030,7 @@ pipeline {
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +
                                                   ' --class-name nlt' +
+                                                  /* groovylint-disable-next-line LineLength */
                                                   " --repeat ${cachedCommitPragma(pragma: 'NLT-repeat', def_val: '1')}" +
                                                   /* groovylint-disable-next-line LineLength */
                                                   (cachedCommitPragma(pragma: 'NLT-repeat-failfast', def_val: 'false').toLowerCase() == 'true' ? ' --failfast' : '') +
