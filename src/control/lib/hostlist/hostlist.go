@@ -53,6 +53,15 @@ type (
 )
 
 func (hn *hostName) Parse(input string) error {
+	// IPv6 literal in [bracket]:port form (RFC 3986). Skip the prefix-N
+	// regex; treat the whole thing as an opaque host. Hostnames cannot
+	// otherwise start with '[' so this is unambiguous.
+	if len(input) > 0 && input[0] == '[' {
+		hn.prefix = input
+		hn.hasNumber = false
+		return nil
+	}
+
 	// prefixN (default)
 	re := regexp.MustCompile(`^([a-zA-Z]+)(\d+)?(.*)?`)
 	if strings.Contains(input, "-") {
@@ -214,6 +223,15 @@ func parseBracketedHostList(input, rangeSep, rangeOp string, nameOptional bool) 
 			return nil, fmt.Errorf("invalid range %q", tok)
 		}
 
+		// IPv6 literal in [bracket]:port form (RFC 3986). Bracket
+		// content contains colons, never a range operator; push the
+		// whole token as a single host and skip range expansion.
+		if strings.ContainsRune(tok[leftIndex+1:rightIndex], ':') {
+			if err := hl.PushHost(tok); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		ranges, err := parseRanges(tok[leftIndex+1:rightIndex], rangeOp)
 		if err != nil {
 			return nil, err
