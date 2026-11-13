@@ -20,6 +20,7 @@
 #include "dlck_checker_ut_mock.h"
 
 #define INITIAL_WARNINGS 7
+#define INITIAL_ERRORS   3
 
 static struct checker Checker;
 
@@ -52,6 +53,7 @@ setup(void **state)
 	    .ck_indent_set          = checker_indent_set,
 	    .ck_vprintf             = checker_vprintf,
 	    .ck_status.warnings_num = INITIAL_WARNINGS,
+	    .ck_status.errors_num   = INITIAL_ERRORS,
 	};
 	mock_vfprintf_check_output = false;
 	*state                     = &Checker;
@@ -64,6 +66,7 @@ teardown(void **state)
 	struct checker *ck = *state;
 
 	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS);
+	assert_int_equal(ck->ck_status.errors_num, INITIAL_ERRORS);
 	assert_string_equal(ck->ck_prefix, "-> ");
 	assert_int_equal(ck->ck_level, 0);
 	return 0;
@@ -158,7 +161,8 @@ test_CK_APPENDL_RC_positive_error(void **state)
 	CK_APPENDL_RC(ck, DER_NO_PERM);
 }
 
-/* CK_APPENDFL_ERR: appends a formatted message with the error infix and a newline. */
+/* CK_APPENDFL_ERR: each formatted error is printed with the error infix and increments the
+ * errors counter. */
 static void
 test_CK_APPENDFL_ERR(void **state)
 {
@@ -166,6 +170,14 @@ test_CK_APPENDFL_ERR(void **state)
 
 	EXPECT_VFPRINTF("error: worker %d: %s\n", "error: worker 42: failed\n");
 	CK_APPENDFL_ERR(ck, "worker %d: %s", 42, "failed");
+	assert_int_equal(ck->ck_status.errors_num, INITIAL_ERRORS + 1);
+
+	EXPECT_VFPRINTF("error: worker %d: %s\n", "error: worker 43: corrupted\n");
+	CK_APPENDFL_ERR(ck, "worker %d: %s", 43, "corrupted");
+	assert_int_equal(ck->ck_status.errors_num, INITIAL_ERRORS + 2);
+
+	/* Reset the counter before teardown. */
+	ck->ck_status.errors_num = INITIAL_ERRORS;
 }
 
 /* CK_APPENDFL_WARN: each formatted warning is printed and increments the warnings counter. */
@@ -256,6 +268,25 @@ test_CK_PRINTFL_RC_error(void **state)
 	CK_PRINTFL_RC(ck, -DER_IO, "worker %d: %s", 42, "check");
 }
 
+/* CK_PRINTF_ERR: each formatted message is printed after ck_prefix and increments the errors
+ * counter. */
+static void
+test_CK_PRINTF_ERR(void **state)
+{
+	struct checker *ck = *state;
+
+	EXPECT_VFPRINTF("%sworker %d: %s\n", "-> worker 42: failed\n");
+	CK_PRINTF_ERR(ck, "worker %d: %s\n", 42, "failed");
+	assert_int_equal(ck->ck_status.errors_num, INITIAL_ERRORS + 1);
+
+	EXPECT_VFPRINTF("%sworker %d: %s\n", "-> worker 43: corrupted\n");
+	CK_PRINTF_ERR(ck, "worker %d: %s\n", 43, "corrupted");
+	assert_int_equal(ck->ck_status.errors_num, INITIAL_ERRORS + 2);
+
+	/* Reset the counter before teardown. */
+	ck->ck_status.errors_num = INITIAL_ERRORS;
+}
+
 /* Output macros print nothing and skip format arguments when the checker is NULL. */
 static void
 test_CK_macros_without_checker(void **state)
@@ -279,6 +310,7 @@ test_CK_macros_without_checker(void **state)
 	CK_PRINTFL_RC(ck, -DER_IO, "check");
 	CK_PRINTFL_RC(ck, DER_SUCCESS, "%d", ++evaluations);
 	CK_PRINTFL_RC(ck, -DER_IO, "%d", ++evaluations);
+	CK_PRINTF_ERR(ck, "%d", ++evaluations);
 	assert_int_equal(evaluations, 0);
 }
 
@@ -451,17 +483,18 @@ static const struct CMUnitTest dlck_checker_macros_tests[] = {
     TEST(114, test_CK_PRINTFL_RC_error_without_args),
     TEST(115, test_CK_PRINTFL_RC_success),
     TEST(116, test_CK_PRINTFL_RC_error),
-    TEST_NO_FIXTURE(117, test_CK_macros_without_checker),
-    TEST(118, test_CK_ASSERT_true_with_checker),
-    TEST(119, test_CK_ASSERT_false_with_checker),
-    TEST_NO_FIXTURE(120, test_CK_ASSERT_true_without_checker),
-    TEST_NO_FIXTURE(121, test_CK_ASSERT_false_without_checker),
-    TEST(122, test_CK_INDENT),
-    TEST(123, test_CK_INDENT_nested),
-    TEST(124, test_CK_INDENT_reaches_maximum),
-    TEST_NO_FIXTURE(125, test_CK_INDENT_without_checker),
-    TEST(126, test_CK_INDENT_exceeds_maximum),
-    TEST(127, test_checker_print_indent_dec_below_minimum),
+    TEST(117, test_CK_PRINTF_ERR),
+    TEST_NO_FIXTURE(118, test_CK_macros_without_checker),
+    TEST(119, test_CK_ASSERT_true_with_checker),
+    TEST(120, test_CK_ASSERT_false_with_checker),
+    TEST_NO_FIXTURE(121, test_CK_ASSERT_true_without_checker),
+    TEST_NO_FIXTURE(122, test_CK_ASSERT_false_without_checker),
+    TEST(123, test_CK_INDENT),
+    TEST(124, test_CK_INDENT_nested),
+    TEST(125, test_CK_INDENT_reaches_maximum),
+    TEST_NO_FIXTURE(126, test_CK_INDENT_without_checker),
+    TEST(127, test_CK_INDENT_exceeds_maximum),
+    TEST(128, test_checker_print_indent_dec_below_minimum),
 };
 
 int
