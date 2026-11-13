@@ -2188,8 +2188,9 @@ meta_hdr_verify(struct meta_header *hdr, struct bio_io_context *ioc, enum bio_mc
 
 	/* The identity fields below exist from version 2 on; later versions keep the layout */
 	if (hdr->mh_version < 2) {
-		D_ERROR("Unsupported meta header version %" PRIu32 " (version 2 layout required)\n",
-			hdr->mh_version);
+		/* An old version is not a corruption: only warn, the caller decides what to do */
+		D_WARN("Unsupported meta header version %" PRIu32 " (version 2 layout required)\n",
+		       hdr->mh_version);
 		return -DER_DF_INCOMPT;
 	}
 
@@ -2338,8 +2339,9 @@ wal_hdr_verify(struct wal_header *hdr, uint32_t vos_id, uuid_t pool_id)
 
 	/* The identity fields below exist from version 2 on; later versions keep the layout */
 	if (hdr->wh_version < 2) {
-		D_ERROR("Unsupported WAL header version %" PRIu32 " (version 2 layout required)\n",
-			hdr->wh_version);
+		/* An old version is not a corruption: only warn, the caller decides what to do */
+		D_WARN("Unsupported WAL header version %" PRIu32 " (version 2 layout required)\n",
+		       hdr->wh_version);
 		return -DER_DF_INCOMPT;
 	}
 
