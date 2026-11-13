@@ -5,6 +5,43 @@
 """Build versioned object store tests"""
 
 
+def build_dlck_engine_macros_ut(henv):
+    """Build dlck_engine_macros_ut"""
+    henv.Append(OBJPREFIX="dlck_engine_macros_ut_")
+    henv.require('argobots', 'cmocka')
+
+    henv.d_test_program('dlck_engine_macros_ut', ['dlck_engine_macros_ut.c'],
+                        LIBS=['gurt', 'cmocka'])
+
+
+def build_dlck_engine_ut(henv):
+    """Build dlck_engine_ut"""
+    henv.Append(OBJPREFIX="dlck_engine_ut_")
+    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
+    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc', '-Wl,--wrap=d_free',
+                                 '-Wl,--wrap=dss_tls_init', '-Wl,--wrap=dss_tls_fini',
+                                 '-Wl,--wrap=dss_tls_get', '-Wl,--wrap=ds_tls_key_create',
+                                 '-Wl,--wrap=ds_tls_key_delete', '-Wl,--wrap=daos_register_key',
+                                 '-Wl,--wrap=daos_unregister_key',
+                                 '-Wl,--wrap=daos_get_module_key', '-Wl,--wrap=ABT_thread_join',
+                                 '-Wl,--wrap=ABT_thread_free', '-Wl,--wrap=ABT_thread_yield',
+                                 '-Wl,--wrap=ABT_pool_is_empty', '-Wl,--wrap=ABT_eventual_create',
+                                 '-Wl,--wrap=ABT_eventual_free', '-Wl,--wrap=ABT_eventual_set',
+                                 '-Wl,--wrap=ABT_eventual_test'])
+    henv.require('argobots', 'cmocka')
+
+    libs = ['gurt', 'daos_common_pmem', 'cmocka', 'uuid', 'abt', 'pthread']
+
+    srcs = [
+        'dlck_engine_ut.c',
+        'dlck_ut_abt_mock.c',
+        'dlck_ut_daos_mock.c',
+        'dlck_ut_mem_mock.c',
+        '../dlck_engine.c',
+    ]
+    henv.d_test_program('dlck_engine_ut', srcs, LIBS=libs)
+
+
 def build_dlck_test_helper(henv):
     """Build dlck_test_helper"""
     henv.Append(OBJPREFIX="dlck_ut_helper_")
@@ -61,7 +98,8 @@ def build_dlck_checker_common_ut(henv):
     """Build dlck_checker_common_ut"""
     henv.require('cmocka')
 
-    henv.d_test_program('dlck_checker_common_ut', ['dlck_checker_common_ut.c'],
+    henv.d_test_program('dlck_checker_common_ut',
+                        ['dlck_checker_common_ut.c', 'dlck_ut_checker_mock.c'],
                         LIBS=['gurt', 'cmocka'])
 
 
@@ -73,7 +111,7 @@ def build_dlck_checker_macros_ut(henv):
     henv.require('argobots', 'cmocka')
 
     libs = ['gurt', 'daos_common_pmem', 'cmocka']
-    srcs = ['dlck_checker_macros_ut.c', 'dlck_checker_ut_mock.c']
+    srcs = ['dlck_checker_macros_ut.c', 'dlck_ut_stdio_mock.c']
     henv.d_test_program('dlck_checker_macros_ut', srcs, LIBS=libs)
 
 
@@ -92,6 +130,9 @@ def build_dlck_checker_main_ut(henv):
     srcs = [
         'dlck_checker_main_ut.c',
         'dlck_checker_ut_mock.c',
+        'dlck_ut_abt_mock.c',
+        'dlck_ut_mem_mock.c',
+        'dlck_ut_stdio_mock.c',
         '../dlck_checker.c',
     ]
     henv.d_test_program('dlck_checker_main_ut', srcs, LIBS=libs)
@@ -110,6 +151,8 @@ def build_dlck_checker_worker_ut(henv):
     srcs = [
         'dlck_checker_worker_ut.c',
         'dlck_checker_ut_mock.c',
+        'dlck_ut_mem_mock.c',
+        'dlck_ut_stdio_mock.c',
         '../dlck_checker.c'
     ]
     henv.d_test_program('dlck_checker_worker_ut', srcs, LIBS=libs)
@@ -125,6 +168,8 @@ def scons():
     build_dlck_checker_macros_ut(env.Clone())
     build_dlck_checker_main_ut(env.Clone())
     build_dlck_checker_worker_ut(env.Clone())
+    build_dlck_engine_macros_ut(env.Clone())
+    build_dlck_engine_ut(env.Clone())
 
 
 if __name__ == "SCons.Script":

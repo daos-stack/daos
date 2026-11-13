@@ -81,7 +81,7 @@ setup_worker_checker(void **state)
 		return rc;
 
 	ck = *state;
-	EXPECT_CHECKER_D_CALLOC(Dcw);
+	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, Mock_log_file);
 	expect_worker_fopen(false);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
@@ -136,7 +136,7 @@ test_worker_init_log_open_failure(void **state)
 	struct checker         main_ck = {.ck_vprintf = mock_main_vprintf};
 	struct checker_options options = {0};
 
-	EXPECT_CHECKER_D_CALLOC(Dcw);
+	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, Mock_log_file);
 	expect_worker_fopen(true);
 	expect_function_call(mock_main_vprintf);
@@ -156,7 +156,7 @@ test_worker_init_log_path_alloc_failure(void **state)
 	struct checker         main_ck = {.ck_vprintf = mock_main_vprintf};
 	struct checker_options options = {0};
 
-	EXPECT_CHECKER_D_CALLOC(Dcw);
+	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
 	will_return(__wrap_d_asprintf2, NULL);
 	expect_function_call(mock_main_vprintf);
 	expect_value(__wrap_d_free, ptr, &Dcw);
@@ -173,7 +173,7 @@ test_worker_init_alloc_failure(void **state)
 	struct checker        *ck      = *state;
 	struct checker_options options = {0};
 
-	expect_checker_d_calloc(sizeof(Dcw), NULL);
+	EXPECT_D_CALLOC(1, sizeof(Dcw), NULL);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, MOCK_LOG_DIR, Mock_pool_uuid, 0, NULL, ck),
 	    -DER_NOMEM);
