@@ -1130,7 +1130,7 @@ func TestControl_WaitForStorageFormatReady(t *testing.T) {
 					Addr: addr,
 					Message: &ctlpb.StorageFormatStatusResp{
 						EngineStatus: []*ctlpb.EngineFormatStatus{
-							{Instanceidx: 0, AwaitingFormat: false, State: "ServerStarting"},
+							{Instanceidx: 0, AwaitingFormat: false, State: "Stopped"},
 						},
 					},
 				},

@@ -59,7 +59,6 @@ type EngineInstance struct {
 	incarnation     uint64
 	storage         *storage.Provider
 	waitFormat      atm.Bool
-	starting        atm.Bool
 	storageReady    chan struct{}
 	waitStart       atm.Bool
 	startReady      chan bool
@@ -133,12 +132,6 @@ func (ei *EngineInstance) isAwaitingStart() bool {
 	return ei.waitStart.Load()
 }
 
-// isServerStarting indicates whether a start has been requested but it is
-// not yet known whether a format is required.
-func (ei *EngineInstance) isServerStarting() bool {
-	return ei.starting.Load()
-}
-
 // IsStarted indicates whether EngineInstance is in a running state.
 func (ei *EngineInstance) IsStarted() bool {
 	return ei.runner.IsRunning()
@@ -207,20 +200,18 @@ func (ei *EngineInstance) setExitErr(err error) {
 }
 
 // LocalFormatState returns a finer-grained, format-centric state name than
-// LocalState, for use in format-status reporting: Stopped, ServerStarting,
-// AwaitingFormat, AwaitingStart, EnginesStarting, or Ready.
+// LocalState, for use in format-status reporting: Stopped, AwaitingFormat,
+// AwaitingStart, EnginesStarting, or Ready.
 func (ei *EngineInstance) LocalFormatState() string {
 	switch {
 	case ei.IsReady():
 		return "Ready"
-	case ei.IsStarted():
-		return "EnginesStarting"
 	case ei.isAwaitingFormat():
 		return "AwaitingFormat"
-	case ei.isServerStarting():
-		return "ServerStarting"
 	case ei.isAwaitingStart():
 		return "AwaitingStart"
+	case ei.IsStarted():
+		return "EnginesStarting"
 	default:
 		return "Stopped"
 	}

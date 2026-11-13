@@ -568,11 +568,10 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 // TestIOEngineInstance_localStateTransitions exercises the full local-state
 // lifecycle of an EngineInstance across a real (non-superblock) format, as
 // reported by LocalFormatState():
-// Stopped (before anything starts) -> ServerStarting (format-readiness check
-// underway) -> AwaitingFormat (blocked waiting for admin to trigger format)
-// -> AwaitingStart (format complete, held pending an explicit start request)
-// -> EnginesStarting (once the engine process has been started, following
-// NotifyStorageReady()) -> Ready.
+// Stopped (before anything starts) -> AwaitingFormat (blocked waiting for
+// admin to trigger format) -> AwaitingStart (format complete, held pending an
+// explicit start request) -> EnginesStarting (once the engine process has
+// been started, following NotifyStorageReady()) -> Ready.
 func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -608,23 +607,16 @@ func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 		awaitErrCh <- ei.awaitStorageReady(ctx)
 	}()
 
-	// Poll for isAwaitingFormat() to confirm awaitStorageReady() has
-	// determined a format is needed and has already transitioned out of
-	// ServerStarting and into AwaitingFormat (blocked on ei.storageReady).
+	// Poll for isAwaitingFormat() to confirm awaitStorageReady() has determined a format is
+	// needed and transitioned into AwaitingFormat (blocked on ei.storageReady).
 	for !ei.isAwaitingFormat() {
 		select {
 		case <-ctx.Done():
 			t.Fatal("timed out waiting for AwaitingFormat state")
-		case <-time.After(time.Millisecond):
+		case <-time.After(10 * time.Millisecond):
 		}
 	}
 
-	if ei.isServerStarting() {
-		t.Fatal("expected isServerStarting() to be false once AwaitingFormat is reached")
-	}
-	if !ei.isAwaitingFormat() {
-		t.Fatal("expected isAwaitingFormat() to be true while blocked on format")
-	}
 	if state := ei.LocalFormatState(); state != "AwaitingFormat" {
 		t.Fatalf("expected AwaitingFormat, got %s", state)
 	}
@@ -632,8 +624,8 @@ func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 		t.Fatalf("expected MemberStateAwaitFormat, got %s", state)
 	}
 
-	// Simulate an admin triggering "dmg storage format", releasing the
-	// block on awaitStorageReady().
+	// Simulate an admin triggering "dmg storage format", releasing the block on
+	// awaitStorageReady().
 	ei.NotifyStorageReady(nil)
 
 	select {
@@ -645,13 +637,12 @@ func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 		t.Fatal("timed out waiting for awaitStorageReady() to return")
 	}
 
-	if ei.isServerStarting() || ei.isAwaitingFormat() {
-		t.Fatal("expected both ServerStarting and AwaitingFormat flags to be cleared post-format")
+	if ei.isAwaitingFormat() {
+		t.Fatal("expected AwaitingFormat flag to be cleared post-format")
 	}
 
-	// Every format is followed by a hold pending an explicit start
-	// request, so the instance should now report AwaitingStart rather
-	// than falling back to the generic Stopped state.
+	// Format is followed by a hold pending an explicit start request, the instance should now
+	// report AwaitingStart.
 	if !ei.isAwaitingStart() {
 		t.Fatal("expected isAwaitingStart() to be true after format completes")
 	}
@@ -661,6 +652,10 @@ func TestIOEngineInstance_localStateTransitions(t *testing.T) {
 	if state := ei.LocalState(); state != system.MemberStateAwaitStart {
 		t.Fatalf("expected MemberStateAwaitStart, got %s", state)
 	}
+
+	// Simulate an admin releasing the held start (e.g. "dmg system start"), which clears
+	// isAwaitingStart() before the engine process is actually exec'd.
+	ei.waitStart.SetFalse()
 
 	// Simulate the engine process having been exec'd by start().
 	if _, err := runner.Start(ctx); err != nil {

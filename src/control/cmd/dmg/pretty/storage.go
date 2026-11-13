@@ -144,11 +144,10 @@ func PrintStorageFormatStatusMap(hsm control.HostStorageMap, out io.Writer, opts
 
 	hostsTitle := "Hosts"
 	engineTitle := "Engine"
-	awaitTitle := "Awaiting Format"
 	stateTitle := "State"
 
 	fmt.Fprintln(out, "Format Status:")
-	tablePrint := txtfmt.NewTableFormatter(hostsTitle, engineTitle, awaitTitle, stateTitle)
+	tablePrint := txtfmt.NewTableFormatter(hostsTitle, engineTitle, stateTitle)
 	tablePrint.InitWriter(txtfmt.NewIndentWriter(out))
 	table := []txtfmt.TableRow{}
 
@@ -159,7 +158,6 @@ func PrintStorageFormatStatusMap(hsm control.HostStorageMap, out io.Writer, opts
 			table = append(table, txtfmt.TableRow{
 				hostsTitle:  hosts,
 				engineTitle: fmt.Sprintf("%d", es.Instanceidx),
-				awaitTitle:  fmt.Sprintf("%t", es.AwaitingFormat),
 				stateTitle:  es.State,
 			})
 		}

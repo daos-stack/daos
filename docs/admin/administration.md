@@ -1500,19 +1500,18 @@ useful for polling engines after a `dmg system erase` or after replacing failed 
 engines have reached the `AwaitingFormat` state before issuing `dmg storage format`. The reported
 `State` reflects the following local, format-centric engine lifecycle (narrower than the states
 reported by `dmg system query`): `Stopped` (engine process not running, no start requested),
-`ServerStarting` (start requested, not yet known whether format is required), `AwaitingFormat`
-(format required, waiting for an administrator to trigger it), `AwaitingStart` (format no longer
-required/awaited, but the engine is held pending an explicit `dmg system start`), `EnginesStarting`
-(hold released and the engine process has started, but has not yet reported ready), and `Ready`
-(engine has started up successfully):
+`AwaitingFormat` (format required, waiting for an administrator to trigger it), `AwaitingStart`
+(format no longer required/awaited, but the engine is held pending an explicit `dmg system start`),
+`EnginesStarting` (hold released and the engine process has started, but has not yet reported
+ready), and `Ready` (engine has started up successfully):
 
 ```bash
 $ dmg storage format-status -l storage-server-16
 Format Status:
-  Hosts             Engine Awaiting Format State
-  -----             ------ --------------- -----
-  storage-server-16 0      true            AwaitingFormat
-  storage-server-16 1      false           Ready
+  Hosts             Engine State
+  -----             ------ -----
+  storage-server-16 0      AwaitingFormat
+  storage-server-16 1      Ready
 ```
 
 ### System Erase
