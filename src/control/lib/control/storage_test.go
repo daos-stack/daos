@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -770,6 +771,7 @@ func TestControl_checkFormatReq(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		reqHosts   []string
+		replace    bool
 		invokerErr error
 		responses  []*UnaryResponse
 		expErr     error
@@ -818,6 +820,21 @@ func TestControl_checkFormatReq(t *testing.T) {
 			},
 			expErr: errors.New("oops"),
 		},
+		"replace on replica running": {
+			reqHosts: reqHosts("replica"),
+			replace:  true,
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
+			},
+			// Should succeed because Replace bypasses MS replica check
+		},
+		"replace on localserver running": {
+			replace: true,
+			responses: []*UnaryResponse{
+				MockMSResponse(localServer, nil, &mgmtpb.SystemQueryResp{}),
+			},
+			// Should succeed because Replace bypasses MS replica check
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -828,7 +845,7 @@ func TestControl_checkFormatReq(t *testing.T) {
 				UnaryResponseSet: tc.responses,
 			})
 
-			req := &StorageFormatReq{}
+			req := &StorageFormatReq{Replace: tc.replace}
 			req.SetHostList(tc.reqHosts)
 			err := checkFormatReq(test.Context(t), mi, req)
 			test.CmpErr(t, tc.expErr, err)
