@@ -685,8 +685,8 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 
 	pm_ver = dc_pool_get_version(tx->tx_pool);
 
-	if (tx->tx_pm_ver != pm_ver ||
-	    DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
+	if (tx->tx_pm_ver != pm_ver || DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM) ||
+	    (tx->tx_for_convert && DAOS_FAIL_CHECK(DAOS_FAIL_TX_CONVERT))) {
 		/* For external non-snap TX, restart it if pool map is stale. */
 		if (tx->tx_pm_ver != 0 && !tx->tx_fixed_epoch) {
 			tx->tx_status = TX_FAILED;
@@ -3172,8 +3172,14 @@ dc_tx_per_akey_existence_sub_cb(tse_task_t *task, void *data)
 	return 0;
 }
 
+/*
+ * Completion callback of the aggregation task that depends on all per-akey existence check
+ * sub-tasks. It must NOT be registered on the parent (args->task) itself, because dc_tx_post()
+ * may complete the parent, and completing a task inside its own completion callback re-enters
+ * tse_task_complete_callback() and corrupts the parent's callback list.
+ */
 static int
-dc_tx_per_akey_existence_parent_cb(tse_task_t *task, void *data)
+dc_tx_per_akey_existence_agg_cb(tse_task_t *task, void *data)
 {
 	struct dc_tx_check_existence_cb_args	*args = data;
 	struct dc_object			*obj = NULL;
@@ -3190,6 +3196,10 @@ dc_tx_per_akey_existence_parent_cb(tse_task_t *task, void *data)
 				      args->iods_or_akeys, args->sgls);
 		D_MUTEX_UNLOCK(&tx->tx_lock);
 	}
+
+	/* Do not propagate the handled -DER_TX_RESTART to the restarted parent task. */
+	if (tx->tx_for_convert && rc == -DER_TX_RESTART)
+		task->dt_result = 0;
 
 	dc_tx_post(tx, obj, args->task, args->opc, rc, 0);
 	obj_decref(obj);
@@ -3252,6 +3262,10 @@ out:
 		D_FREE(args->tmp_iods);
 	}
 
+	/* Do not propagate the handled -DER_TX_RESTART to the restarted parent task. */
+	if (tx->tx_for_convert && rc == -DER_TX_RESTART)
+		task->dt_result = 0;
+
 	dc_tx_post(tx, obj, args->task, args->opc, rc, 0);
 	obj_decref(obj);
 
@@ -3270,6 +3284,7 @@ dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_
 	daos_iod_t				*in_iods = iods_or_akeys;
 	daos_iod_t				*iods = NULL;
 	tse_task_t				*task = NULL;
+	tse_task_t                              *agg     = NULL;
 	d_list_t				 task_list;
 	int					 rc = 0;
 	int					 i;
@@ -3288,6 +3303,22 @@ dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_
 	cb_args.nr		= nr;
 	cb_args.iods_or_akeys	= iods_or_akeys;
 	cb_args.sgls		= sgls;
+
+	/*
+	 * The aggregation task (without body) depends on all the sub-tasks, its completion
+	 * callback handles the result. Schedule it before adding dependencies, then it will be
+	 * marked as running and completed when all the sub-tasks completed.
+	 */
+	rc = dc_task_create(NULL, tse_task2sched(parent), NULL, &agg);
+	if (rc != 0)
+		goto fail;
+
+	/* Hold agg, aborting sub-tasks may complete and release it before the fail path. */
+	tse_task_addref(agg);
+
+	rc = tse_task_schedule(agg, false);
+	if (rc != 0)
+		goto fail;
 
 	/* XXX: individual sub-task for checking each akey's existence independently. */
 
@@ -3324,7 +3355,7 @@ dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_
 		tse_task_addref(task);
 		tse_task_list_add(task, &task_list);
 
-		rc = dc_task_depend(parent, 1, &task);
+		rc = dc_task_depend(agg, 1, &task);
 
 		/*
 		 * The task is in the task_list, then even if to be aborted, it will be handled
@@ -3342,6 +3373,8 @@ out:
 		if (unlikely(d_list_empty(&task_list))) {
 			struct dc_object	*obj;
 
+			tse_task_complete(agg, 0);
+
 			obj = obj_hdl2ptr(oh);
 			D_MUTEX_LOCK(&tx->tx_lock);
 			rc = dc_tx_add_update(tx, obj, flags, dkey, nr, iods_or_akeys, sgls);
@@ -3353,12 +3386,24 @@ out:
 			/* Drop the reference that is held via dc_tx_attach(). */
 			dc_tx_decref(tx);
 		} else {
-			rc = tse_task_register_comp_cb(parent, dc_tx_per_akey_existence_parent_cb,
+			rc = tse_task_register_comp_cb(agg, dc_tx_per_akey_existence_agg_cb,
 						       &cb_args, sizeof(cb_args));
 			if (rc != 0)
 				goto fail;
 
-			tse_task_list_sched(&task_list, true);
+			rc = dc_task_depend(parent, 1, &agg);
+			if (rc != 0) {
+				/* Abort sub-tasks to complete agg, then agg_cb() will post the
+				 * parent and release the TX.
+				 */
+				tse_task_list_traverse(&task_list, shard_task_abort, &rc);
+			} else {
+				/* Reset status for the converted task. */
+				if (tx->tx_for_convert)
+					parent->dt_result = 0;
+
+				tse_task_list_sched(&task_list, true);
+			}
 		}
 	} else {
 		if (task != NULL)
@@ -3371,12 +3416,17 @@ out:
 
 fail:
 		tse_task_list_traverse(&task_list, shard_task_abort, &rc);
+		if (agg != NULL)
+			tse_task_complete(agg, rc);
 
 		rc = dc_tx_post(tx, NULL, parent, opc, rc, 0);
 
 		/* Drop the reference that is held via dc_tx_attach(). */
 		dc_tx_decref(tx);
 	}
+
+	if (agg != NULL)
+		tse_task_decref(agg);
 
 	return rc;
 }
@@ -3459,7 +3509,9 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_tx 
 	if (rc != 0) {
 		D_ERROR("Fail to add dep on check existence task: "DF_RC"\n",
 			DP_RC(rc));
-		goto out;
+		/* dc_tx_check_existence_cb() will post the parent and release resources. */
+		tse_task_complete(task, rc);
+		return rc;
 	}
 
 	/* Reset status for the converted task. */
@@ -3704,7 +3756,10 @@ dc_tx_convert_cb(tse_task_t *task, void *data)
 		 */
 		task->dt_result = 0;
 
+		/* Hold TX, it may be closed and released via dc_tx_convert_post(). */
+		dc_tx_addref(tx);
 		rc = dc_tx_convert_post(tx, obj, opc, rc, 0);
+		dc_tx_decref(tx);
 	} else {
 		dc_tx_close_internal(tx);
 	}
@@ -3735,6 +3790,13 @@ dc_tx_convert_post(struct dc_tx *tx, struct dc_object *obj, enum obj_rpc_opc opc
 		if (result == 0 && tx->tx_has_cond)
 			return 0;
 	}
+
+	/*
+	 * The condition check task has posted (completed the task and closed the TX) on failure,
+	 * nothing to do. The caller must hold a reference on the TX.
+	 */
+	if (tx->tx_closed)
+		return result;
 
 	if (result != 0)
 		D_GOTO(out, rc = result);
