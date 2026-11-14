@@ -8,7 +8,7 @@ hosts:
 timeouts:
   test_one_pool_hw: 240
   test_two_pools_hw: 320
-  test_recycle_pools_hw: 1500
+  test_recycle_pools_hw: 75m
 
 test_one_pool_hw:
   deltas:
@@ -28,7 +28,7 @@ test_recycle_pools_hw:
 test_two_pools_hw:
   deltas:
     pool_half:
-      scm: 18874368     # 18MiB
+      scm: 400000000    # 400MB
       nvme: 1048576     # 1MiB
     pool_full:
       scm: 18874368     # 18MiB
@@ -36,7 +36,7 @@ test_two_pools_hw:
     distribution:
       # DAOS-12750 NOTE metadata such as DAOS RDB (1GiB) are not recorded on all engines.
       scm: 2147483648   # 2GiB
-      nvme: 0
+      nvme: 4000000000  # 4GB
 
 server_config:
   name: daos_server
@@ -45,25 +45,11 @@ server_config:
     0:
       pinned_numa_node: 0
       log_file: daos_server0.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       log_file: daos_server1.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
   engines_common:
     targets_mux: !mux
       one_target:
