@@ -542,24 +542,38 @@ ik_btr_query(void **state)
 {
 	struct btr_attr		attr;
 	struct btr_stat		stat;
+	uint64_t                exp_rec_nr;
 	int			rc;
-	char		outbuf[64];
+	char                    outbuf[128];
 
+	D_PRINT("Query\n");
 	rc = dbtree_query(ik_toh, &attr, &stat);
 	if (rc != 0) {
 		sprintf(outbuf, "Failed to query btree: %d\n", rc);
 		fail_msg("%s", outbuf);
 	}
-
 	D_PRINT("tree	[order=%d, depth=%d]\n", attr.ba_order, attr.ba_depth);
-	D_PRINT("node	[total="DF_U64"]\n"
-		"record [total="DF_U64"]\n"
-		"key	[total="DF_U64", max="DF_U64"]\n"
-		"val	[total="DF_U64", max="DF_U64"]\n",
-		stat.bs_node_nr, stat.bs_rec_nr,
-		stat.bs_key_sum, stat.bs_key_max,
-		stat.bs_val_sum, stat.bs_val_max);
+	D_PRINT("node	[total=" DF_U64 "]\n"
+		"record	[total=" DF_U64 "]\n"
+		"key	[total=" DF_U64 ", max=" DF_U64 "]\n"
+		"val	[total=" DF_U64 ", max=" DF_U64 "]\n",
+		stat.bs_node_nr, stat.bs_rec_nr, stat.bs_key_sum, stat.bs_key_max, stat.bs_val_sum,
+		stat.bs_val_max);
 
+	if (tst_fn_val.optval != NULL) {
+		exp_rec_nr = strtoul(tst_fn_val.optval, NULL, 0);
+		if (stat.bs_rec_nr != exp_rec_nr) {
+			sprintf(outbuf,
+				"Btree query reported unexpected number of records: " DF_U64
+				" != " DF_U64 " (expected)\n",
+				stat.bs_rec_nr, exp_rec_nr);
+			fail_msg("%s", outbuf);
+		} else {
+			D_PRINT("number of records as expected\n");
+		}
+	} else {
+		D_PRINT("no expected number of records provided\n");
+	}
 }
 
 static void
@@ -735,7 +749,9 @@ ik_btr_batch_oper(void **state)
 		ik_btr_kv_operate(NULL);
 	}
 
+	tst_fn_val.optval = NULL;
 	ik_btr_query(NULL);
+
 	/* lookup all rest records, delete 10000 of them, and repeat until
 	 * deleting all records.
 	 */
@@ -763,7 +779,10 @@ ik_btr_batch_oper(void **state)
 			ik_btr_kv_operate(NULL);
 		}
 	}
+
+	tst_fn_val.optval = NULL;
 	ik_btr_query(NULL);
+
 	D_FREE(arr);
 }
 
@@ -863,7 +882,9 @@ ik_btr_drain(void **state)
 		ik_btr_kv_operate(NULL);
 	}
 
+	tst_fn_val.optval = NULL;
 	ik_btr_query(NULL);
+
 	while (1) {
 		int	creds = drain_creds;
 		bool	empty = false;
@@ -940,14 +961,14 @@ static struct option btr_ops[] = {
     {"find", required_argument, NULL, 'f'},
     {"delete", required_argument, NULL, 'd'},
     {"del_retain", required_argument, NULL, 'r'},
-    {"query", no_argument, NULL, 'q'},
+    {"query", optional_argument, NULL, 'q'},
     {"iterate", required_argument, NULL, 'i'},
     {"batch", required_argument, NULL, 'b'},
     {"perf", required_argument, NULL, 'p'},
     {NULL, 0, NULL, 0},
 };
 
-#define BTR_SHORTOPTS "+S:R::M::C:Deocqu:f:d:r:qi:b:p:"
+#define BTR_SHORTOPTS "+S:R::M::C:Deocu:f:d:r:q::i:b:p:"
 
 /**
  * Execute test based on the given sequence of steps.

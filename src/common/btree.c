@@ -3505,9 +3505,8 @@ delete:
 }
 
 /** gather statistics from a tree node and all its children recursively. */
-static void
-btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
-	      struct btr_stat *stat)
+static int
+btr_node_stat(struct btr_context *tcx, umem_off_t nd_off, struct btr_stat *stat)
 {
 	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
 	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
@@ -3523,9 +3522,11 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 			umem_off_t	child_off;
 
 			child_off = btr_node_child_at(tcx, nd_off, i);
-			btr_node_stat(tcx, child_off, stat);
+			rc        = btr_node_stat(tcx, child_off, stat);
+			if (rc != 0)
+				return rc;
 		}
-		return;
+		return 0;
 	}
 	/* leaf */
 	stat->bs_rec_nr += nd->tn_keyn;
@@ -3535,6 +3536,8 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 
 		rec = btr_node_rec_at(tcx, nd_off, i);
 		rc = btr_rec_stat(tcx, rec, &rs);
+		if (rc != -DER_NOSYS)
+			return rc;
 		if (rc != 0)
 			continue;
 
@@ -3546,15 +3549,39 @@ btr_node_stat(struct btr_context *tcx, umem_off_t nd_off,
 		if (stat->bs_val_max < rs.rs_vsize)
 			stat->bs_val_max = rs.rs_vsize;
 	}
+
+	return 0;
 }
 
 /** scan all tree nodes and records, gather their stats */
 static int
 btr_tree_stat(struct btr_context *tcx, struct btr_stat *stat)
 {
+	struct btr_rec_stat rs;
+	struct btr_record  *rec;
 	struct btr_root *root;
+	int                 rc;
 
 	memset(stat, 0, sizeof(*stat));
+
+	if (btr_has_embedded_value(tcx)) {
+		rec = &tcx->tc_record;
+		/** Use the fake record since only the user allocated part is stored
+		 *  in the tree root.
+		 */
+		rec->rec_off = tcx->tc_tins.ti_root->tr_node;
+		rc           = btr_rec_stat(tcx, rec, &rs);
+		if (rc != 0)
+			return rc;
+
+		stat->bs_rec_nr  = 1; /* embedded value counts as one record */
+		stat->bs_key_sum = rs.rs_ksize;
+		stat->bs_val_sum = rs.rs_vsize;
+		stat->bs_key_max = rs.rs_ksize;
+		stat->bs_val_max = rs.rs_vsize;
+
+		return 0;
+	}
 
 	root = tcx->tc_tins.ti_root;
 	if (!UMOFF_IS_NULL(root->tr_node)) {
@@ -3618,8 +3645,9 @@ dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
 		attr->ba_count = btr_tree_count(tcx, root);
 	}
 
-	if (stat != NULL)
-		btr_tree_stat(tcx, stat);
+	if (stat != NULL) {
+		return btr_tree_stat(tcx, stat);
+	}
 
 	return 0;
 }
