@@ -508,8 +508,14 @@ struct obj_auxi_args {
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
-	/* Replica-cycle start in the request layout; UINT32_MAX requires reselection. */
-	uint32_t			 initial_shard;
+
+	union {
+		/* Fetch: replica-cycle start in request layout; UINT32_MAX requires reselection. */
+		uint32_t initial_shard;
+		/* Modification: former DTX leader (object shard ID) before current resending. */
+		uint32_t former_leader;
+	};
+
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	/* per-IOM merge state for EC fetch, one per iod, allocated on demand
@@ -1169,8 +1175,8 @@ void
 obj_coll_oper_args_fini(struct coll_oper_args *coa);
 
 int
-obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
-		  uint32_t map_ver, uint32_t idx);
+obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj, uint32_t map_ver, uint32_t idx,
+		  uint32_t former_leader, int *candidate);
 
 int
 dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
