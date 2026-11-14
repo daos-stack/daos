@@ -642,19 +642,6 @@ done:
 	if (rc == 0 && p_arg->result != 0)
 		rc = p_arg->result;
 
-	/* After RDMA is done, corrupt the server data */
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
-		struct bio_sglist	*fbsgl;
-		d_sg_list_t		 fsgl;
-		int			*fbuffer;
-
-		D_ERROR("csum: Corrupting data after RDMA\n");
-		fbsgl = vos_iod_sgl_at(ioh, 0);
-		bio_sgl_convert(fbsgl, &fsgl);
-		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-		*fbuffer += 0x2;
-		d_sgl_fini(&fsgl, false);
-	}
 	return rc;
 }
 
@@ -1803,10 +1790,21 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
-		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK) && !rma) {
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 			D_ERROR("csum: Corrupting data (DISK)\n");
-			dcf_corrupt(orw->orw_sgls.ca_arrays,
-				    orw->orw_sgls.ca_count);
+			if (rma) {
+				struct bio_sglist *fbsgl;
+				d_sg_list_t        fsgl;
+				int               *fbuffer;
+
+				fbsgl = vos_iod_sgl_at(ioh, 0);
+				bio_sgl_convert(fbsgl, &fsgl);
+				fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+				*fbuffer += 0x2;
+				d_sgl_fini(&fsgl, false);
+			} else {
+				dcf_corrupt(orw->orw_sgls.ca_arrays, orw->orw_sgls.ca_count);
+			}
 		}
 	}
 	if (obj_rpc_is_fetch(rpc) && create_map) {
@@ -2049,10 +2047,17 @@ obj_get_iods_offs(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 		return 0;
 	}
 
-	if (iod_array->oia_iod_csums != NULL)
-		(*p_csums)->ic_data = csum_info;
-	else
+	if (iod_array->oia_iod_csums != NULL) {
+		/*
+		 * The caller may pass an empty slot (*p_csums == NULL), in which case
+		 * obj_get_iods_offs_by_oid() allocates the csums array and fills in
+		 * ic_data for each entry itself, so there is nothing to seed here.
+		 */
+		if (*p_csums != NULL)
+			(*p_csums)->ic_data = csum_info;
+	} else {
 		*p_csums = NULL;
+	}
 
 	rc = obj_get_iods_offs_by_oid(uoid, iod_array, oca, dkey_hash, layout_ver, iods, offs,
 				      skips, iod_array->oia_iod_csums == NULL ? NULL : p_csums, nr);
@@ -2538,6 +2543,34 @@ failed:
 	return rc;
 }
 
+/*
+ * EC aggregation requests come from the parity leader. Reject them if the
+ * sender's target has been excluded: an excluded but still alive target may
+ * run EC aggregation with stale data and must not update the real shards.
+ * \a src_tgt is the sender's target index + 1, or 0 if the sender did not
+ * tell (then reject only if the whole rank is excluded).
+ */
+static int
+obj_ec_agg_src_check(crt_rpc_t *rpc, struct ds_cont_child *cont, uint32_t src_tgt)
+{
+	d_rank_t src_rank;
+	int      tgt_idx = src_tgt == 0 ? -1 : (int)src_tgt - 1;
+	int      rc;
+
+	rc = crt_req_src_rank_get(rpc, &src_rank);
+	if (rc != 0)
+		return rc;
+
+	if (ds_pool_tgt_excluded(cont->sc_pool->spc_pool, src_rank, tgt_idx)) {
+		D_ERROR(DF_CONT ": EC aggregation request from excluded rank %u tgt %d\n",
+			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), src_rank, tgt_idx);
+		/* not -DER_STALE: the sender would retry forever, it is excluded for good */
+		return -DER_OP_CANCELED;
+	}
+
+	return 0;
+}
+
 void
 ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 {
@@ -2570,6 +2603,9 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	rc = obj_ec_agg_src_check(rpc, ioc.ioc_coc, oer->er_src_tgt);
+	if (rc)
+		goto out;
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oer->er_dkey;
@@ -2660,6 +2696,9 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	}
 
 	D_ASSERT(ioc.ioc_coc != NULL);
+	rc = obj_ec_agg_src_check(rpc, ioc.ioc_coc, oea->ea_src_tgt);
+	if (rc)
+		goto out;
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oea->ea_dkey;
@@ -2795,7 +2834,9 @@ obj_handle_resend(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, ui
 			D_GOTO(out, rc = -DER_INPROGRESS);
 
 		/* Abort it if exist but with different epoch, then re-execute with new epoch. */
-		rc = vos_dtx_abort(coh, dti, e, ver);
+		rc = vos_dtx_abort(coh, dti, e, pm_ver);
+		if (unlikely(rc == -DER_NO_PERM))
+			D_GOTO(out, rc = -DER_STALE);
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 		/* Fall through */
@@ -3321,9 +3362,10 @@ again:
 			      &orw->orw_oid, dti_cos, dti_cos_cnt, tgts, tgt_cnt, dtx_flags, mbs,
 			      NULL /* dce */, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for update " DF_RC "\n",
-			DP_UOID(orw->orw_oid), DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_CDEBUG(rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+			  "Failed to start DTX " DF_DTI " for update " DF_UOID,
+			  DP_DTI(&orw->orw_dti), DP_UOID(orw->orw_oid));
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 	}
 
 	exec_arg.rpc = rpc;
@@ -3402,7 +3444,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
@@ -4261,9 +4303,10 @@ again:
 			      &opi->opi_oid, dti_cos, dti_cos_cnt, tgts, tgt_cnt, dtx_flags, mbs,
 			      NULL /* dce */, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for punch " DF_RC "\n",
-			DP_UOID(opi->opi_oid), DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_CDEBUG(rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+			  "Failed to start DTX " DF_DTI " for punch " DF_UOID,
+			  DP_DTI(&opi->opi_dti), DP_UOID(opi->opi_oid));
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 	}
 
 	exec_arg.rpc = rpc;
@@ -4336,7 +4379,7 @@ out:
 		dte.dte_refs = 1;
 		dte.dte_mbs  = mbs;
 
-		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
@@ -5211,7 +5254,28 @@ out:
 			continue;
 
 		dcu = &dcsr->dcsr_update;
-		if (piods!= NULL && piods[i] != NULL && piods[i] != &local_iods[i] &&
+		if (pcsums != NULL && pcsums[i] != NULL && pcsums[i] != &local_csums[i] &&
+		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
+			struct dcs_iod_csums	*csum = pcsums[i];
+			int j;
+
+			/* csum[] was compacted alongside piods[i] by
+			 * obj_get_iods_offs_by_oid(), so the iod types have to be read
+			 * from the compacted array. Only single values own ic_data; the
+			 * array entries borrow it from the decoded RPC buffer.
+			 */
+			for (j = 0;
+			     piods != NULL && piods[i] != NULL && j < dcu->dcu_iod_array.oia_iod_nr;
+			     j++) {
+				if (piods[i][j].iod_type == DAOS_IOD_SINGLE &&
+				    csum[j].ic_data != NULL)
+					D_FREE(csum[j].ic_data);
+			}
+
+			D_FREE(csum);
+		}
+
+		if (piods != NULL && piods[i] != NULL && piods[i] != &local_iods[i] &&
 		    piods[i] != dcu->dcu_iod_array.oia_iods)
 			D_FREE(piods[i]);
 
@@ -5221,20 +5285,6 @@ out:
 
 		if (pskips != NULL && pskips[i] != NULL && pskips[i] != (uint8_t *)&local_skips[i])
 			D_FREE(pskips[i]);
-
-		if (pcsums != NULL && pcsums[i] != NULL && pcsums[i] != &local_csums[i] &&
-		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
-			struct dcs_iod_csums	*csum = pcsums[i];
-			int j;
-
-			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; i++) {
-				if (dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE &&
-				    csum[j].ic_data != NULL)
-					D_FREE(csum[j].ic_data);
-			}
-
-			D_FREE(csum);
-		}
 	}
 
 	if (piods != local_p_iods && piods != NULL)
@@ -5515,7 +5565,9 @@ out:
 		dte.dte_ver = oci->oci_map_ver;
 		dte.dte_refs = 1;
 		dte.dte_mbs = dcsh->dcsh_mbs;
-		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value);
+
+		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value,
+				oci->oci_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&dcsh->dcsh_xid), DP_RC(rc1));
@@ -6071,9 +6123,10 @@ again:
 			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */, dtx_flags,
 			      odm->odm_mbs, dce, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for collective punch: "DF_RC"\n",
-			DP_UOID(ocpi->ocpi_oid), DP_RC(rc));
-		D_GOTO(out, rc);
+		DL_CDEBUG(rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+			  "Failed to start DTX " DF_DTI " for collective punch " DF_UOID,
+			  DP_DTI(&odm->odm_xid), DP_UOID(ocpi->ocpi_oid));
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 	}
 
 	/* Execute the operation on all shards */
@@ -6105,7 +6158,7 @@ again:
 
 out:
 	if (rc != 0 && need_abort) {
-		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch);
+		rc1 = dtx_coll_abort(ioc.ioc_coc, dce, ocpi->ocpi_epoch, ioc.ioc_map_ver);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to collective abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&ocpi->ocpi_xid), DP_RC(rc1));
@@ -6246,7 +6299,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */,
 			      DTX_TGT_COLL | DTX_RELAY, NULL /* mbs */, &dce, &dlh);
 	if (rc != 0)
-		goto out;
+		D_GOTO(out, rc = (rc == -DER_TX_RESTART ? -DER_INPROGRESS : rc));
 
 	rc = dtx_leader_exec_ops(dlh, obj_coll_query_disp, obj_coll_query_agg_cb, -DER_NONEXIST,
 				 &exec_arg);

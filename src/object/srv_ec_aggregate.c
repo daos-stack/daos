@@ -59,6 +59,8 @@
 #include "obj_ec.h"
 #include "srv_internal.h"
 
+#include <isa-l.h>
+
 #define EC_AGG_ITERATION_MAX	1024
 #define EC_AGG_PROCESS_CREDITS  128
 #define EC_AGG_FILTER_CREDITS   1
@@ -150,6 +152,7 @@ struct ec_agg_stripe_ud {
 	unsigned int		 asu_cell_cnt;  /* Count of cells        */
 	bool			 asu_recalc;    /* Should recalc parity  */
 	bool                     asu_write_par; /* Should write parity   */
+	int                      asu_tgt_id;    /* Originating VOS target, not the IOFW target */
 	daos_iod_t		 asu_iod;
 	d_iov_t			 asu_csum_iov;
 	struct dcs_iod_csums	*asu_iod_csums; /* iod csums */
@@ -1478,6 +1481,7 @@ retry:
 		ec_agg_in->ea_stripenum = entry->ae_cur_stripe.as_stripenum;
 		ec_agg_in->ea_map_ver =
 			agg_param->ap_pool_info.api_pool->sp_map_version;
+		ec_agg_in->ea_src_tgt             = stripe_ud->asu_tgt_id + 1;
 		ec_agg_in->ea_iod_csums.ca_arrays = NULL;
 		ec_agg_in->ea_iod_csums.ca_count = 0;
 		iod_csums = NULL;
@@ -1597,6 +1601,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 		return rc;
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
+	stripe_ud.asu_tgt_id = tid;
 	rc = dss_ult_create(agg_peer_update_ult, &stripe_ud,
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
@@ -1771,6 +1776,7 @@ retry:
 		ec_rep_in->er_epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
 		ec_rep_in->er_epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 		ec_rep_in->er_map_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
+		ec_rep_in->er_src_tgt             = stripe_ud->asu_tgt_id + 1;
 		ec_rep_in->er_bulk = bulk_hdl;
 		ec_rep_in->er_comm_in.req_in_enqueue_id = enqueue_id;
 		rc = dss_rpc_send(rpc);
@@ -1858,6 +1864,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 		goto out;
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
+	stripe_ud.asu_tgt_id = tid;
 
 	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
 			    DSS_XS_IOFW, tid, 0, NULL);

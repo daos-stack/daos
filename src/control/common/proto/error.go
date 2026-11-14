@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,6 +38,9 @@ const (
 	// AnnotatedSystemErrPoolNotFound defines an identifier for ErrPoolNotFound errors
 	// serialized as gRPC status metadata.
 	AnnotatedSystemErrPoolNotFound = "proto.system.ErrPoolNotFound"
+	// AnnotatedSystemErrReplicaNoEngine defines an identifier for ErrReplicaNoEngine errors
+	// serialized as gRPC status metadata.
+	AnnotatedSystemErrReplicaNoEngine = "proto.system.ErrReplicaNoEngine"
 )
 
 // ErrFromMeta converts a map of metadata into an error.
@@ -56,6 +60,8 @@ func ErrFromMeta(meta map[string]string, errType error) error {
 		err = json.Unmarshal([]byte(meta["Replicas"]), &et.Replicas)
 	case *system.ErrPoolNotFound:
 		err = json.Unmarshal([]byte(meta["PoolInfo"]), et)
+	case *system.ErrReplicaNoEngine:
+		err = json.Unmarshal([]byte(meta["Replicas"]), &et.Replicas)
 	default:
 		err = errors.Errorf("unable to convert %+v into error", meta)
 	}
@@ -139,6 +145,18 @@ func AnnotateError(in error) error {
 				"PoolInfo": string(data),
 			},
 		}
+	case *system.ErrReplicaNoEngine:
+		data, err := json.Marshal(et.Replicas)
+		if err != nil {
+			break
+		}
+		details = &errdetails.ErrorInfo{
+			Reason: AnnotatedSystemErrReplicaNoEngine,
+			Domain: "DAOS",
+			Metadata: map[string]string{
+				"Replicas": string(data),
+			},
+		}
 	}
 
 	if details == nil {
@@ -177,6 +195,8 @@ func UnwrapError(st *status.Status) error {
 				return ErrFromMeta(t.Metadata, new(system.ErrNotLeader))
 			case AnnotatedSystemErrPoolNotFound:
 				return ErrFromMeta(t.Metadata, new(system.ErrPoolNotFound))
+			case AnnotatedSystemErrReplicaNoEngine:
+				return ErrFromMeta(t.Metadata, new(system.ErrReplicaNoEngine))
 			}
 		}
 	}
