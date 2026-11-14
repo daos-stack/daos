@@ -4585,9 +4585,9 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 
 #define TREE_CLASS_STR           "Tree class... "
 #define TREE_FEATURES_STR        "Tree features... "
-#define INVALID_CLASS_FMT        "Invalid class id: %d\n"
-#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d\n"
-#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64 "\n"
+#define INVALID_CLASS_FMT        "Invalid class id: %d"
+#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d"
+#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64
 #define OK_STR                   "ok.\n"
 
 /**
@@ -4626,14 +4626,14 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	CK_PRINTF(ck, TREE_CLASS_STR);
 	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
 		CK_APPENDFL_ERR(ck, INVALID_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT "\n", tree_class);
 		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
 	if (tc->tc_ops == NULL || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_UNREG_CLASS)) {
 		CK_APPENDFL_ERR(ck, UNREGISTERED_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT "\n", tree_class);
 		return -DER_NONEXIST;
 	}
 	CK_APPENDL_OK(ck);
@@ -4642,7 +4642,7 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	rc = btr_class_feats_init(tree_class, tree_feats, tc);
 	if (rc != DER_SUCCESS) {
 		CK_APPENDFL_ERR(ck, UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
-		D_ERROR(UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
+		D_ERROR(UNSUPPORTED_FEATURES_FMT "\n", *tree_feats, tc->tc_feats);
 		return rc;
 	}
 	CK_APPENDL_OK(ck);
