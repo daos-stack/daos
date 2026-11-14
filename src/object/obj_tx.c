@@ -300,7 +300,11 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 		return -DER_NO_HDL;
 
 	ph = dc_cont_hdl2pool_hdl(coh);
-	D_ASSERT(daos_handle_is_valid(ph));
+	/* the pool handle can be invalidated by a concurrent teardown
+	 * (daos_fini) while a worker still holds the container handle;
+	 * fail the operation instead of aborting. See DAOS-19955. */
+	if (daos_handle_is_inval(ph))
+		return -DER_NO_HDL;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)

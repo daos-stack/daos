@@ -22,6 +22,7 @@
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
 static __thread bool		ev_thpriv_is_init;
+static __thread unsigned int	ev_thpriv_gen;
 
 /**
  * Global progress timeout for synchronous operation
@@ -61,12 +62,22 @@ static uint32_t ev_prog_timeout;
 static crt_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int eq_ref;
+/* number of workers currently inside daos_event_priv_wait(); the final
+ * daos_eq_lib_fini() waits for this to drain to zero before destroying
+ * the CaRT context, see DAOS-19955. Plain atomics (not daos_eq_lock):
+ * the waiters decrement must not need the lock the finalizer sleeps on.
+ */
+static ATOMIC unsigned int eq_waiters;
+static pthread_cond_t eq_waiters_cond = PTHREAD_COND_INITIALIZER;
+/* Bumped on every daos_eq_lib_init() so threads can detect that their
+ * private event predates the current library instance. See DAOS-19955. */
+static unsigned int eq_gen;
 
 /*
  * Pointer to global scheduler for events not part of an EQ. Events initialized
  * as part of an EQ will be tracked in that EQ scheduler.
  */
-static tse_sched_t daos_sched_g;
+static tse_sched_t *daos_sched_g;
 
 int
 daos_eq_lib_init(crt_init_options_t *crt_info)
@@ -93,12 +104,23 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 		D_GOTO(crt, rc);
 	}
 
-	/** set up scheduler for non-eq events */
-	rc = tse_sched_init(&daos_sched_g, NULL, daos_eq_ctx);
-	if (rc != 0)
+	/** set up scheduler for non-eq events; a fresh object per
+	 * generation - the previous one is intentionally leaked so
+	 * workers still waiting on the old generation keep a valid
+	 * (cancelled) scheduler instead of racing this init's memset.
+	 * See DAOS-19955. */
+	D_ALLOC_PTR(daos_sched_g);
+	if (daos_sched_g == NULL)
+		D_GOTO(crt, rc = -DER_NOMEM);
+
+	rc = tse_sched_init(daos_sched_g, NULL, daos_eq_ctx);
+	if (rc != 0) {
+		D_FREE(daos_sched_g);
 		D_GOTO(crt, rc);
+	}
 
 	eq_ref = 1;
+	eq_gen++;
 
 	d_getenv_uint32_t("D_POLL_TIMEOUT", &ev_prog_timeout);
 
@@ -121,6 +143,7 @@ daos_eq_lib_reset_after_fork(void)
 
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
+	daos_sched_g      = NULL;
 	crt_info          = daos_crt_init_opt_get(false, 1);
 	rc                = dc_mgmt_net_cfg_init(NULL, crt_info);
 	if (rc == 0)
@@ -136,16 +159,6 @@ daos_eq_lib_fini()
 {
 	int rc;
 
-	if (daos_eq_ctx != NULL) {
-		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
-		if (rc != 0) {
-			D_ERROR("failed to destroy client context: "DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
-		daos_eq_ctx = NULL;
-	}
-
 	D_MUTEX_LOCK(&daos_eq_lock);
 	if (eq_ref == 0)
 		D_GOTO(unlock, rc = -DER_UNINIT);
@@ -155,7 +168,55 @@ daos_eq_lib_fini()
 	}
 	ev_thpriv_is_init = false;
 
-	tse_sched_complete(&daos_sched_g, 0, true);
+	/* The current generation's scheduler object is leaked on
+	 * purpose: workers still inside daos_event_priv_wait() from this
+	 * generation keep using it (cancelled, dsp_lock valid) instead
+	 * of racing the next generation's initialization, and a late
+	 * RPC completion callback still holding a pinned task finds a
+	 * live dsp_lock. The pre-drain hold taken by DAOS-19955 keeps
+	 * the object alive the same way for a static scheduler. See
+	 * DAOS-19955 / DAOS-19962.
+	 */
+	/* Cancel and drain in-flight tasks on the global scheduler while
+	 * the cart context can still make progress, so completion
+	 * callbacks run and retries unwind instead of surviving the
+	 * teardown below. See DAOS-19955.
+	 *
+	 * Take one extra reference first: tse_sched_complete() drops the
+	 * initial reference taken by tse_sched_init() when its drain
+	 * finishes, which would finalize the scheduler (destroying
+	 * dsp_lock) while workers racing this fini may still touch it.
+	 * With the extra reference the object stays whole for the leak
+	 * described above. See DAOS-19962.
+	 */
+	tse_sched_addref(daos_sched_g);
+	tse_sched_complete(daos_sched_g, 0, true);
+
+	/* the drain above force-completes the private event tasks, so
+	 * every daos_event_priv_wait() returns within finite time; wait
+	 * for the stragglers to leave crt_hg_progress() before the
+	 * context goes away. See DAOS-19955. */
+	struct timespec		deadline;
+
+	while (atomic_load(&eq_waiters) > 0) {
+		/* the atomic decrement in daos_event_priv_wait() does not
+		 * take this lock, so its broadcast can race this loop's
+		 * load; bound the sleep to close the lost-wakeup window */
+		clock_gettime(CLOCK_REALTIME, &deadline);
+		deadline.tv_sec += 1;
+		pthread_cond_timedwait(&eq_waiters_cond, &daos_eq_lock,
+					&deadline);
+	}
+
+	if (daos_eq_ctx != NULL) {
+		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
+		if (rc != 0) {
+			D_ERROR("failed to destroy client context: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(unlock, rc);
+		}
+		daos_eq_ctx = NULL;
+	}
 
 	rc = crt_finalize();
 	if (rc != 0) {
@@ -1055,13 +1116,13 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		evx->evx_sched = &eqx->eqx_sched;
 		daos_eq_putref(eqx);
 	} else {
-		if (daos_sched_g.ds_udata == NULL) {
+		if (daos_sched_g == NULL || daos_sched_g->ds_udata == NULL) {
 			D_ERROR("The DAOS client library is not initialized: "DF_RC"\n",
 				DP_RC(-DER_UNINIT));
 			return -DER_UNINIT;
 		}
 		evx->evx_ctx = daos_eq_ctx;
-		evx->evx_sched = &daos_sched_g;
+		evx->evx_sched = daos_sched_g;
 	}
 
 	if (daos_handle_is_inval(evx->evx_eqh)) {
@@ -1268,12 +1329,43 @@ daos_event_priv_get(daos_event_t **ev)
 
 	D_ASSERT(*ev == NULL);
 
-	if (!ev_thpriv_is_init) {
-		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
-		if (rc)
-			return rc;
-		ev_thpriv_is_init = true;
+	/* Reject submissions racing the final daos_eq_lib_fini().
+	 * The fini path holds daos_eq_lock for the whole teardown and
+	 * leaves eq_ref at 0, so checking under the same lock closes the
+	 * window where a worker's stale TLS event outlives the global
+	 * scheduler. See DAOS-19955. */
+	D_MUTEX_LOCK(&daos_eq_lock);
+	if (eq_ref == 0) {
+		D_MUTEX_UNLOCK(&daos_eq_lock);
+		return -DER_UNINIT;
 	}
+
+	/* A worker whose TLS event was initialized under a previous
+	 * library instance (before the last daos_fini()) still points at
+	 * the destroyed context/scheduler. Re-init it instead of
+	 * returning the stale event. See DAOS-19955. */
+	if (!ev_thpriv_is_init || ev_thpriv_gen != eq_gen) {
+		if (ev_thpriv_is_init) {
+			rc = daos_event_priv_reset();
+			if (rc == -DER_BUSY) {
+				/* event stuck RUNNING on the dead context:
+				 * fini failed, force-close it so the
+				 * re-init below starts from a sane state */
+				daos_event_fini(&ev_thpriv);
+			} else if (rc) {
+				D_MUTEX_UNLOCK(&daos_eq_lock);
+				return rc;
+			}
+		}
+		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
+		if (rc) {
+			D_MUTEX_UNLOCK(&daos_eq_lock);
+			return rc;
+		}
+		ev_thpriv_is_init = true;
+		ev_thpriv_gen = eq_gen;
+	}
+	D_MUTEX_UNLOCK(&daos_eq_lock);
 
 	ev_status = atomic_load(&evx->evx_status);
 	if (ev_status != DAOS_EVS_READY) {
@@ -1295,6 +1387,7 @@ daos_event_priv_wait()
 {
 	struct ev_progress_arg	epa;
 	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
+	unsigned int		wait_gen;
 	int rc = 0, rc2;
 
 	D_ASSERT(ev_thpriv_is_init);
@@ -1302,8 +1395,45 @@ daos_event_priv_wait()
 	epa.evx = evx;
 	epa.eqx = NULL;
 
+	/* Register as a waiter so the final daos_eq_lib_fini() waits
+	 * for this wait to return before destroying the CaRT context.
+	 * The loop-head generation checks below cannot cover the window
+	 * between ev_progress_cb() returning 0 and crt_hg_progress()
+	 * touching the context inside crt_progress_cond(). See
+	 * DAOS-19955. */
+	D_MUTEX_LOCK(&daos_eq_lock);
+	if (eq_ref == 0) {
+		D_MUTEX_UNLOCK(&daos_eq_lock);
+		return -DER_UNINIT;
+	}
+	atomic_fetch_add(&eq_waiters, 1);
+	D_MUTEX_UNLOCK(&daos_eq_lock);
+
+	/* generation of the library instance this wait started under */
+	wait_gen = eq_gen;
+
 	/* Wait on the event to complete */
 	while (atomic_load(&evx->evx_status) != DAOS_EVS_READY) {
+		/* The scheduler was drained and cancelled underneath us
+		 * (daos_eq_lib_fini during teardown); nobody will ever
+		 * complete this event, so fail fast instead of spinning
+		 * forever. See DAOS-19955. */
+		if (tse_sched_is_cancelling(evx->evx_sched)) {
+			D_ERROR("private event aborted: scheduler cancelled\n");
+			rc = -DER_CANCELED;
+			break;
+		}
+
+		/* The library was finalized (and possibly re-initialized
+		 * by another thread) while we were waiting: the context
+		 * this event runs on is gone, so stop waiting. See
+		 * DAOS-19955. */
+		if (eq_ref == 0 || wait_gen != eq_gen) {
+			D_ERROR("private event aborted: library re-initialized\n");
+			rc = -DER_CANCELED;
+			break;
+		}
+
 		rc = crt_progress_cond(evx->evx_ctx, ev_prog_timeout, ev_progress_cb, &epa);
 
 		/** progress succeeded, loop can exit if event completed */
@@ -1327,6 +1457,10 @@ daos_event_priv_wait()
 	/** on success, the event should have been reset to ready stat by the progress cb */
 	if (rc == 0)
 		D_ASSERT(evx->evx_status == DAOS_EVS_READY);
+
+	if (atomic_fetch_sub(&eq_waiters, 1) == 1)
+		pthread_cond_broadcast(&eq_waiters_cond);
+
 	rc2 = daos_event_priv_reset();
 	if (rc2) {
 		if (rc == 0)
