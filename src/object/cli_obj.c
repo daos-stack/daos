@@ -720,7 +720,7 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint3
 			found = true;
 
 		if (pl_shard->po_target == -1 || pl_shard->po_shard == -1 ||
-		    pl_shard->po_rebuilding ||
+		    pl_shard->po_rebuilding || pl_shard->po_reintegrating ||
 		    (DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
 		     daos_shard_in_fail_value(grp_size - 1 - i))) {
 			/* Then try former one */
@@ -739,8 +739,8 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint3
 	 * If no parity node is available, then handle related task that has conditional
 	 * modification via distributed tranasaction.
 	 */
-	if (cond_modify && candidate < 0)
-		D_GOTO(unlock, rc = -DER_NEED_TX);
+	if (cond_modify)
+		D_GOTO(unlock, rc = candidate < 0 ? -DER_NEED_TX : candidate);
 
 	/* Choose one from data shards within bit_map, and also make sure there are
 	 * no further data shards failed.
@@ -757,7 +757,7 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint3
 			found = true;
 
 		if (pl_shard->po_target == -1 || pl_shard->po_shard == -1 ||
-		    pl_shard->po_rebuilding) {
+		    pl_shard->po_rebuilding || pl_shard->po_reintegrating) {
 			if (candidate >= 0)
 				D_GOTO(unlock, rc = candidate);
 
@@ -778,9 +778,6 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint3
 
 	if (candidate >= 0)
 		D_GOTO(unlock, rc = candidate);
-
-	if (cond_modify)
-		D_GOTO(unlock, rc = -DER_NEED_TX);
 
 	D_WARN(DF_OID " no shards %d are in bitmaps, retry later.\n", DP_OID(obj->cob_md.omd_id),
 	       obj_ec_parity_tgt_nr(oca));
@@ -852,7 +849,8 @@ obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx, uint64_t 
 		 * case that during reintegration we may have an extended
 		 * layout that with in-adding shards with po_rebuilding set).
 		 */
-		if (shard->po_target == -1 || shard->po_shard == -1 || shard->po_rebuilding)
+		if (shard->po_target == -1 || shard->po_shard == -1 || shard->po_rebuilding ||
+		    shard->po_reintegrating)
 			continue;
 
 		if (pos == -1 || obj_get_shard(obj, pos)->po_fseq > shard->po_fseq)
@@ -1328,6 +1326,17 @@ obj_check_repeat_tgt(struct dc_object *obj, struct daos_shard_tgt *head, struct 
 	return 0;
 }
 
+static inline int
+obj_for_next(int idx, int tgt, int grp_size, bool extend, bool parity)
+{
+	if (extend)
+		return idx;
+
+	if (parity)
+		return (tgt - 1 + grp_size) % grp_size;
+
+	return (tgt + 1) % grp_size;
+}
 /*
  * Pack shards for updating EC object: DTX leader is the first one, then the other parity shards,
  * and then other data shards. Such order will help DTX resync logic to select new leader during
@@ -1336,7 +1345,7 @@ obj_check_repeat_tgt(struct dc_object *obj, struct daos_shard_tgt *head, struct 
 static int
 obj_modify_ec_packtgts(struct obj_auxi_args *obj_auxi, struct dc_object *obj, uint64_t dkey_hash,
 		       uint32_t grp_start, uint32_t leader, uint32_t map_ver, uint8_t *bit_map,
-		       struct daos_shard_tgt *head, struct daos_shard_tgt **tgts)
+		       struct daos_shard_tgt *head, struct daos_shard_tgt **tgts, int *skipped)
 {
 	struct daos_oclass_attr *oca      = obj_get_oca(obj);
 	int                      grp_size = obj_ec_tgt_nr(oca);
@@ -1352,16 +1361,14 @@ obj_modify_ec_packtgts(struct obj_auxi_args *obj_auxi, struct dc_object *obj, ui
 	tgt_idx = obj_ec_shard_idx(obj, dkey_hash, grp_size - 1);
 
 again:
-	for (i = low; i < high; i++, tgt_idx = extend
-						   ? i
-						   : (parity ? (tgt_idx - 1 + grp_size) % grp_size
-							     : (tgt_idx + 1) % grp_size)) {
+	for (i = low; i < high; i++, tgt_idx = obj_for_next(i, tgt_idx, grp_size, extend, parity)) {
 		if (tgt_idx + grp_start == leader)
 			continue;
 
 		rc = obj_shard_tgts_query(obj, map_ver, tgt_idx + grp_start, *tgts, obj_auxi,
 					  bit_map);
 		if (rc == -DER_NONEXIST) {
+			(*skipped)++;
 			rc = 0;
 			continue;
 		}
@@ -1414,6 +1421,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	uint32_t		 shard_idx, grp_size;
 	bool			 cli_disp = flags & OBJ_TGT_FLAG_CLI_DISPATCH;
 	int			 rc = 0;
+	int                      skipped  = 0;
 
 	D_ASSERT(shard_cnt >= 1);
 	grp_size = shard_cnt / grp_nr;
@@ -1521,7 +1529,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 
 		if (req_tgts->ort_srv_disp && obj_is_ec(obj)) {
 			rc = obj_modify_ec_packtgts(obj_auxi, obj, obj_auxi->dkey_hash, grp_start,
-						    leader_shard, map_ver, bit_map, head, &tgt);
+						    leader_shard, map_ver, bit_map, head, &tgt,
+						    &skipped);
 			if (rc != 0)
 				goto out;
 
@@ -1553,6 +1562,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				if (rc != -DER_NONEXIST)
 					D_GOTO(out, rc);
 				rc = 0;
+				skipped++;
+				cur_grp_size--;
 				if (obj_is_modification_opc(obj_auxi->opc))
 					tgt_idx = (tgt_idx + 1) % obj_get_grp_size(obj);
 				else
@@ -1582,7 +1593,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	}
 
 	if ((flags == 0 || flags & OBJ_TGT_FLAG_FW_LEADER_INFO) && bit_map == NIL_BITMAP)
-		D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_cnt);
+		D_ASSERT(tgt + skipped == req_tgts->ort_shard_tgts + shard_cnt);
 
 out:
 	DL_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE, DLOG_ERR, rc,

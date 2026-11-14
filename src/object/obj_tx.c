@@ -570,6 +570,11 @@ dc_tx_cleanup(struct dc_tx *tx)
 	}
 	tx->tx_head.dcs_buf = NULL;
 
+	if (tx->tx_renew) {
+		tx->tx_leader_tgt = UINT32_MAX;
+		D_FREE(tx->tx_mbs);
+	}
+
 	if (tx->tx_disp.dcs_type == DCST_BULK_ENT) {
 		dc_tx_bulk_free(&tx->tx_disp_bulk.dcb_bulk);
 		dcde = tx->tx_disp_bulk.dcb_iov.iov_buf;
@@ -2048,16 +2053,21 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	mbs = dcsh->dcsh_mbs;
 	mbs->dm_flags = DMF_CONTAIN_LEADER;
 
+	rc = 0;
+
 	if (tx->tx_set_resend && tx->tx_leader_tgt != UINT32_MAX) {
+		if (unlikely(tx->tx_leader_tgt >= tgt_cnt))
+			D_GOTO(out, rc = -DER_STALE);
+
 		rc = dc_tx_resend_leader(tx, dtrgs);
 		if (rc < 0)
 			goto out;
+	}
 
-		if (rc > 0) {
-			leader_oid      = tx->tx_leader_oid;
-			leader_dtrg_idx = tx->tx_leader_tgt;
-			rc              = 0;
-		}
+	if (rc > 0) {
+		rc              = 0;
+		leader_oid      = tx->tx_leader_oid;
+		leader_dtrg_idx = tx->tx_leader_tgt;
 	} else if (mod_grp_cnt == 1) {
 		/* Modification within single RDG, elect leader as standalone modification does. */
 		uint8_t	*bit_map;
