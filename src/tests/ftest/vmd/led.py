@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -128,16 +129,13 @@ class VmdLedStatus(OSAUtils):
             self.log.info("First device on hosts %s: %s", hosts, uuid_list[0])
             host = hosts.split(':')[0]
 
-            self.log.debug(f"## uuid_dict = {uuid_dict}; uuid_list[0] = {uuid_list[0]}")
+            self.log.info("uuid_dict = %s; uuid_list[0] = %s", uuid_dict, uuid_list[0])
             device_values = uuid_dict[uuid_list[0]]
-            self.log.debug(f"## device_values = {device_values}")
             has_sys_xs = device_values["has_sys_xs"]
-            self.log.debug(f"## has_sys_xs = {has_sys_xs}")
-
             if not has_sys_xs:
                 resp = set_device_faulty(self, dmg=self.dmg, server=host, uuid=uuid_list[0])
             else:
-                self.log.info("Device has_sys_xs is true. Skip this device and host.")
+                self.log.info("Device has_sys_xs is True. Skip this device and host.")
                 continue
 
             self.log.info("Sleeping for 15 seconds ...")
@@ -148,5 +146,3 @@ class VmdLedStatus(OSAUtils):
             self.log.info("Sleeping for 60 seconds ...")
             time.sleep(60)
             self.log.info(resp)
-
-        self.log.debug("## End of test.")
