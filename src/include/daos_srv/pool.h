@@ -121,6 +121,10 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	/* Highest stable epoch of the rebuilds seen by this engine, set by the rebuild IV and never
+	 * reset. Updates at or below it are rejected, see check_update_rebuild_race(), and EC
+	 * aggregation rounds below it check for newer updates, see agg_stripe_has_newer().
+	 */
 	daos_epoch_t             sp_rebuild_epoch;
 };
 
