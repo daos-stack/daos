@@ -8,6 +8,7 @@
 #define __DAOS_CHECKER_H__
 
 #include <stdarg.h>
+#include <daos/common.h>
 #include <gurt/common.h>
 
 #define CHECKER_INDENT_MAX 10
@@ -48,9 +49,9 @@ struct checker {
 	void                  *ck_private;
 	struct checker_options ck_options;
 	/** state */
-	int                    ck_level;
+	uint8_t                ck_level;
 	char                  *ck_prefix;
-	int (*ck_indent_set)(struct checker *ck);
+	void (*ck_indent_set)(struct checker *ck);
 	/** output */
 	int (*ck_vprintf)(struct checker *ck, const char *fmt, va_list ap);
 	struct checker_status ck_status;
@@ -198,13 +199,8 @@ checker_print_indent_inc(struct checker *ck)
 		return;
 	}
 	D_ASSERTF(ck->ck_level < CHECKER_INDENT_MAX,
-		  "Cannot increase the indent level: %d >= %d (max)\n", ck->ck_level,
+		  "Cannot increase the indent level: %u >= %d (max)\n", ck->ck_level,
 		  CHECKER_INDENT_MAX);
-
-	if (ck->ck_level == CHECKER_INDENT_MAX) {
-		CK_PRINTF(ck, "Max indent reached.\n");
-		return;
-	}
 
 	ck->ck_level++;
 	ck->ck_indent_set(ck);
@@ -217,13 +213,8 @@ checker_print_indent_dec(struct checker *ck)
 		return;
 	}
 
-	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %d <= 0 (min)\n",
+	D_ASSERTF(ck->ck_level > 0, "Cannot decrease the indent level: %u == 0 (min)\n",
 		  ck->ck_level);
-
-	if (ck->ck_level == 0) {
-		CK_PRINTF(ck, "Min indent reached.\n");
-		return;
-	}
 
 	ck->ck_level--;
 	ck->ck_indent_set(ck);
@@ -235,5 +226,111 @@ checker_print_indent_dec(struct checker *ck)
 		exp;                                                                               \
 		checker_print_indent_dec(ck);                                                      \
 	} while (0)
+
+/** fault injection helpers */
+
+/**
+ * Proxy the fault injection location from the checker-specific definition to the
+ * DAOS fault injection definition.
+ *
+ * \param[in] fail_loc_in Checker-specific fault location.
+ *
+ * \return Corresponding DAOS fault location.
+ */
+static inline uint64_t
+checker_fi_proxy(uint64_t fail_loc_in)
+{
+	switch (fail_loc_in) {
+	case DLCK_FAULT_POOL_NVME_HEALTH:
+		return DAOS_FAULT_POOL_NVME_HEALTH;
+	case DLCK_FAULT_POOL_OPEN_BIO:
+		return DAOS_FAULT_POOL_OPEN_BIO;
+	case DLCK_FAULT_POOL_OPEN_UMEM:
+		return DAOS_FAULT_POOL_OPEN_UMEM;
+	case DLCK_FAULT_POOL_OPEN_MAGIC:
+		return DAOS_FAULT_POOL_OPEN_MAGIC;
+	case DLCK_FAULT_POOL_OPEN_VERSION:
+		return DAOS_FAULT_POOL_OPEN_VERSION;
+	case DLCK_FAULT_POOL_OPEN_UUID:
+		return DAOS_FAULT_POOL_OPEN_UUID;
+	case DAOS_FAULT_CONT_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DAOS_FAULT_CONT_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DAOS_FAULT_CONT_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DAOS_FAULT_GC_TREE_INV_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_INV_CLASS;
+	case DAOS_FAULT_GC_TREE_UNREG_CLASS:
+		return DAOS_FAULT_BTREE_OPEN_UNREG_CLASS;
+	case DAOS_FAULT_GC_TREE_FEATURES:
+		return DAOS_FAULT_BTREE_FEATURES;
+	case DLCK_FAULT_CONT_DOES_NOT_EXIST:
+		return DAOS_FAULT_CONT_DOES_NOT_EXIST;
+	default:
+		D_ASSERTF(0, "Unknown fail location: %lu\n", fail_loc_in);
+		return 0;
+	}
+}
+
+/**
+ * Enter a fault injection point for the checker.
+ *
+ * This function assumes you enable a proxy fault via a config file. Each of the proxy faults have
+ * only one corresponding DAOS fault location. This fault location is set progrmatically to fail
+ * only once. Before exit this function disables faults injected via a config file so a
+ * programmatically set fault can take effect. Call the \ref checker_fi_exit() function after
+ * exiting the tested code.
+ *
+ * Note: Proxy faults require the process to have just one execution stream. Mutlitple execution
+ * streams are not supported.
+ *
+ * \param[in] exp_fail_locs	NULL-terminated array of expected fault locations.
+ * \param[out] re_enable	Whether to re-enable fault injection on \ref checker_fi_exit().
+ */
+static inline void
+checker_fi_entry(const uint64_t *exp_fail_locs, bool *re_enable)
+{
+	uint64_t fail_loc_out;
+	int      i = 0;
+
+	*re_enable = false;
+
+	if (!d_fault_inject_is_enabled()) {
+		return;
+	}
+
+	for (i = 0; exp_fail_locs[i] != 0; i++) {
+		if (DAOS_FAIL_CHECK(exp_fail_locs[i])) {
+			fail_loc_out = checker_fi_proxy(exp_fail_locs[i]);
+			daos_fail_loc_set(fail_loc_out | DAOS_FAIL_ONCE);
+
+			/**
+			 * Disable faults injected via the config file so the programmatically set
+			 * fault can take effect.
+			 */
+			d_fault_inject_disable();
+			*re_enable = true;
+
+			return;
+		}
+	}
+}
+
+/**
+ * Exit a fault injection point for the checker.
+ *
+ * This function re-enables fault injection if it was previously disabled by \ref
+ * checker_fi_entry().
+ *
+ * \param[in] re_enable	Whether to re-enable fault injection.
+ */
+static inline void
+checker_fi_exit(bool re_enable)
+{
+	if (re_enable) {
+		d_fault_inject_enable();
+	}
+}
 
 #endif /** __DAOS_CHECKER_H__ */
