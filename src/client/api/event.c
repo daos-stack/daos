@@ -136,16 +136,6 @@ daos_eq_lib_fini()
 {
 	int rc;
 
-	if (daos_eq_ctx != NULL) {
-		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
-		if (rc != 0) {
-			D_ERROR("failed to destroy client context: "DF_RC"\n",
-				DP_RC(rc));
-			return rc;
-		}
-		daos_eq_ctx = NULL;
-	}
-
 	D_MUTEX_LOCK(&daos_eq_lock);
 	if (eq_ref == 0)
 		D_GOTO(unlock, rc = -DER_UNINIT);
@@ -155,7 +145,30 @@ daos_eq_lib_fini()
 	}
 	ev_thpriv_is_init = false;
 
+	/* Hold the scheduler across the drain and the context destroy:
+	 * the exit path of tse_sched_complete() consumes both the
+	 * loop-wide and the initial reference, and without this hold
+	 * the last decref would destroy dsp_lock while a late RPC
+	 * completion callback still holds a pinned task and re-enters
+	 * tse_task_complete()/tse_task_decref() on that lock. The
+	 * reference is intentional leak-by-design: nothing after
+	 * lib_fini may use the static scheduler again. See DAOS-19955. */
+	tse_sched_addref(&daos_sched_g);
+	/* Cancel and drain in-flight tasks on the global scheduler while
+	 * the cart context can still make progress, so completion
+	 * callbacks run and retries unwind instead of surviving the
+	 * teardown below. See DAOS-19955. */
 	tse_sched_complete(&daos_sched_g, 0, true);
+
+	if (daos_eq_ctx != NULL) {
+		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
+		if (rc != 0) {
+			D_ERROR("failed to destroy client context: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(unlock, rc);
+		}
+		daos_eq_ctx = NULL;
+	}
 
 	rc = crt_finalize();
 	if (rc != 0) {

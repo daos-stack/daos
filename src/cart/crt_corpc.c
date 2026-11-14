@@ -388,6 +388,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	D_ASSERT(rpc_priv != NULL);
 	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 
+	/* pair with the crt_grp_priv_decref() in crt_rpc_priv_free() */
+	crt_grp_priv_addref(grp_priv);
 	rpc_priv->crp_grp_priv = grp_priv;
 
 	/* grp_root is logical rank number in this group */

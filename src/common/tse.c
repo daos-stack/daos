@@ -19,6 +19,7 @@
 #include <pthread.h>
 
 #include <daos/common.h>
+#include <cart/api.h>
 
 #include "tse_internal.h"
 
@@ -287,6 +288,8 @@ tse_sched_priv_addref_locked(struct tse_sched_private *dsp)
 	dsp->dsp_refcount++;
 }
 
+void tse_sched_fini(tse_sched_t *sched);
+
 static void
 tse_sched_priv_decref(struct tse_sched_private *dsp)
 {
@@ -302,6 +305,18 @@ tse_sched_priv_decref(struct tse_sched_private *dsp)
 
 	if (finalize)
 		tse_sched_fini(tse_priv2sched(dsp));
+}
+
+/* Drop a scheduler reference while dsp_lock is held. Returns true when
+ * this was the last reference; the caller must release dsp_lock before
+ * calling tse_sched_fini(). Callers on the drain path hold their own
+ * loop reference, so a finalize here means accounting is broken. */
+static bool
+tse_sched_priv_decref_locked(struct tse_sched_private *dsp)
+{
+	D_ASSERT(dsp->dsp_refcount > 0);
+	dsp->dsp_refcount--;
+	return dsp->dsp_refcount == 0;
 }
 
 void
@@ -365,7 +380,7 @@ static void
 tse_task_complete_locked(struct tse_task_private *dtp,
 			 struct tse_sched_private *dsp)
 {
-	if (dtp->dtp_completed)
+	if (dtp->dtp_completed == 1)
 		return;
 
 	/*
@@ -389,7 +404,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_private *dtp = tse_task2priv(task);
 	struct tse_task_cb *dtc;
 
-	if (atomic_load(&dtp->dtp_completed)) {
+	if (atomic_load(&dtp->dtp_completed) == 1) {
 		D_ERROR("Can't add a callback for a completed task\n");
 		return -DER_NO_PERM;
 	}
@@ -529,6 +544,9 @@ tse_task_complete_callback(tse_task_t *task)
 	return true;
 }
 
+static int
+tse_task_post_process(tse_task_t *task);
+
 /*
  * Process the init and sleeping lists of the scheduler. This first moves all
  * tasks who shall wake up now from the sleeping list to the tail of the init
@@ -548,7 +566,10 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_sleeping_list,
 				   dtp_list) {
-		if (dtp->dtp_wakeup_time > now)
+		/* Take delayed-retry tasks too when cancelling, or they
+		 * stay asleep forever and the drain never finishes.
+		 * See DAOS-19955. */
+		if (!dsp->dsp_cancelling && dtp->dtp_wakeup_time > now)
 			break;
 		dtp->dtp_wakeup_time = 0;
 		d_list_move_tail(&dtp->dtp_list, &dsp->dsp_init_list);
@@ -563,7 +584,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 
 	while (!d_list_empty(&list)) {
 		tse_task_t *task;
-		bool bumped = false;
+		bool cancelling;
 
 		dtp = d_list_entry(list.next, struct tse_task_private,
 				   dtp_list);
@@ -571,19 +592,43 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 		task = tse_priv2task(dtp);
 
 		D_MUTEX_LOCK(&dsp->dsp_lock);
-		if (dsp->dsp_cancelling) {
-			tse_task_complete_locked(dtp, dsp);
+		/* Ownership is decided once, under the lock: the branch
+		 * taken here is the only authority for what happens to
+		 * this task below. Re-reading dsp_cancelling after the
+		 * unlock would let a drain claim a task this thread had
+		 * just published with completed==0, and both threads
+		 * would run its callbacks and drop its references. */
+		cancelling = dsp->dsp_cancelling;
+		if (cancelling) {
+			/* process_init already accounted this task's
+			 * inflight slot above; mark it running so the
+			 * completion below does not bump dsp_inflight a
+			 * second time and leak the count. Park the task
+			 * on the running list in the callback-running
+			 * state: the drain claims only completed==0
+			 * tasks, so it cannot take this one, and the
+			 * completion callbacks of a cancelled task must
+			 * still run before it is freed - a delayed-retry
+			 * task put to sleep by tse_task_reinit() may
+			 * carry unexecuted callbacks, and freeing it
+			 * with a non-empty comp cb list trips the
+			 * tse_task_decref() invariant. See DAOS-19955. */
+			dtp->dtp_running = 1;
+			d_list_move_tail(&dtp->dtp_list,
+					 &dsp->dsp_running_list);
+			atomic_store(&dtp->dtp_completed, DTP_CB_RUNNING);
+			/** +1 while the callbacks run unlocked */
+			tse_task_addref_locked(dtp);
 		} else {
 			dtp->dtp_running = 1;
 			d_list_move_tail(&dtp->dtp_list,
 					 &dsp->dsp_running_list);
 			/** +1 in case prep cb calls task_complete() */
 			tse_task_addref_locked(dtp);
-			bumped = true;
 		}
 		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
-		if (!dsp->dsp_cancelling) {
+		if (!cancelling) {
 			/** if task is reinitialized in prep cb, skip over it */
 			if (!tse_task_prep_callback(task)) {
 				tse_task_decref(task);
@@ -592,9 +637,30 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 			D_ASSERT(dtp->dtp_func != NULL);
 			if (!atomic_load(&dtp->dtp_completed))
 				dtp->dtp_func(task);
-		}
-		if (bumped)
 			tse_task_decref(task);
+		} else {
+			/* Run the cancelled task's completion callbacks
+			 * here (unlocked, DTP_CB_RUNNING protects against
+			 * a concurrent tse_task_complete()), then finish
+			 * it exactly like the drain does: unlink, mark
+			 * completed, post-process, and drop the
+			 * scheduler reference of
+			 * tse_task_schedule_with_delay(), the local
+			 * callback pin, and the completion reference the
+			 * drain's claim path would have dropped. */
+			tse_task_complete_callback(task);
+
+			D_MUTEX_LOCK(&dsp->dsp_lock);
+			d_list_del_init(&dtp->dtp_list);
+			atomic_store(&dtp->dtp_completed, 1);
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+			tse_task_post_process(task);
+			/* drop reference of tse_task_schedule() */
+			tse_sched_priv_decref(dsp);
+			tse_task_decref(task);
+			tse_task_decref(task);
+		}
 
 		processed++;
 	}
@@ -663,6 +729,14 @@ tse_task_post_process(tse_task_t *task)
 			 * it is completed when they completed in this code
 			 * block.
 			 */
+			/* Mark the parent as executing its completion
+			 * callbacks so the drain cannot claim it while
+			 * the callbacks run here without the lock (it
+			 * would traverse and free callback nodes this
+			 * traversal still advances to). See DAOS-19955.
+			 */
+			D_ASSERT(dtp_tmp->dtp_completed == 0);
+			dtp_tmp->dtp_completed = DTP_CB_RUNNING;
 			/** release lock for CB */
 			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
 			done = tse_task_complete_callback(task_tmp);
@@ -673,10 +747,21 @@ tse_task_post_process(tse_task_t *task)
 			 * calling tse_task_reinit().
 			 */
 			if (!done) {
+				/* back to the live state: the task is
+				 * in flight again via reinit */
+				dtp_tmp->dtp_completed = 0;
 				/* -1 for tlink (addref by add_dependent) */
 				tse_task_decref_free_locked(task_tmp);
 				continue;
 			}
+			/* Callbacks finished and the list is empty now,
+			 * so a drain claiming the task next cannot race
+			 * this traversal. Restore the live state; the
+			 * complete_locked below (not cancelling) or the
+			 * drain (cancelling) marks completion and owns
+			 * the unlink and the scheduler reference.
+			 * See DAOS-19955. */
+			dtp_tmp->dtp_completed = 0;
 
 			tse_task_complete_locked(dtp_tmp, dsp_tmp);
 		}
@@ -721,6 +806,19 @@ tse_sched_process_complete(struct tse_sched_private *dsp)
 		processed++;
 	}
 	return processed;
+}
+
+bool
+tse_sched_is_cancelling(tse_sched_t *sched)
+{
+	struct tse_sched_private *dsp = tse_sched2priv(sched);
+	bool				   cancelling;
+
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	cancelling = dsp->dsp_cancelling != 0;
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+	return cancelling;
 }
 
 bool
@@ -789,17 +887,66 @@ tse_sched_complete_inflight(struct tse_sched_private *dsp)
 {
 	struct tse_task_private *dtp;
 	struct tse_task_private *tmp;
-	int			  processed = 0;
+	d_list_t			  list;
+	int				  processed = 0;
 
+	D_INIT_LIST_HEAD(&list);
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 	d_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_running_list,
 				      dtp_list)
-		if (dtp->dtp_dep_cnt == 0) {
-			d_list_del(&dtp->dtp_list);
-			tse_task_complete_locked(dtp, dsp);
+		if (dtp->dtp_dep_cnt == 0 && dtp->dtp_completed == 0) {
+			d_list_move_tail(&dtp->dtp_list, &list);
+			/* Mark the task completed and hold a reference
+			 * while it is on the local list: a concurrent
+			 * tse_task_complete() checks dtp_completed
+			 * before touching the task and returns early,
+			 * so its cancelling path cannot consume this
+			 * reference. See DAOS-19955. */
+			dtp->dtp_completed = 1;
+			tse_task_addref_locked(dtp);
 			processed++;
 		}
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+	while (!d_list_empty(&list)) {
+		tse_task_t	*task;
+		bool		 done;
+
+		dtp = d_list_entry(list.next, struct tse_task_private,
+				   dtp_list);
+		task = tse_priv2task(dtp);
+
+		/**
+		 * Execute the completion callbacks before force-completing
+		 * the task, as tse_task_post_process() does for dependent
+		 * tasks. Completing a running task with pending callbacks
+		 * breaks the tse_task_decref() invariant that the comp cb
+		 * list is empty when the last reference is dropped.
+		 * See DAOS-19955.
+		 */
+		done = tse_task_complete_callback(task);
+
+		D_MUTEX_LOCK(&dsp->dsp_lock);
+		d_list_del_init(&dtp->dtp_list);
+		if (done) {
+			/* complete the task now; post_process() below
+			 * clears the dependency list, so it must run
+			 * before any final reference drop */
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+			tse_task_post_process(task);
+			/* drop reference of tse_task_schedule() */
+			tse_sched_priv_decref(dsp);
+			/* drop final task reference */
+			tse_task_decref(task);
+		} else {
+			tse_task_decref_free_locked(task);
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
+		}
+		/* drop the reference taken when the task was moved to
+		 * the local list (may free the task) */
+		tse_task_decref(task);
+	}
 
 	return processed;
 }
@@ -823,8 +970,18 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 	else
 		dsp->dsp_completing = 1;
 
-	/** Wait for all in-flight tasks */
+	/**
+	 * Wait for all in-flight tasks. Hold one reference for the
+	 * whole loop: tse_sched_run() drops its own reference each
+	 * iteration, and without an extra hold the refcount can reach
+	 * zero mid-loop, finalizing the scheduler (destroying
+	 * dsp_lock) while this loop still touches it.
+	 */
+	tse_sched_priv_addref_locked(dsp);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
 	while (1) {
+		D_MUTEX_LOCK(&dsp->dsp_lock);
 		/** +1 for tse_sched_run */
 		tse_sched_priv_addref_locked(dsp);
 		D_MUTEX_UNLOCK(&dsp->dsp_lock);
@@ -832,14 +989,33 @@ tse_sched_complete(tse_sched_t *sched, int ret, bool cancel)
 		tse_sched_run(sched);
 		if (dsp->dsp_inflight == 0)
 			break;
+
+		/* Tasks waiting on in-flight RPCs only complete when
+		 * somebody pumps the context; after the workers exit,
+		 * that somebody must be this drain loop itself, or
+		 * dsp_inflight never reaches zero (observed hang).
+		 * ds_udata holds the crt context for schedulers
+		 * created by daos_eq_lib_init(). See DAOS-19955. */
+		if (sched->ds_udata != NULL)
+			crt_progress((crt_context_t)sched->ds_udata, 0);
+		D_MUTEX_LOCK(&dsp->dsp_lock);
+		if (dsp->dsp_inflight == 0) {
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
+			break;
+		}
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 		if (dsp->dsp_cancelling)
 			tse_sched_complete_inflight(dsp);
-
-		D_MUTEX_LOCK(&dsp->dsp_lock);
 	}
 
 	tse_sched_complete_cb(sched);
 	sched->ds_udata = NULL;
+	/* drop the loop-wide reference taken above, then the initial
+	 * reference tse_sched_init() took, restoring the original
+	 * complete-consumes-init semantics for ordinary schedulers.
+	 * A generation scheduler keeps its pre-drain hold, so the
+	 * object survives for stale waiters. See DAOS-19962. */
+	tse_sched_priv_decref(dsp);
 	tse_sched_priv_decref(dsp);
 }
 
@@ -856,16 +1032,160 @@ tse_task_complete(tse_task_t *task, int ret)
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
+	/*
+	 * Mark the task as executing its completion callbacks before
+	 * running them: the callbacks run without dsp_lock, and the
+	 * drain (tse_sched_complete_inflight) must not collect a task
+	 * whose callback list is being traversed, or it would free
+	 * callback nodes the traversal still advances to. The drain
+	 * skips tasks in the DTP_CB_RUNNING state and lets this path
+	 * finish the completion (including the cancelling branch
+	 * below). See DAOS-19955.
+	 */
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	if (dtp->dtp_completed) {
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
+		return;
+	}
+	dtp->dtp_completed = DTP_CB_RUNNING;
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
 
 	D_MUTEX_LOCK(&dsp->dsp_lock);
+	if (dtp->dtp_completed == DTP_CB_RUNNING) {
+		if (dsp->dsp_cancelling) {
+			/* The scheduler is being cancelled, so the drain
+			 * (tse_sched_complete_inflight) can claim this
+			 * task the moment the lock is dropped. Do not
+			 * restore the live state (completed = 0):
+			 * between that restore and the cancelling
+			 * branch below, the drain could claim the task
+			 * and both sides would drop the scheduler
+			 * reference the task owes, underflowing
+			 * dsp_refcount. Finalize the completed state
+			 * here and let the cancelling branch below
+			 * finish the teardown; it re-sets completed,
+			 * unlinks and drops the reference exactly once.
+			 * See DAOS-19955. */
+			dtp->dtp_completed = 1;
+		} else {
+			/* Not cancelling: the drain never runs while
+			 * dsp_cancelling is clear, so restoring the live
+			 * state is race-free. tse_task_complete_locked()
+			 * needs it: it marks completion itself. */
+			dtp->dtp_completed = 0;
+		}
+	} else {
+		/* The drain (tse_sched_complete_inflight) claimed this task
+	 * while the completion callbacks ran without the lock above;
+		 * it owns the scheduler reference and the unlink now. */
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
+		return;
+	}
 	if (!dsp->dsp_cancelling) {
 		/** if task reinserted itself in scheduler, don't complete */
 		if (done)
 			tse_task_complete_locked(dtp, dsp);
 	} else {
-		tse_task_decref_free_locked(task);
+		/* The scheduler is being cancelled (drain). Account
+		 * this task's in-flight slot before unlinking it:
+		 * post_process() will never run for it, and a leaked
+		 * count keeps tse_sched_complete() spinning forever.
+		 * Only free the task when this call holds the last
+		 * reference; if the drain still pins it (v11/v12),
+		 * leave that reference for the drain to drop, or the
+		 * late mercury callback drops a freed counter again.
+		 * See DAOS-19955. */
+		if (dtp->dtp_running) {
+			dtp->dtp_running = 0;
+			D_ASSERT(dsp->dsp_inflight > 0);
+			dsp->dsp_inflight--;
+		}
+		if (!d_list_empty(&dtp->dtp_list)) {
+			d_list_del_init(&dtp->dtp_list);
+			dtp->dtp_completed = 1;
+			/* the task is leaving the scheduler lists
+			 * without tse_sched_process_complete(); drop
+			 * the scheduler reference taken by
+			 * tse_task_schedule_with_delay(). A task
+			 * completed before it was ever scheduled
+			 * (event launch rejected under cancel) owns no
+			 * scheduler reference: an empty dtp_list marks
+			 * it, and dropping one here underflowed the
+			 * count. See DAOS-19955. */
+			tse_sched_priv_decref_locked(dsp);
+		} else {
+			dtp->dtp_completed = 1;
+		}
+		/* Release any dependency links the same way
+		 * tse_task_post_process() does: a late completion of a
+		 * task with unresolved dependencies must not leave
+		 * tlinks behind, the final decref asserts the dep list
+		 * is empty. The dependent's dep_cnt must also drop, or
+		 * it can never be selected by the drain. All drops
+		 * happen with dsp_lock released, since the dependents
+		 * can share this (non-recursive) scheduler lock.
+		 * See DAOS-19955. */
+		while (!d_list_empty(&dtp->dtp_dep_list)) {
+			struct tse_task_link	*tlink;
+			tse_task_t		*dep_task;
+			struct tse_task_private *dep_dtp;
+			struct tse_sched_private *dep_dsp;
+
+			tlink = d_list_entry(dtp->dtp_dep_list.next,
+					     struct tse_task_link, tl_link);
+			d_list_del(&tlink->tl_link);
+			dep_task = tlink->tl_task;
+			D_FREE(tlink);
+			if (dep_task == NULL)
+				continue;
+
+			dep_dtp = tse_task2priv(dep_task);
+			dep_dsp = dep_dtp->dtp_sched;
+
+			/* A dependent on the same scheduler shares this
+			 * (non-recursive) lock: keep it held and adjust the
+			 * dependency count under it. Only a cross-scheduler
+			 * dependent needs a lock switch, and those are
+			 * different mutexes, so no unlock-lock race exists.
+			 * Do NOT complete the dependent here: it stays on
+			 * its scheduler lists with its own in-flight
+			 * accounting, and the drain (or the worker completing
+			 * it) owns its completion. Completing it here left it
+			 * on the running list and double-counted its
+			 * in-flight slot. See DAOS-19955. */
+			if (dep_dsp != dsp) {
+				D_MUTEX_UNLOCK(&dsp->dsp_lock);
+				D_MUTEX_LOCK(&dep_dsp->dsp_lock);
+				D_ASSERT(dep_dtp->dtp_dep_cnt > 0);
+				dep_dtp->dtp_dep_cnt--;
+				/* drop the reference the link took on the
+				 * dependent, like tse_task_post_process().
+				 * The dependent may already have left its
+				 * scheduler lists (init-list cancellation
+				 * finished it without this link's
+				 * knowledge), so this can be its final
+				 * reference: free it the same way post-
+				 * processing would. See DAOS-19955. */
+				tse_task_decref_free_locked(dep_task);
+				D_MUTEX_UNLOCK(&dep_dsp->dsp_lock);
+				D_MUTEX_LOCK(&dsp->dsp_lock);
+			} else {
+				D_ASSERT(dep_dtp->dtp_dep_cnt > 0);
+				dep_dtp->dtp_dep_cnt--;
+				/* same scheduler: dsp_lock already covers
+				 * the dependent; drop the link reference,
+				 * freeing on the final reference like
+				 * tse_task_post_process(). See DAOS-19955. */
+				tse_task_decref_free_locked(dep_task);
+			}
+		}
+		if (dtp->dtp_refcnt == 1)
+			tse_task_decref_free_locked(task);
+		else
+			tse_task_decref_locked(dtp);
 	}
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
@@ -888,15 +1208,21 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 
 	D_ASSERT(task != dep);
 
-	if (atomic_load(&dtp->dtp_completed)) {
+	if (atomic_load(&dtp->dtp_completed) == 1) {
 		D_ERROR("Can't add a dependency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
 
 	/** if task to depend on has completed already, do nothing */
-	if (atomic_load(&dep_dtp->dtp_completed))
+	if (atomic_load(&dep_dtp->dtp_completed) == 1)
 		return 0;
+
+	/* Adding dependencies while the scheduler is being cancelled
+	 * lets completion callbacks arm cross-references that outlive
+	 * the drain. Reject like reinit does. See DAOS-19955. */
+	if (dtp->dtp_sched->dsp_cancelling || dep_dtp->dtp_sched->dsp_cancelling)
+		return -DER_NO_PERM;
 
 	diff_sched = dtp->dtp_sched != dep_dtp->dtp_sched;
 
@@ -1017,6 +1343,42 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
+	/* A scheduler being cancelled (drained for teardown) must not
+	 * admit new work: the drain loop would spin while the task's
+	 * error paths keep re-scheduling, and every admitted task drags
+	 * a scheduler reference into exactly the window the drain is
+	 * releasing its own. Force-complete the task instead: register
+	 * it like an instant run and mark it cancelled under this lock,
+	 * so the caller's completion callbacks still execute (mirrors
+	 * tse_sched_complete_inflight) and the reference pairing stays
+	 * intact. See DAOS-19955. */
+	if (dsp->dsp_cancelling) {
+		dsp->dsp_inflight++;
+		dtp->dtp_running = 1;
+		dtp->dtp_wakeup_time = 0;
+		task->dt_result = -DER_CANCELED;
+		d_list_add_tail(&dtp->dtp_list, &dsp->dsp_running_list);
+		/* Hold a task reference across the unlocked completion
+		 * below: the drain may claim the task between the unlock
+		 * and tse_task_complete(), and its final decref would
+		 * otherwise free the task under us. The cancelling
+		 * branch drops the scheduler reference taken here; this
+		 * extra task reference is released after completion.
+		 * See DAOS-19955. */
+		tse_task_addref_locked(dtp);
+		tse_sched_priv_addref_locked(dsp);
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+		if (instant) {
+			dtp->dtp_func(task);
+		} else {
+			/* No body to run here; complete it now so it
+			 * never waits for a drain that outruns it. */
+			tse_task_complete(task, -DER_CANCELED);
+		}
+		tse_task_decref(task);
+		return 0;
+	}
 	ready = (dtp->dtp_dep_cnt == 0 && d_list_empty(&dtp->dtp_prep_cb_list));
 	if ((dtp->dtp_func == NULL || instant) && ready) {
 		/** If task has no body function, mark it as running */
@@ -1078,7 +1440,7 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 		D_GOTO(err_unlock, rc = -DER_INVAL);
 	}
 
-	if (dtp->dtp_completed) {
+	if (dtp->dtp_completed == 1) {
 		D_ASSERT(d_list_empty(&dtp->dtp_list));
 		/* +1 ref for valid until complete */
 		tse_task_addref_locked(dtp);
@@ -1150,7 +1512,7 @@ tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
-	if (!dtp->dtp_completed) {
+	if (dtp->dtp_completed != 1) {
 		D_ERROR("Can't reset a task in init or running state.\n");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
