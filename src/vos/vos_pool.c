@@ -1068,6 +1068,7 @@ umem_open:
 		*ph = pop;
 		return 0;
 	}
+	CK_ERR_NUM_INC(ck);
 
 	D_ASSERT(rc != 0);
 
@@ -1654,6 +1655,10 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	       void *metrics, struct vos_pool *pool, struct checker *ck, int ret)
 {
 	struct umem_attr *uma;
+	bool              fi_reenable;
+	const uint64_t    exp_fail_locs[] = {DAOS_FAULT_CONT_TREE_INV_CLASS,
+					     DAOS_FAULT_CONT_TREE_UNREG_CLASS,
+					     DAOS_FAULT_CONT_TREE_FEATURES, 0};
 	daos_handle_t     poh;
 	int               rc;
 
@@ -1690,10 +1695,12 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	}
 
 	if (IS_CHECKER(ck)) {
+		checker_fi_entry(exp_fail_locs, &fi_reenable);
 		CK_PRINTF(ck, CK_CONT_TREE_STR "...\n");
 		CK_INDENT(
 		    ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma, pool, ck));
 		CK_PRINTFL_RC(ck, rc, CK_CONT_TREE_STR);
+		checker_fi_exit(fi_reenable);
 		if (rc != DER_SUCCESS) {
 			goto out;
 		}

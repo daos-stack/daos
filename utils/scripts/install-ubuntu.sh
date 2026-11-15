@@ -46,7 +46,6 @@ apt-get install ${apt_get_install_args} \
     libndctl-dev \
     libnuma-dev \
     libopenmpi-dev \
-    libpsm2-dev \
     libpci-dev \
     libprotobuf-c-dev \
     librdmacm-dev \

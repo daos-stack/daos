@@ -1007,6 +1007,78 @@ free_mem:
 	return rc;
 }
 
+/*
+ * Check that the WAL blob, the data blob and the data SSD named by the meta header are the ones
+ * SMD records for the pool target. bio_mc_open() trusts the header, bio_mc_destroy() trusts SMD.
+ */
+static int
+meta_hdr_smd_check(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags,
+		   struct meta_header *hdr)
+{
+	struct smd_dev_info *dev_info = NULL;
+	uint64_t             blob_id  = SPDK_BLOBID_INVALID;
+	int                  rc;
+
+	if (flags & BIO_MC_FL_RDB)
+		rc = smd_rdb_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_WAL, &blob_id);
+	else
+		rc = smd_pool_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_WAL, &blob_id);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to find the WAL blob ID of pool " DF_UUID ", tgt %d",
+			 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return rc;
+	}
+
+	if (hdr->mh_wal_blobid != blob_id) {
+		D_ERROR("Meta header references WAL blob " DF_U64 " but SMD records blob " DF_U64
+			" for pool " DF_UUID ", tgt %d\n",
+			hdr->mh_wal_blobid, blob_id, DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return -DER_DF_INVAL;
+	}
+
+	/* A RDB, and a pool created without data size, have no entry in the data table */
+	blob_id = SPDK_BLOBID_INVALID;
+	if (flags & BIO_MC_FL_RDB)
+		rc = smd_rdb_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA, &blob_id);
+	else
+		rc = smd_pool_get_blob(pool_id, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA, &blob_id);
+	if (rc != 0 && rc != -DER_NONEXIST) {
+		DL_ERROR(rc, "Failed to find the data blob ID of pool " DF_UUID ", tgt %d",
+			 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return rc;
+	}
+
+	if (hdr->mh_data_blobid != blob_id) {
+		D_ERROR("Meta header references data blob " DF_U64 " but SMD records blob " DF_U64
+			" for pool " DF_UUID ", tgt %d\n",
+			hdr->mh_data_blobid, blob_id, DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return -DER_DF_INVAL;
+	}
+
+	/* No data blob, no data SSD to compare */
+	if (hdr->mh_data_blobid == SPDK_BLOBID_INVALID)
+		return 0;
+
+	/* A blob ID only identifies a blob on its SSD, and the data blob is not opened here */
+	rc = smd_dev_get_by_tgt(xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA, &dev_info);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to find the data SSD of pool " DF_UUID ", tgt %d",
+			 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
+		return rc;
+	}
+
+	if (uuid_compare(hdr->mh_data_devid, dev_info->sdi_id) != 0) {
+		D_ERROR("Meta header references data SSD " DF_UUID " but SMD records SSD " DF_UUID
+			" for pool " DF_UUID ", tgt %d\n",
+			DP_UUID(hdr->mh_data_devid), DP_UUID(dev_info->sdi_id), DP_UUID(pool_id),
+			xs_ctxt->bxc_tgt_id);
+		rc = -DER_DF_INVAL;
+	}
+	smd_dev_free_info(dev_info);
+
+	return rc;
+}
+
 int
 bio_mc_hdr_verify(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags)
 {
@@ -1038,6 +1110,15 @@ bio_mc_hdr_verify(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_fl
 		D_DEBUG(DB_MGMT, "Invalid meta header for pool " DF_UUID ", xs %p: " DF_RC "\n",
 			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
 		goto close_meta_ioctxt;
+	}
+
+	/* Check the blob IDs before opening the WAL blob the header points to */
+	rc = meta_hdr_smd_check(xs_ctxt, pool_id, flags, &bio_mc->mc_meta_hdr);
+	if (rc != 0) {
+		D_DEBUG(DB_MGMT,
+			"Meta header of pool " DF_UUID ", xs %p doesn't match SMD: " DF_RC "\n",
+			DP_UUID(pool_id), xs_ctxt, DP_RC(rc));
+		goto close_meta;
 	}
 
 	rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_WAL,

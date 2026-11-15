@@ -150,6 +150,10 @@ src/tests/suite/daos_rebuild_simple\.c$:
   test-tag: test_daos_rebuild_simple
   <<: *ftest-only
 
+src/tests/suite/daos_rebuild_weekly\.c$:
+  test-tag: test_rebuild_weekly
+  <<: *ftest-only
+
 src/tests/suite/daos_upgrade\.c$:
   test-tag: test_daos_upgrade
   <<: *ftest-only
