@@ -8,6 +8,8 @@ timeout: 300
 server_manager:
   storage_format_timeout: 90
 setup: !mux
+  start_agents_once: false
+  start_servers_once: false
   single_replica:
     mgmt_svc_replicas_qty: 1
   multi_replica:
@@ -23,7 +25,6 @@ server_config:
       name: daos_server
     non_standard:
       name: daos_nonstd
-      port: 10515
 pool: !mux
   default:
     size: 90%

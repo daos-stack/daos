@@ -32,13 +32,13 @@ class DmgSystemReformatTest(TestWithServers):
         super().setUp()
 
     def get_replicas(self, dmg):
-        """Get the current set of management service (MS) replica ranks.
+        """Get the current set of management service (MS) replica addresses.
 
         Args:
             dmg (DmgCommand): dmg command object to use to query the system.
 
         Returns:
-            list: sorted list of MS replica ranks reported by the leader.
+            list: sorted list of MS replica addresses reported by the leader.
 
         """
         leader_info = dmg.system_leader_query()
@@ -66,7 +66,7 @@ class DmgSystemReformatTest(TestWithServers):
             "Testing with %s configured MS replica(s): %s",
             len(self.mgmt_svc_replicas), self.mgmt_svc_replicas)
         pre_erase_replicas = self.get_replicas(dmg)
-        self.log.info("MS replica ranks before erase: %s", pre_erase_replicas)
+        self.log.info("MS replica addresses before erase: %s", pre_erase_replicas)
 
         # Create pool using 90% of the available NVMe capacity
         pools = [self.get_pool(dmg=dmg)]
@@ -150,10 +150,10 @@ class DmgSystemReformatTest(TestWithServers):
         # Verify the MS replica set survived the erase/reformat cycle intact - this is the
         # critical guarantee relied upon by the raft database erase-then-restart logic.
         post_erase_replicas = self.get_replicas(dmg)
-        self.log.info("MS replica ranks after erase/reformat: %s", post_erase_replicas)
+        self.log.info("MS replica addresses after erase/reformat: %s", post_erase_replicas)
         self.assertEqual(
             pre_erase_replicas, post_erase_replicas,
-            "MS replica ranks changed as a result of system erase/reformat")
+            "MS replica addresses changed as a result of system erase/reformat")
 
         # Check that we have cleared storage by checking pool list
         if dmg.get_pool_list_uuids():
