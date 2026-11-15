@@ -1347,17 +1347,16 @@ obj_modify_ec_packtgts(struct obj_auxi_args *obj_auxi, struct dc_object *obj, ui
 		       uint32_t grp_start, uint32_t leader, uint32_t map_ver, uint8_t *bit_map,
 		       struct daos_shard_tgt *head, struct daos_shard_tgt **tgts, int *skipped)
 {
-	struct daos_oclass_attr *oca      = obj_get_oca(obj);
-	int                      grp_size = obj_ec_tgt_nr(oca);
-	int                      tgt_idx;
-	int                      low = 0;
-	int                      high;
-	int                      rc = 0;
-	int                      i;
-	bool                     parity = true;
-	bool                     extend = false;
+	int  grp_size = obj_ec_tgt_nr(&obj->cob_oca);
+	int  tgt_idx;
+	int  low = 0;
+	int  high;
+	int  rc = 0;
+	int  i;
+	bool parity = true;
+	bool extend = false;
 
-	high    = obj_ec_parity_tgt_nr(oca);
+	high    = obj_ec_parity_tgt_nr(&obj->cob_oca);
 	tgt_idx = obj_ec_shard_idx(obj, dkey_hash, grp_size - 1);
 
 again:
@@ -1385,7 +1384,7 @@ again:
 
 	if (parity) {
 		parity  = false;
-		high    = obj_ec_data_tgt_nr(oca);
+		high    = obj_ec_data_tgt_nr(&obj->cob_oca);
 		tgt_idx = obj_ec_shard_idx(obj, dkey_hash, 0);
 		goto again;
 	}
@@ -1562,13 +1561,14 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				if (rc != -DER_NONEXIST)
 					D_GOTO(out, rc);
 				rc = 0;
-				skipped++;
-				cur_grp_size--;
-				if (obj_is_modification_opc(obj_auxi->opc))
+				if (obj_is_modification_opc(obj_auxi->opc)) {
+					skipped++;
+					cur_grp_size--;
 					tgt_idx = (tgt_idx + 1) % obj_get_grp_size(obj);
-				else
+				} else {
 					tgt_idx = (tgt_idx + 1) %
 						  daos_oclass_grp_size(&obj->cob_oca);
+				}
 				continue;
 			}
 
