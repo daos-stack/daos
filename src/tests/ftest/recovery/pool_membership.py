@@ -23,8 +23,8 @@ class PoolMembershipTest(IorTestBase):
     def run_cmd_check_result(self, command):
         """Run given command as root and check its result.
 
-        Args:                                                  
-            command (str): Command to execute.                                          
+        Args:
+            command (str): Command to execute.
         """
         command_root = command_as_user(command=command, user="root")
         result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
@@ -325,10 +325,10 @@ class PoolMembershipTest(IorTestBase):
                 result = ddb_command.prov_mem(db_path=db_path_1, tmpfs_mount=tmpfs_mounts[1])
                 if not result.passed:
                     self.fail(f"prov_mem failed for {db_path_1} on {host}! result = {result}")
-            
+
             self.log_step(f"MD-on-SSD: Remove vos-0 from {tmpfs_mounts[0]} at {hosts[0]}.")
             ddb_command = DdbCommand(server_host=hosts[0], path=self.bin, vos_path=None)
-            # Makie sure to use the same combination as used in the above prov_mem. In this case,
+            # Make sure to use the same combination as used in the above prov_mem. In this case,
             # tmpfs_mounts[0] and db_path_0.
             vos_0_path = f"{tmpfs_mounts[0]}/{pool.uuid.lower()}/vos-0"
             result = ddb_command.rm_pool(db_path=db_path_0, removing_path=vos_0_path)
