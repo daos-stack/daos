@@ -19,6 +19,9 @@
 #include <abt.h>
 #include "dtx_internal.h"
 
+/* Interval (ms) before retrying DTX resync on repeated network failure. */
+#define DTX_RESYNC_RETRY_INTERVAL 500
+
 #define dre_xid		dre_dte.dte_xid
 
 struct dtx_resync_head {
@@ -194,6 +197,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_head *drh,
 	struct dtx_coll_entry  *dce     = NULL;
 	daos_epoch_t            epoch   = dre->dre_epoch;
 	uint32_t                version = cont->sc_pool->spc_map_version;
+	int                     last_err;
 	int                     rc      = 0;
 
 	/*
@@ -220,6 +224,10 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_head *drh,
 		rc = dtx_check(cont, dte, epoch, version);
 	}
 
+	/* Record the raw check result, rc will be converted to DSHR_XXX below. */
+	last_err          = drh->drh_last_err;
+	drh->drh_last_err = rc;
+
 	switch (rc) {
 	case DTX_ST_COMMITTED:
 	case DTX_ST_COMMITTABLE:
@@ -233,8 +241,8 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_head *drh,
 		       DP_DTI(&dte->dte_xid), DP_RC(rc));
 
 		/* Repeatedly hit the same network failure, let's wait for a while before retry. */
-		if (drh->drh_last_err == rc)
-			dss_sleep(50);
+		if (last_err == rc)
+			dss_sleep(DTX_RESYNC_RETRY_INTERVAL);
 
 		/* Fall through. */
 	case -DER_INPROGRESS:
@@ -322,8 +330,6 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_resync_head *drh,
 	}
 
 out:
-	drh->drh_last_err = rc;
-
 	if (rc == DSHR_NEED_COMMIT) {
 		/*
 		 * IO handler for resent may have changed the DTX by race, re-check it locally.
