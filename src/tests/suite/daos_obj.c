@@ -4824,7 +4824,7 @@ tx_convert_restart_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey, da
 	 * Do not use DAOS_FAIL_ALWAYS here, otherwise the convert TX will keep restarting.
 	 */
 	daos_fail_num_set(2);
-	daos_fail_loc_set(DAOS_FAIL_TX_CONVERT | DAOS_FAIL_SOME);
+	daos_fail_loc_set(DAOS_FAIL_TX_CONVERT_RESTART | DAOS_FAIL_SOME);
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, dkey, 1, iod, sgl, NULL);
 	daos_fail_loc_set(0);
 	daos_fail_num_set(0);

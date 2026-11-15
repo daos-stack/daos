@@ -686,7 +686,7 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 	pm_ver = dc_pool_get_version(tx->tx_pool);
 
 	if (tx->tx_pm_ver != pm_ver || DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM) ||
-	    (tx->tx_for_convert && DAOS_FAIL_CHECK(DAOS_FAIL_TX_CONVERT))) {
+	    (tx->tx_for_convert && DAOS_FAIL_CHECK(DAOS_FAIL_TX_CONVERT_RESTART))) {
 		/* For external non-snap TX, restart it if pool map is stale. */
 		if (tx->tx_pm_ver != 0 && !tx->tx_fixed_epoch) {
 			tx->tx_status = TX_FAILED;
