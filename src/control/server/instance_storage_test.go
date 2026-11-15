@@ -478,6 +478,19 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			readErr:    os.ErrNotExist,
 			expFmtType: "Metadata",
 		},
+		"metadata path; metadata needs format; ramdisk cache still force-wiped": {
+			storageCfg:   &mockRamCfg,
+			isMounted:    true,
+			metaNeedsFmt: true,
+			expFmtType:   "Metadata",
+		},
+		"metadata path; metadata needs format; ramdisk wipe fails": {
+			storageCfg:   &mockRamCfg,
+			isMounted:    true,
+			metaNeedsFmt: true,
+			unmountErr:   errors.New("ramdisk busy"),
+			expErr:       errors.New("format ramdisk: failed to clear existing mount: failed to unmount"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

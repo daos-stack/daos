@@ -2407,7 +2407,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
+							Info: fmt.Sprintf(msgNvmeFormatSkipFail,
 								0),
 						},
 					},
@@ -2416,8 +2416,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					{
 						Mntpoint: "/mnt/daos",
 						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   "SCM is already formatted",
+							Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
+							Error:  fmt.Sprintf(msgScmReplaceNotWiped, 0),
 						},
 					},
 				},
@@ -2664,10 +2664,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		// Only one engine on the host was actually replaced (its ramdisk was
-		// force-reformatted and reads as empty); the other engine's ramdisk is
-		// untouched (already formatted, non-empty) and must stay held.
-		"ram multi-io; only one instance replaced": {
+		// Instance 0 is the --replace target and was successfully wiped
+		// (empty); instance 1 shares the host but has also lost its
+		// superblock while retaining non-empty storage so refuses
+		"ram multi-io; second instance also missing superblock with stale data": {
 			scmMounted:           true,
 			replace:              true,
 			tmpfsEmptyPerInst:    []bool{true, false},
@@ -2709,7 +2709,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
+							Info: fmt.Sprintf(msgNvmeFormatSkipFail,
 								1),
 						},
 					},
@@ -2727,8 +2727,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						Mntpoint:    "/mnt/daos1",
 						Instanceidx: 1,
 						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   "SCM is already formatted",
+							Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
+							Error:  fmt.Sprintf(msgScmReplaceNotWiped, 1),
 						},
 					},
 				},
