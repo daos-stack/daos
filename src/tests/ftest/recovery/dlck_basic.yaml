@@ -8,7 +8,7 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      targets: 4
+      targets: 1
       storage: auto
 
 pool:
