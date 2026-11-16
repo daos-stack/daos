@@ -617,14 +617,14 @@ dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de)
 		goto fail_report;
 	}
 
+	for (int i = 0; i < de->targets; ++i) {
+		de->ults[i].thread = ABT_THREAD_NULL;
+	}
+
 	D_ALLOC_ARRAY(de->ult_args, de->targets);
 	if (de->ult_args == NULL) {
 		rc = -DER_NOMEM;
 		goto fail_ults_free;
-	}
-
-	for (int i = 0; i < de->targets; ++i) {
-		de->ults[i].thread = ABT_THREAD_NULL;
 	}
 
 	for (int i = 0; i < de->targets; ++i) {

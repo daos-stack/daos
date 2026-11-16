@@ -7,6 +7,8 @@
 #ifndef __DLCK_ENGINE__
 #define __DLCK_ENGINE__
 
+#include <stdbool.h>
+
 #include <abt.h>
 
 #include "dlck_args.h"
@@ -154,7 +156,7 @@ dlck_exec_fini(struct dlck_exec *de);
  * \param[in]	arg_free_fn		Function to free arguments.
  * \param[in]	arg_free_fn_arg		Custom parameters for \p arg_free_fn.
  * \param[in]	exec_one		Function to run in the ULTs.
- * \param[in]	checker			Checker.
+ * \param[in]	ck			Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
@@ -171,9 +173,9 @@ dlck_engine_exec_all(struct dlck_engine *engine, arg_alloc_fn_t arg_alloc_fn,
  */
 struct xstream_arg {
 	/** in */
-	struct dlck_control *ctrl;   /** Control state. */
-	struct dlck_engine  *engine; /** Engine itself. */
-	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
+	struct dlck_control  *ctrl;   /** Control state. */
+	struct dlck_engine   *engine; /** Engine itself. */
+	struct dlck_xstream  *xs;     /** The execution stream the ULT is run in. */
 	/** out */
 	struct checker_status status;
 };
