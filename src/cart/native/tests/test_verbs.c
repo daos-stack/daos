@@ -23,6 +23,7 @@ static unsigned           num_accepted;
 static int                post_error, poll_error;
 static unsigned           poll_calls;
 static int                create_qp_error;
+static int                destroy_qp_error;
 static unsigned           destroyed_qps, destroyed_cqs, destroyed_pds, closed_devices;
 
 struct ibv_device **
@@ -117,6 +118,8 @@ int
 ibv_destroy_qp(struct ibv_qp *q)
 {
 	(void)q;
+	if (destroy_qp_error)
+		return destroy_qp_error;
 	destroyed_qps++;
 	return 0;
 }
@@ -198,6 +201,7 @@ test_lifetime(void)
 	char                            buffer[64];
 
 	assert(ops->open(&cfg, &ep) == 0);
+	assert(ops->quiesce(ep) == EINVAL);
 	assert(ops->address(ep, &address) == 0);
 	assert(ops->register_memory(ep, buffer, sizeof(buffer),
 				    CRT_NATIVE_REMOTE_READ | CRT_NATIVE_REMOTE_WRITE, &mr,
@@ -224,9 +228,16 @@ test_lifetime(void)
 	assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 8, NULL, 0, NULL) == ESHUTDOWN);
 	assert(ops->progress(ep, out, 1, &count) == 0 && count == 1);
 	assert(out[0].error == ECANCELED && out[0].bytes == 0);
+	assert(ops->quiesce(ep) == EBUSY);
 	assert(ops->deregister_memory(mr) == EBUSY);
 	assert(ops->progress(ep, out, 2, &count) == 0 && count == 1);
 	assert(out[0].error == ECANCELED);
+	destroy_qp_error = EIO;
+	assert(ops->quiesce(ep) == EIO);
+	destroy_qp_error = 0;
+	assert(ops->quiesce(ep) == 0);
+	assert(ops->quiesce(ep) == 0 && ops->close_begin(ep) == 0);
+	assert(ops->close(ep) == EBUSY); /* MR remains reachable after path teardown */
 	assert(ops->deregister_memory(mr) == 0);
 	assert(ops->close(ep) == 0);
 	assert(destroyed_qps == 1 && destroyed_cqs == 1 && destroyed_pds == 1 &&

@@ -359,10 +359,33 @@ verbs_close_begin(struct crt_native_ep *ep)
 {
 	struct ibv_qp_attr attr = {.qp_state = IBV_QPS_ERR};
 
-	if (ep == NULL || ep->qp == NULL)
+	if (ep == NULL)
 		return EINVAL;
+	if (ep->qp == NULL)
+		return ep->closing ? 0 : EINVAL;
 	ep->closing = true;
 	return ibv_modify_qp(ep->qp, &attr, IBV_QP_STATE);
+}
+
+static int
+verbs_quiesce(struct crt_native_ep *ep)
+{
+	int rc;
+	if (ep == NULL || !ep->closing)
+		return EINVAL;
+	if (ep->outstanding != 0)
+		return EBUSY;
+	if (ep->qp == NULL)
+		return 0;
+	/* There is exactly one QP in this endpoint's private PD. Destroying it
+	 * removes every remote path to that PD before exported MRs are released.
+	 */
+	rc = ibv_destroy_qp(ep->qp);
+	if (rc == 0) {
+		ep->qp        = NULL;
+		ep->connected = false;
+	}
+	return rc;
 }
 
 static int
@@ -444,5 +467,6 @@ const struct crt_native_ops crt_native_verbs_ops = {
     .post              = verbs_post,
     .progress          = verbs_progress,
     .close_begin       = verbs_close_begin,
+    .quiesce           = verbs_quiesce,
     .close             = verbs_close,
 };

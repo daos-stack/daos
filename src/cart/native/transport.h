@@ -88,6 +88,15 @@ struct crt_native_ops {
 	int (*progress)(struct crt_native_ep *, struct crt_native_completion *, unsigned,
 			unsigned *);
 	int (*close_begin)(struct crt_native_ep *);
+	/* After close_begin and after all local completions have been consumed,
+	 * destroy the endpoint's remote-access path. Success guarantees the peer
+	 * can no longer DMA through registrations owned by this endpoint. Keep
+	 * registrations/PD reachable for subsequent deregistration; return EBUSY
+	 * while local operations remain. Idempotent; failed teardown is retryable.
+	 * A backend sharing protection domains must revoke every path, not merely
+	 * destroy one QP. A timeout or successful close_begin is NOT this guarantee.
+	 */
+	int (*quiesce)(struct crt_native_ep *);
 	int (*close)(struct crt_native_ep *);
 };
 
