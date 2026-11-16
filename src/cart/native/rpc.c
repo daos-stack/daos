@@ -26,6 +26,10 @@ struct crt_native_rpc {
 	size_t               frame_size;
 	int                  failed;
 	struct entry        *requests, *replies;
+	struct entry        *controls;
+	unsigned             control_free, control_head, control_tail, active_controls;
+	crt_native_release_t release;
+	void                *release_arg;
 	uint8_t             *buffers;
 	crt_native_handler_t handler;
 	void                *handler_arg;
@@ -103,15 +107,18 @@ crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t ha
 		return EINVAL;
 	*output = NULL;
 	if (depth == 0 || depth > 16384 || frame_size < CRT_NATIVE_HEADER_SIZE ||
-	    frame_size > 1048576 || handler == NULL || frame_size > SIZE_MAX / (3 * depth))
+	    frame_size > 1048576 || handler == NULL || frame_size > SIZE_MAX / (4 * depth))
 		return EINVAL;
 	rpc = calloc(1, sizeof(*rpc));
 	if (rpc == NULL)
 		return ENOMEM;
 	rpc->requests = calloc(depth, sizeof(*rpc->requests));
 	rpc->replies  = calloc(depth, sizeof(*rpc->replies));
-	rpc->buffers  = calloc(3 * depth, frame_size);
-	if (rpc->requests == NULL || rpc->replies == NULL || rpc->buffers == NULL) {
+	rpc->controls = calloc(depth, sizeof(*rpc->controls));
+	rpc->buffers  = calloc(4 * depth, frame_size);
+	if (rpc->requests == NULL || rpc->replies == NULL || rpc->controls == NULL ||
+	    rpc->buffers == NULL) {
+		free(rpc->controls);
 		free(rpc->buffers);
 		free(rpc->replies);
 		free(rpc->requests);
@@ -124,13 +131,58 @@ crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t ha
 	rpc->handler_arg  = arg;
 	rpc->request_head = rpc->request_tail = depth;
 	rpc->reply_head = rpc->reply_tail = depth;
+	rpc->control_head = rpc->control_tail = depth;
 	for (unsigned i = 0; i < depth; i++) {
 		rpc->requests[i].next     = i + 1;
 		rpc->requests[i].frame    = rpc->buffers + i * frame_size;
 		rpc->requests[i].response = rpc->buffers + (depth + i) * frame_size;
 		rpc->replies[i].frame     = rpc->buffers + (2 * depth + i) * frame_size;
+		rpc->controls[i].frame    = rpc->buffers + (3 * depth + i) * frame_size;
+		rpc->controls[i].next     = i + 1;
 	}
 	*output = rpc;
+	return 0;
+}
+
+int
+crt_native_rpc_set_release_handler(struct crt_native_rpc *rpc, crt_native_release_t release,
+				   void *arg)
+{
+	if (rpc == NULL || release == NULL || rpc->callback || rpc->encoding)
+		return EINVAL;
+	if (!crt_native_rpc_idle(rpc) || rpc->release != NULL)
+		return EBUSY;
+	rpc->release     = release;
+	rpc->release_arg = arg;
+	return 0;
+}
+
+int
+crt_native_rpc_queue_release(struct crt_native_rpc *rpc, uint64_t id)
+{
+	if (rpc == NULL || id == 0)
+		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
+	if (rpc->failed)
+		return rpc->failed;
+	unsigned slot = rpc->control_free;
+	if (slot == rpc->depth)
+		return EAGAIN;
+	struct entry *e = &rpc->controls[slot];
+	if (e->generation == UINT32_MAX)
+		return EOVERFLOW;
+	struct crt_native_header h  = {.type = CRT_NATIVE_RELEASE, .request_id = id};
+	int                      rc = crt_native_encode(&h, e->frame, rpc->frame_size);
+	if (rc != 0)
+		return rc;
+	e->generation++;
+	e->id             = (uint64_t)e->generation << 32 | (slot + 1);
+	e->state          = QUEUED;
+	e->size           = CRT_NATIVE_HEADER_SIZE;
+	rpc->control_free = e->next;
+	rpc->active_controls++;
+	enqueue(rpc->controls, &rpc->control_head, &rpc->control_tail, slot, rpc->depth);
 	return 0;
 }
 
@@ -213,7 +265,8 @@ crt_native_rpc_reply_encoded(struct crt_native_rpc *rpc, struct crt_native_token
 	struct entry *e;
 	int           rc;
 
-	if (rpc == NULL || !token.reply || slot_of(rpc, token.id, &slot) != 0 || encode == NULL)
+	if (rpc == NULL || !token.reply || token.control || slot_of(rpc, token.id, &slot) != 0 ||
+	    encode == NULL)
 		return EINVAL;
 	if (rpc->encoding)
 		return EBUSY;
@@ -284,6 +337,16 @@ crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 		return EBUSY;
 	if (rpc->failed)
 		return rpc->failed;
+	/* Releases make progress independently, including when every RPC slot is busy. */
+	slot = dequeue(rpc->controls, &rpc->control_head, &rpc->control_tail, rpc->depth);
+	if (slot != rpc->depth) {
+		e        = &rpc->controls[slot];
+		e->state = IN_FLIGHT;
+		rpc->driver_owned++;
+		*tx = (struct crt_native_tx){
+		    .token = {.id = e->id, .control = true}, .data = e->frame, .length = e->size};
+		return 0;
+	}
 	/* Replies have independent records and priority over new requests. */
 	slot = dequeue(rpc->replies, &rpc->reply_head, &rpc->reply_tail, rpc->depth);
 	if (slot == rpc->depth) {
@@ -295,7 +358,8 @@ crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 	e        = reply ? &rpc->replies[slot] : &rpc->requests[slot];
 	e->state = IN_FLIGHT;
 	rpc->driver_owned++;
-	*tx = (struct crt_native_tx){.token = {e->id, reply}, .data = e->frame, .length = e->size};
+	*tx = (struct crt_native_tx){
+	    .token = {.id = e->id, .reply = reply}, .data = e->frame, .length = e->size};
 	return 0;
 }
 
@@ -309,6 +373,17 @@ crt_native_rpc_tx_complete(struct crt_native_rpc *rpc, struct crt_native_token t
 		return EINVAL;
 	if (rpc->encoding)
 		return EBUSY;
+	if (token.control) {
+		e = &rpc->controls[slot];
+		if (token.reply || e->state != IN_FLIGHT || e->id != token.id)
+			return ENOENT;
+		e->state          = FREE;
+		e->next           = rpc->control_free;
+		rpc->control_free = slot;
+		rpc->active_controls--;
+		rpc->driver_owned--;
+		return error;
+	}
 	e = token.reply ? &rpc->replies[slot] : &rpc->requests[slot];
 	if (e->state != IN_FLIGHT || e->id != token.id)
 		return ENOENT;
@@ -341,7 +416,17 @@ crt_native_rpc_receive(struct crt_native_rpc *rpc, const void *frame, size_t siz
 	if (rpc->failed)
 		return rpc->failed;
 	rc = crt_native_decode(frame, size, &h);
-	if (rc != 0 || slot_of(rpc, h.request_id, &slot) != 0)
+	if (rc != 0)
+		return EPROTO;
+	if (h.type == CRT_NATIVE_RELEASE) {
+		if (rpc->release == NULL)
+			return EPROTO;
+		rpc->callback = true;
+		rc            = rpc->release(rpc->release_arg, h.request_id);
+		rpc->callback = false;
+		return rc;
+	}
+	if (slot_of(rpc, h.request_id, &slot) != 0)
 		return EPROTO;
 	if (h.type == CRT_NATIVE_REPLY) {
 		e = &rpc->requests[slot];
@@ -372,7 +457,8 @@ crt_native_rpc_receive(struct crt_native_rpc *rpc, const void *frame, size_t siz
 	e->state  = HANDLING;
 	rpc->active_servers++;
 	rpc->callback = true;
-	rpc->handler(rpc->handler_arg, rpc, (struct crt_native_token){h.request_id, true}, h.opcode,
+	rpc->handler(rpc->handler_arg, rpc,
+		     (struct crt_native_token){.id = h.request_id, .reply = true}, h.opcode,
 		     (const uint8_t *)frame + CRT_NATIVE_HEADER_SIZE, h.payload_size);
 	rpc->callback = false;
 	return 0;
@@ -422,6 +508,13 @@ crt_native_rpc_fail(struct crt_native_rpc *rpc, int error)
 	if (rpc->failed == 0)
 		rpc->failed = error;
 	for (unsigned i = 0; i < rpc->depth; i++) {
+		struct entry *control = &rpc->controls[i];
+		if (control->state == QUEUED) {
+			control->state    = FREE;
+			control->next     = rpc->control_free;
+			rpc->control_free = i;
+			rpc->active_controls--;
+		}
 		struct entry *e = &rpc->requests[i];
 		if (e->state != FREE)
 			crt_native_rpc_cancel(rpc, e->id, rpc->failed);
@@ -432,6 +525,7 @@ crt_native_rpc_fail(struct crt_native_rpc *rpc, int error)
 		}
 	}
 	rpc->reply_head = rpc->reply_tail = rpc->depth;
+	rpc->control_head = rpc->control_tail = rpc->depth;
 	return 0;
 }
 
@@ -440,10 +534,11 @@ crt_native_rpc_destroy(struct crt_native_rpc *rpc)
 {
 	if (rpc == NULL)
 		return EINVAL;
-	if (rpc->active_calls || rpc->active_servers || rpc->driver_owned || rpc->callback ||
-	    rpc->encoding)
+	if (rpc->active_calls || rpc->active_servers || rpc->active_controls || rpc->driver_owned ||
+	    rpc->callback || rpc->encoding)
 		return EBUSY;
 	free(rpc->buffers);
+	free(rpc->controls);
 	free(rpc->replies);
 	free(rpc->requests);
 	free(rpc);
@@ -454,7 +549,8 @@ bool
 crt_native_rpc_idle(const struct crt_native_rpc *rpc)
 {
 	return rpc != NULL && rpc->active_calls == 0 && rpc->active_servers == 0 &&
-	       rpc->driver_owned == 0 && !rpc->callback && !rpc->encoding;
+	       rpc->driver_owned == 0 && rpc->active_controls == 0 && !rpc->callback &&
+	       !rpc->encoding;
 }
 
 int
@@ -463,6 +559,6 @@ crt_native_rpc_buffers(struct crt_native_rpc *rpc, void **base, size_t *size)
 	if (rpc == NULL || base == NULL || size == NULL)
 		return EINVAL;
 	*base = rpc->buffers;
-	*size = 3 * rpc->depth * rpc->frame_size;
+	*size = 4 * rpc->depth * rpc->frame_size;
 	return 0;
 }

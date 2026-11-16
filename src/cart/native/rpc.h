@@ -11,6 +11,7 @@ struct crt_native_rpc;
 struct crt_native_token {
 	uint64_t id;
 	bool     reply;
+	bool     control;
 };
 struct crt_native_tx {
 	struct crt_native_token token;
@@ -46,6 +47,16 @@ typedef void (*crt_native_handler_t)(void    *arg, struct crt_native_rpc *, stru
  * reply encoder leaves its handler token valid for retry.
  */
 typedef int (*crt_native_encoder_t)(void *arg, void *payload, size_t capacity, size_t *used);
+typedef int (*crt_native_release_t)(void *arg, uint64_t lease_id);
+/* Bind before receiving any RELEASE frames. Callback returns positive errno.
+ * RELEASE has its own bounded queue and TX slab, independent of request/reply
+ * slots, so releasing keys does not require a free RPC slot. Queue EAGAIN means
+ * retain the pending acknowledgment and retry; success transfers its ownership.
+ */
+int
+crt_native_rpc_set_release_handler(struct crt_native_rpc *, crt_native_release_t, void *);
+int
+crt_native_rpc_queue_release(struct crt_native_rpc *, uint64_t lease_id);
 
 int
 crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t, void *,

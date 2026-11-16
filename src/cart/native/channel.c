@@ -198,6 +198,29 @@ crt_native_channel_call_encoded(struct crt_native_channel *c, uint32_t opcode,
 }
 
 int
+crt_native_channel_set_release_handler(struct crt_native_channel *c, crt_native_release_t release,
+				       void *arg)
+{
+	if (c == NULL || c->running)
+		return EINVAL;
+	if (c->error)
+		return c->error;
+	return crt_native_rpc_set_release_handler(c->rpc, release, arg);
+}
+
+int
+crt_native_channel_queue_release(struct crt_native_channel *c, uint64_t id)
+{
+	if (c == NULL)
+		return EINVAL;
+	if (c->error)
+		return c->error;
+	if (!c->started)
+		return ENOTCONN;
+	return crt_native_rpc_queue_release(c->rpc, id);
+}
+
+int
 crt_native_channel_retain(struct crt_native_channel *c, const void *view, size_t size,
 			  struct crt_native_rx_lease *lease)
 {

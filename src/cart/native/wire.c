@@ -23,8 +23,11 @@ static int
 valid(const struct crt_native_header *h)
 {
 	return h != NULL && h->request_id != 0 &&
-	       (h->type == CRT_NATIVE_REQUEST || h->type == CRT_NATIVE_REPLY) &&
-	       (h->type != CRT_NATIVE_REQUEST || h->status == 0);
+	       (h->type == CRT_NATIVE_REQUEST || h->type == CRT_NATIVE_REPLY ||
+		h->type == CRT_NATIVE_RELEASE) &&
+	       (h->type != CRT_NATIVE_REQUEST || h->status == 0) &&
+	       (h->type != CRT_NATIVE_RELEASE ||
+		(h->status == 0 && h->opcode == 0 && h->payload_size == 0));
 }
 
 int

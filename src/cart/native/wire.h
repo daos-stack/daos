@@ -13,7 +13,11 @@
  */
 #define CRT_NATIVE_HEADER_SIZE  32
 #define CRT_NATIVE_WIRE_VERSION 1
-enum crt_native_message_type { CRT_NATIVE_REQUEST = 1, CRT_NATIVE_REPLY = 2 };
+enum crt_native_message_type {
+	CRT_NATIVE_REQUEST = 1,
+	CRT_NATIVE_REPLY   = 2,
+	CRT_NATIVE_RELEASE = 3
+};
 
 struct crt_native_header {
 	enum crt_native_message_type type;

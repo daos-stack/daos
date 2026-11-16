@@ -32,7 +32,10 @@ $(BUILD)/bulk.o: bulk.c bulk.h transport.h | $(BUILD)
 $(BUILD)/proc.o: proc.c proc.h bulk.h transport.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -c $< -o $@
 
-$(BUILD)/libcrt_native_verbs.a: $(BUILD)/verbs.o $(BUILD)/wire.o $(BUILD)/bootstrap.o $(BUILD)/rpc.o $(BUILD)/channel.o $(BUILD)/bulk.o $(BUILD)/proc.o
+$(BUILD)/bulk_session.o: bulk_session.c bulk_session.h bulk.h transport.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -c $< -o $@
+
+$(BUILD)/libcrt_native_verbs.a: $(BUILD)/verbs.o $(BUILD)/wire.o $(BUILD)/bootstrap.o $(BUILD)/rpc.o $(BUILD)/channel.o $(BUILD)/bulk.o $(BUILD)/proc.o $(BUILD)/bulk_session.o
 	$(AR) rcs $@ $^
 
 $(BUILD)/test_verbs: verbs.c transport.h tests/test_verbs.c tests/fake/infiniband/verbs.h | $(BUILD)
@@ -56,10 +59,16 @@ $(BUILD)/test_bulk: bulk.c bulk.h proc.c proc.h transport.h tests/test_bulk.c | 
 $(BUILD)/test_proc: proc.c proc.h bulk.c bulk.h rpc.c rpc.h wire.c wire.h tests/test_proc.c | $(BUILD)
 	$(CC) $(CFLAGS) $(WARN) proc.c bulk.c rpc.c wire.c tests/test_proc.c -o $@
 
-$(BUILD)/test_cart_proc: cart_proc.c cart_proc.h proc.c proc.h bulk.c bulk.h tests/test_cart_proc.c ../../include/cart/api.h ../../include/cart/types.h | $(BUILD)
-	$(CC) $(CFLAGS) $(WARN) -pthread -Itests/compat -I../../include cart_proc.c proc.c bulk.c tests/test_cart_proc.c -o $@
+$(BUILD)/test_cart_proc: cart_proc.c cart_proc.h proc.c proc.h bulk.c bulk.h tests/test_cart_proc.c tests/mercury_proc_stubs.c ../../include/cart/api.h ../../include/cart/types.h | $(BUILD)
+	$(CC) $(CFLAGS) $(WARN) -pthread -Itests/compat -I../../include cart_proc.c proc.c bulk.c tests/mercury_proc_stubs.c tests/test_cart_proc.c -o $@
 
-test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/test_rpc $(BUILD)/test_channel $(BUILD)/test_bulk $(BUILD)/test_proc $(BUILD)/test_cart_proc
+$(BUILD)/test_bulk_session: bulk_session.c bulk_session.h bulk.c bulk.h rpc.c rpc.h wire.c wire.h tests/test_bulk_session.c | $(BUILD)
+	$(CC) $(CFLAGS) $(WARN) bulk_session.c bulk.c rpc.c wire.c tests/test_bulk_session.c -o $@
+
+$(BUILD)/test_cart_bulk: cart_bulk.c cart_bulk.h cart_proc.c cart_proc.h bulk_session.c bulk_session.h proc.c proc.h bulk.c bulk.h tests/test_cart_bulk.c tests/mercury_proc_stubs.c | $(BUILD)
+	$(CC) $(CFLAGS) $(WARN) -pthread -Itests/compat -I../../include cart_bulk.c cart_proc.c bulk_session.c proc.c bulk.c tests/mercury_proc_stubs.c tests/test_cart_bulk.c -o $@
+
+test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/test_rpc $(BUILD)/test_channel $(BUILD)/test_bulk $(BUILD)/test_proc $(BUILD)/test_cart_proc $(BUILD)/test_bulk_session $(BUILD)/test_cart_bulk
 	$(abspath $(BUILD))/test_verbs
 	$(abspath $(BUILD))/test_wire
 	$(abspath $(BUILD))/test_bootstrap
@@ -68,6 +77,8 @@ test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/te
 	$(abspath $(BUILD))/test_bulk
 	$(abspath $(BUILD))/test_proc
 	$(abspath $(BUILD))/test_cart_proc
+	$(abspath $(BUILD))/test_bulk_session
+	$(abspath $(BUILD))/test_cart_bulk
 
 $(BUILD)/verbs_smoke: tests/verbs_smoke.c $(BUILD)/libcrt_native_verbs.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -D_POSIX_C_SOURCE=200809L $^ -libverbs -o $@
@@ -81,3 +92,5 @@ clean:
 	$(RM) $(BUILD)/bulk.o $(BUILD)/test_bulk
 	$(RM) $(BUILD)/proc.o $(BUILD)/test_proc
 	$(RM) $(BUILD)/test_cart_proc
+	$(RM) $(BUILD)/bulk_session.o $(BUILD)/test_bulk_session
+	$(RM) $(BUILD)/test_cart_bulk

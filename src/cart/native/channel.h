@@ -8,6 +8,10 @@
 #include "rpc.h"
 
 struct crt_native_channel;
+int
+crt_native_channel_set_release_handler(struct crt_native_channel *, crt_native_release_t, void *);
+int
+crt_native_channel_queue_release(struct crt_native_channel *, uint64_t lease_id);
 /* Caller-owned, initially zero; do not copy an active lease. Retain only on
  * the channel's progress thread during a receive callback. Release may run
  * on a worker thread, once; reposting remains the progress owner's job.

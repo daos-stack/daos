@@ -10,6 +10,9 @@
 #define CRT_NATIVE_BULK_HEADER       16
 #define CRT_NATIVE_BULK_SEGMENT      24
 struct crt_native_bulk;
+bool
+crt_native_bulk_on_endpoint(const struct crt_native_bulk *, const struct crt_native_ops *,
+			    const struct crt_native_ep *);
 struct crt_native_iov {
 	void  *base;
 	size_t size;

@@ -18,6 +18,13 @@ struct crt_native_bulk {
 	struct crt_native_remote_memory segments[CRT_NATIVE_BULK_MAX_SEGMENTS];
 };
 
+bool
+crt_native_bulk_on_endpoint(const struct crt_native_bulk *bulk, const struct crt_native_ops *ops,
+			    const struct crt_native_ep *ep)
+{
+	return bulk != NULL && bulk->ops == ops && bulk->ep == ep;
+}
+
 static void
 put32(uint8_t *p, uint32_t v)
 {

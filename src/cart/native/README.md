@@ -86,8 +86,9 @@ bulk progress owner must route its completions: do not submit bulk operations
 onto the RPC channel's exclusively owned endpoint. Canceling a transfer stops
 unsubmitted chunks and retains local registrations until accepted chunks finish.
 Releasing an exported remote key requires a peer acknowledgment or established
-remote quiescence. The CaRT adapter does not yet provide that lifecycle binding;
-a local RPC timeout must never be treated as such an acknowledgment.
+remote quiescence. `bulk_session.h` supplies that ledger and `cart_bulk.h` supplies
+the CaRT bulk binding described below. The context bridge must still instantiate
+and progress them. A local RPC timeout must never act as an acknowledgment.
 
 ## Serialization and copy ownership
 
@@ -152,8 +153,8 @@ Non-NULL bulk handles require the connection-specific bulk callback supplied to
 `crt_native_cart_run()`/`payload()`. That hook owns local-handle lookup, decoded
 wrappers, and export leases. Absent a hook, only NULL bulk handles are supported;
 non-NULL handles fail explicitly with `-DER_NOSYS`. A Mercury bulk handle is never
-mistaken for a native export. The actual CaRT bulk/context lifecycle bridge is
-still pending, including peer acknowledgments and connection quiescence.
+mistaken for a native export. `crt_native_cart_bulk_proc()` now implements this
+callback; installing it on real peer contexts remains part of the context bridge.
 
 Portable adapter tests compile against real CaRT API/types with Mercury fallback
 test doubles. Test-only empty Boost and byteswap includes permit these tests on
@@ -175,6 +176,56 @@ copied to the RPC response slab are not RX-backed; consumers needing asynchronou
 ownership of those responses must make an owned copy. Retaining an RX is separate
 from owning a server request/reply token; release both lifetimes correctly. The
 actual CaRT dispatcher still needs to attach leases to its RPC destruction path.
+
+## Bulk publication, acknowledgments and CaRT transfers
+
+Create one `crt_native_bulk_session` on the dedicated bulk endpoint per peer,
+and bind the control channel's RELEASE callback to `crt_native_bulk_session_ack`.
+The ACK sender queues `crt_native_channel_queue_release()`. Both peers use the
+negotiated ledger capacity; do not share a ledger between endpoints or peers.
+RELEASE frames use an independent preallocated queue/slab, so ACKs can progress
+with a full request window. Their IDs are generation-tagged and connection-local;
+future/unpublished IDs are rejected and stale/duplicate ACKs are harmless.
+
+Create a `crt_native_cart_bulk` cache on the same session/endpoint. Use a stack
+`crt_native_cart_bulk_txn` with `crt_native_cart_bulk_proc()` during payload
+serialization. After successful encoding, commit its exports before publishing
+the frame; abort drafts on earlier encoding/queue errors. Once published, a key
+stays pinned until peer RELEASE receipt or successful endpoint quiescence. A
+queued acknowledgment or a local timeout is insufficient. A decoder failure
+must shut down the peer: unparsed bulk fields may contain additional exports
+which cannot safely be located/released by scanning arbitrary payload bytes.
+
+The binding registers local CaRT SGLs with their original RO/WO/RW permissions
+and caches a bounded number of registrations. Cache entries retain the original
+CaRT wrapper and cannot be evicted while exports or accepted local DMA use them.
+Decoded native wrappers expose length/segment count, but never expose remote
+virtual addresses as accessible local buffers. `crt_bulk_free()` can run on a
+worker; final destruction and import release are queued to binding progress.
+
+`crt_bulk_transfer()` routes decoded native handles to a preallocated GET/PUT
+queue. Worker submissions retain the RPC and both bulk handles; registration,
+posting, CQ polling and callbacks run on the progress owner. `crt_bulk_abort()`
+recognizes native pool membership without interpreting Mercury operation IDs.
+Operation IDs are valid until their completion callback, as with other CaRT
+bulk operations; callers must synchronize cancellation with completion. Deadlines
+are checked before posting and during progress. Cancellation stops unsent chunks,
+then waits for accepted DMA before the single completion callback and unpinning.
+
+Progress the control channel and `crt_native_cart_bulk_progress()` independently.
+For teardown, stop new work, shut down/drain the bulk session, and retry quiesce
+until it succeeds. The verbs implementation destroys the only QP in its private
+PD while retaining MRs for subsequent deregistration. Only then may published
+exports be revoked without peer ACKs. Drain wrapper releases and destroy the
+binding before its session; shut down the control channel before destroying the
+session referenced by its RELEASE callback. Live wrappers/transfers/leases keep
+destruction busy, and failed deregistration/teardown retains retryable handles.
+
+Forwarding a decoded key to a different peer is unsupported: registrations belong
+to the original connection's PD. Bound-handle forwarding and collective relay
+need explicit routing/proxy support before claiming collective compatibility.
+The native provider is still unselectable; these implemented bulk paths await
+the listener/context/dispatch integration and full Linux CaRT validation.
 
 ## Remaining integration work
 

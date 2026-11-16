@@ -11,6 +11,73 @@
 #define D_LOGFAC	DD_FAC(bulk)
 
 #include "crt_internal.h"
+#include "native/cart_bulk.h"
+
+struct native_remote_wrapper {
+	struct crt_bulk               bulk;
+	struct crt_native_cart_remote remote;
+};
+
+int
+crt_native_cart_wrap_remote(struct crt_native_cart_bulk    *binding,
+			    struct crt_native_bulk_session *session, uint64_t id,
+			    const struct crt_native_bulk_remote *descriptor, crt_bulk_t *out)
+{
+	struct native_remote_wrapper *wrapper;
+	if (binding == NULL || session == NULL || descriptor == NULL || out == NULL ||
+	    descriptor->lease_id != id)
+		return -DER_INVAL;
+	D_ALLOC_PTR(wrapper);
+	if (wrapper == NULL)
+		return -DER_NOMEM;
+	wrapper->bulk.refcount      = 1;
+	wrapper->bulk.native_remote = &wrapper->remote;
+	wrapper->remote             = (struct crt_native_cart_remote){.binding    = binding,
+								      .session    = session,
+								      .descriptor = descriptor,
+								      .handle     = &wrapper->bulk};
+	crt_native_cart_remote_acquire(&wrapper->remote);
+	*out = &wrapper->bulk;
+	return 0;
+}
+
+void
+crt_native_cart_destroy_remote(struct crt_native_cart_remote *remote)
+{
+	/* The worker already dropped the last wrapper reference; only the owner
+	 * consumes this deferred destruction after releasing its import pin.
+	 */
+	struct native_remote_wrapper *wrapper =
+	    container_of(remote, struct native_remote_wrapper, remote);
+	D_FREE(wrapper);
+}
+
+int
+crt_native_cart_remote_info(crt_bulk_t handle, struct crt_native_cart_bulk **binding,
+			    struct crt_native_bulk_session      **session,
+			    const struct crt_native_bulk_remote **descriptor)
+{
+	struct crt_bulk *bulk = handle;
+	if (bulk == NULL || bulk->native_remote == NULL)
+		return -DER_INVAL;
+	if (binding)
+		*binding = bulk->native_remote->binding;
+	if (session)
+		*session = bulk->native_remote->session;
+	if (descriptor)
+		*descriptor = bulk->native_remote->descriptor;
+	return 0;
+}
+
+int
+crt_native_cart_bulk_permission(crt_bulk_t handle, crt_bulk_perm_t *permission)
+{
+	struct crt_bulk *bulk = handle;
+	if (bulk == NULL || permission == NULL || bulk->native_remote != NULL)
+		return -DER_INVAL;
+	*permission = bulk->bulk_perm;
+	return 0;
+}
 
 /** Check the validation of the d_sg_list_t parameter */
 static inline bool
@@ -107,6 +174,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	if (ret_hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	ret_hdl->refcount = 1;
+	ret_hdl->bulk_perm = bulk_perm;
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc == -DER_QUOTA_LIMIT) {
@@ -167,6 +235,8 @@ crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 		D_ERROR("invalid parameter, NULL crt_ctx or crt_bulk.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+	if (bulk->native_remote != NULL)
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 
 	if (bulk->deferred) {
 		bulk->bound = true;
@@ -226,6 +296,10 @@ crt_bulk_free_common(struct crt_bulk *bulk)
 	hg_return_t         hg_ret;
 
 	D_ASSERT(bulk != NULL);
+	if (bulk->native_remote != NULL) {
+		crt_native_cart_remote_release(bulk->native_remote);
+		return;
+	}
 
 	if (bulk->hg_bulk_hdl != HG_BULK_NULL) {
 		hg_ret = HG_Bulk_free(bulk->hg_bulk_hdl);
@@ -271,6 +345,12 @@ crt_bulk_desc_expired(struct crt_bulk_desc *bulk_desc)
 	return false;
 }
 
+bool
+crt_native_cart_bulk_expired(struct crt_bulk_desc *desc)
+{
+	return crt_bulk_desc_expired(desc);
+}
+
 int
 verify_complete_cb(const struct crt_bulk_cb_info *cb_info)
 {
@@ -304,6 +384,12 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	if (crt_bulk_desc_expired(bulk_desc))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
+	if (((struct crt_bulk *)bulk_desc->bd_remote_hdl)->native_remote != NULL) {
+		struct crt_native_cart_bulk *binding =
+		    ((struct crt_bulk *)bulk_desc->bd_remote_hdl)->native_remote->binding;
+		return crt_native_cart_bulk_transfer(binding, bulk_desc, verify_complete_cb,
+						     complete_cb, arg, opid);
+	}
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, false);
 	if (rc != 0)
@@ -326,6 +412,12 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_c
 
 	if (crt_bulk_desc_expired(bulk_desc))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
+	if (((struct crt_bulk *)bulk_desc->bd_remote_hdl)->native_remote != NULL) {
+		struct crt_native_cart_bulk *binding =
+		    ((struct crt_bulk *)bulk_desc->bd_remote_hdl)->native_remote->binding;
+		return crt_native_cart_bulk_transfer(binding, bulk_desc, verify_complete_cb,
+						     complete_cb, arg, opid);
+	}
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
 	if (rc != 0)
@@ -353,7 +445,13 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 	if (bulk->deferred)
 		return -DER_NOTSUPPORTED;
 
-	*bulk_len = crt_hg_bulk_get_len(bulk->hg_bulk_hdl);
+	if (bulk->native_remote != NULL) {
+		uint64_t length = bulk->native_remote->descriptor->length;
+		if (length > SIZE_MAX)
+			return -DER_OVERFLOW;
+		*bulk_len = length;
+	} else
+		*bulk_len = crt_hg_bulk_get_len(bulk->hg_bulk_hdl);
 	return 0;
 }
 
@@ -368,7 +466,8 @@ crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)
 	if (bulk->deferred)
 		return -DER_NOTSUPPORTED;
 
-	*bulk_sgnum = crt_hg_bulk_get_sgnum(bulk->hg_bulk_hdl);
+	*bulk_sgnum = bulk->native_remote != NULL ? bulk->native_remote->descriptor->count
+						  : crt_hg_bulk_get_sgnum(bulk->hg_bulk_hdl);
 	return 0;
 }
 
@@ -388,6 +487,8 @@ crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	if (bulk->native_remote != NULL)
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 	if (bulk->deferred)
 		*sgl = bulk->sgl;
 	else
@@ -400,5 +501,8 @@ out:
 int
 crt_bulk_abort(crt_context_t crt_ctx, crt_bulk_opid_t opid)
 {
+	int rc;
+	if (crt_native_cart_bulk_try_abort(crt_ctx, opid, &rc))
+		return rc;
 	return HG_Bulk_cancel(opid);
 }

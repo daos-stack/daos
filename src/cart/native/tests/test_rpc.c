@@ -52,7 +52,7 @@ pipeline(void)
 	assert(crt_native_rpc_create(4, 256, echo, &handled, &a) == 0);
 	assert(crt_native_rpc_create(4, 256, echo, &handled, &b) == 0);
 	assert(crt_native_rpc_buffers(a, &slab, &slab_size) == 0 && slab != NULL &&
-	       slab_size == 3 * 4 * 256);
+	       slab_size == 4 * 4 * 256);
 	for (unsigned round = 0; round < 1024; round++) {
 		for (unsigned i = 0; i < 4; i++) {
 			assert(crt_native_rpc_call(a, 17, "hello", 5, done, &results[i], &ids[i]) ==
@@ -143,9 +143,47 @@ reply_before_request_and_bad_frame(void)
 	assert(crt_native_rpc_destroy(rpc) == 0);
 }
 
+static int
+released(void *arg, uint64_t id)
+{
+	uint64_t *last = arg;
+	*last          = id;
+	return 0;
+}
+
+static void
+release_queue(void)
+{
+	struct crt_native_rpc *rpc, *peer;
+	unsigned               handled = 0;
+	struct result          result  = {0};
+	struct crt_native_tx   tx, call;
+	uint64_t               id, last = 0;
+	assert(crt_native_rpc_create(1, 64, echo, &handled, &rpc) == 0);
+	assert(crt_native_rpc_create(1, 64, echo, &handled, &peer) == 0);
+	assert(crt_native_rpc_set_release_handler(peer, released, &last) == 0);
+	assert(crt_native_rpc_call(rpc, 17, NULL, 0, done, &result, &id) == 0);
+	assert(crt_native_rpc_next_tx(rpc, &call) == 0);
+	/* Key ACK does not consume a request slot, even with the only call busy. */
+	assert(crt_native_rpc_queue_release(rpc, UINT64_C(0x1234567800000007)) == 0);
+	assert(crt_native_rpc_queue_release(rpc, 42) == EAGAIN);
+	assert(crt_native_rpc_next_tx(rpc, &tx) == 0 && tx.token.control);
+	assert(crt_native_rpc_receive(peer, tx.data, tx.length) == 0);
+	assert(last == UINT64_C(0x1234567800000007) && handled == 0);
+	assert(crt_native_rpc_tx_complete(rpc, tx.token, 0) == 0);
+	assert(crt_native_rpc_tx_complete(rpc, tx.token, 0) == ENOENT);
+	assert(crt_native_rpc_queue_release(rpc, 9) == 0);
+	assert(crt_native_rpc_fail(rpc, ECANCELED) == 0); /* queued controls released */
+	assert(crt_native_rpc_tx_complete(rpc, call.token, ECANCELED) == 0);
+	assert(result.count == 1 && result.error == ECANCELED);
+	assert(crt_native_rpc_destroy(rpc) == 0);
+	assert(crt_native_rpc_destroy(peer) == 0);
+}
+
 int
 main(void)
 {
+	release_queue();
 	pipeline();
 	cancellation();
 	reply_before_request_and_bad_frame();
