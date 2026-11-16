@@ -379,6 +379,13 @@ crt_native_rpc_destroy(struct crt_native_rpc *rpc)
 	return 0;
 }
 
+bool
+crt_native_rpc_idle(const struct crt_native_rpc *rpc)
+{
+	return rpc != NULL && rpc->active_calls == 0 && rpc->active_servers == 0 &&
+	       rpc->driver_owned == 0 && !rpc->callback;
+}
+
 int
 crt_native_rpc_buffers(struct crt_native_rpc *rpc, void **base, size_t *size)
 {

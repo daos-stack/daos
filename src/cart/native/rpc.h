@@ -61,6 +61,8 @@ crt_native_rpc_fail(struct crt_native_rpc *, int error);
 /* EBUSY while calls, handlers or driver-owned send frames remain outstanding. */
 int
 crt_native_rpc_destroy(struct crt_native_rpc *);
+bool
+crt_native_rpc_idle(const struct crt_native_rpc *);
 /* Stable backing slab, for one-time driver registration. The slab cannot be
  * deregistered while next_tx() frames remain driver-owned. Registration and
  * deregistration are the driver's responsibility, not the RPC engine's.

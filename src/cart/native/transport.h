@@ -70,6 +70,8 @@ struct crt_native_config {
 
 struct crt_native_ops {
 	const char *name;
+	/* Maximum combined outstanding SEND/RECV/READ/WRITE operations. */
+	unsigned (*capacity)(struct crt_native_ep *);
 	int (*open)(const struct crt_native_config *, struct crt_native_ep **);
 	int (*address)(struct crt_native_ep *, struct crt_native_address *);
 	int (*connect)(struct crt_native_ep *, const struct crt_native_address *);

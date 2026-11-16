@@ -424,8 +424,15 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 	return 0;
 }
 
+static unsigned
+verbs_capacity(struct crt_native_ep *ep)
+{
+	return ep == NULL ? 0 : ep->config.depth;
+}
+
 const struct crt_native_ops crt_native_verbs_ops = {
     .name              = "verbs",
+    .capacity          = verbs_capacity,
     .open              = verbs_open,
     .address           = verbs_address,
     .connect           = verbs_connect,

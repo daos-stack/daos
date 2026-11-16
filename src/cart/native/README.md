@@ -64,6 +64,17 @@ No privileged system configuration is changed by the test.
 
 ## Remaining before CaRT can select this backend
 
+The per-commit status is tracked in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+Endpoint hello exchange, a bounded eager RPC engine, and a registered channel
+driver are now implemented as private modules. The channel tests simulate full
+duplex communication with injected posting backpressure. They do not run CaRT
+handlers or DAOS operations, and they do not validate a real verbs provider.
+
+`bootstrap.h` exchanges endpoint parameters over a caller-owned socket;
+`rpc.h` matches requests/replies and owns preallocated frames; `channel.h`
+registers those frames, posts receives and drives the transport. The CaRT bridge
+must supply authenticated connections, payload codecs and handler integration.
+
 1. Introduce transport-neutral context, address, request, and bulk state alongside
    the current Mercury state. Convert direct HG calls outside `crt_hg.c` and
    `crt_hg_proc.c` to that interface while preserving a Mercury implementation.
