@@ -11,7 +11,7 @@ from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
 from ior_test_base import IorTestBase
-from recovery_utils import wait_for_check_complete
+from recovery_utils import clean_mounts, run_cmd_check_result, wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
@@ -20,42 +20,6 @@ class PoolMembershipTest(IorTestBase):
 
     :avocado: recursive
     """
-    def run_cmd_check_result(self, command):
-        """Run given command as root and check its result.
-
-        Args:
-            command (str): Command to execute.
-        """
-        command_root = command_as_user(command=command, user="root")
-        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
-        if not result.passed:
-            self.fail(f"{command_root} failed on {result.failed_hosts}!")
-
-    def clean_mounts(self, tmpfs_mounts):
-        """Unmount and remove the tmpfs directory used for MD-on-SSD testing.
-
-        Args:
-            tmpfs_mounts (list): tmpfs mounts to clean.
-
-        Returns:
-            list: Errors detected during cleanup.
-        """
-        self.log.info("MD-on-SSD: Clean %s on %s", tmpfs_mounts, self.hostlist_servers)
-        commands = ["rc=0"]
-        for tmpfs_mount in tmpfs_mounts:
-            commands.append(
-                f"if mountpoint -q {tmpfs_mount}; then umount {tmpfs_mount} || rc=1; fi")
-            commands.append(
-                f"if mountpoint -q {tmpfs_mount}; then rc=1; "
-                f"else rm -rf {tmpfs_mount} || rc=1; fi")
-        commands.append("exit $rc")
-        command_str = "; ".join(commands)
-        command = command_as_user(command=f"sh -c '{command_str}'", user="root")
-        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
-        if not result.passed:
-            return [f"Failed to clean {tmpfs_mounts} on {result.failed_hosts}"]
-        return []
-
     def get_rank_to_free(self):
         """Get the free space for each engine rank.
 
@@ -307,12 +271,12 @@ class PoolMembershipTest(IorTestBase):
 
             self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
             # Make sure to clean the mounts even if the test hits an error.
-            self.register_cleanup(self.clean_mounts, tmpfs_mounts=tmpfs_mounts)
-            cleanup_errors = self.clean_mounts(tmpfs_mounts=tmpfs_mounts)
+            self.register_cleanup(clean_mounts, test=self, tmpfs_mounts=tmpfs_mounts)
+            cleanup_errors = clean_mounts(self, tmpfs_mounts=tmpfs_mounts)
             if cleanup_errors:
                 self.fail("\n".join(cleanup_errors))
             command = f"mkdir -p {tmpfs_mounts[0]} {tmpfs_mounts[1]}"
-            self.run_cmd_check_result(command=command)
+            run_cmd_check_result(self, command=command)
 
             self.log_step(f"MD-on-SSD: Load pool dir to {tmpfs_mounts}.")
             for host in hosts:
