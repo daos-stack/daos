@@ -763,6 +763,40 @@ These are two command line options to control the DFuse process itself.
 
 These will affect all containers accessed via DFuse, regardless of any container attributes.
 
+### Mounting a Snapshot
+
+DFuse can mount a snapshot of a POSIX container instead of the live container. The mount shows the
+file system as it was when the snapshot was taken, whatever is done to the container afterwards.
+
+Snapshots are created with the `daos` tool, see the
+[Snapshot & Rollback](container.md#snapshot-rollback) section, and mounted by name or by epoch:
+
+```bash
+$ daos cont create-snap tank mycont --snap=before-upgrade
+snapshot/epoch 262508437483290624 has been created
+
+$ dfuse -m /mnt/snap --pool=tank --container=mycont --snap=before-upgrade
+$ dfuse -m /mnt/snap --pool=tank --container=mycont --snap-epoch=262508437483290624
+```
+
+The epoch can also be given in hexadecimal with a `0x` prefix. A snapshot is selected with either
+`--snap` or `--snap-epoch`, not both, and both a pool and a container must be given. DFuse refuses
+to mount a snapshot that does not exist.
+
+A snapshot is always mounted read-only, as if `--read-only` had been given, and any attempt to
+modify it fails. The live container can be mounted at the same time on another mount point.
+
+Both interception libraries, `libioil` and `libpil4dfs`, work with a snapshot mount and read the
+data of the snapshot, not the live data of the container. DFuse gives them the epoch of the
+snapshot, so one process can use a snapshot mount and a mount of the live container, which share
+the same container, together. The interception libraries and DFuse have to come from the same DAOS
+version, otherwise the ioctl protocol versions differ and the interception libraries do not
+intercept the file.
+
+Only a whole mount can be a snapshot, there is no `.snapshot` directory in the live container.
+Unmount a snapshot before destroying it, the behavior of a mounted snapshot that is destroyed is
+not defined.
+
 ### Managing memory usage and disconnecting from containers
 
 DFuse can be instructed to evict paths from local memory which drops any open handles on containers

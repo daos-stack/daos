@@ -1412,6 +1412,153 @@ dfs_test_handles(void **state)
 	D_FREE(ghdl.iov_buf);
 }
 
+static void
+dfs_test_check_file(dfs_t *dfs, const char *name, const char *expected)
+{
+	dfs_obj_t   *obj;
+	d_sg_list_t  sgl;
+	d_iov_t      iov;
+	char         buf[16] = {0};
+	daos_size_t  got     = 0;
+	int          rc;
+
+	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IRUSR, O_RDONLY, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&iov, buf, sizeof(buf));
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_read(dfs, obj, &sgl, 0, &got, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(got, strlen(expected));
+	assert_int_equal(memcmp(buf, expected, got), 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_snap_mount(void **state)
+{
+	test_arg_t        *arg = *state;
+	daos_handle_t      coh;
+	dfs_t             *dfs, *dfs_name, *dfs_epoch, *dfs_glob;
+	dfs_obj_t         *obj;
+	uuid_t             cuuid;
+	char               cuuid_str[37];
+	char               snap_name[] = "dfs_snap";
+	char               buf[16];
+	daos_epoch_t       snap_epoch, epoch;
+	daos_epoch_range_t epr;
+	d_iov_t            ghdl = {NULL, 0, 0};
+	d_iov_t            iov;
+	d_sg_list_t        sgl;
+	int                rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("create a POSIX container and a file with the original content\n");
+	rc = dfs_cont_create(arg->pool.poh, &cuuid, NULL, &coh, &dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs, NULL, "file", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	memcpy(buf, "original", 8);
+	d_iov_set(&iov, buf, 8);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	rc            = dfs_write(dfs, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("snapshot the container, then overwrite the file\n");
+	rc = daos_cont_create_snap(coh, &snap_epoch, snap_name, NULL);
+	assert_rc_equal(rc, 0);
+
+	memcpy(buf, "modified", 8);
+	rc = dfs_write(dfs, obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** a mount that is not a snapshot has no snapshot epoch */
+	rc = dfs_get_snap_epoch(dfs, &epoch);
+	assert_int_equal(rc, 0);
+	assert_true(epoch == 0);
+	dfs_test_check_file(dfs, "file", "modified");
+
+	print_message("mount the snapshot by name\n");
+	rc = dfs_mount_snap(arg->pool.poh, coh, O_RDONLY, 0, snap_name, &dfs_name);
+	assert_int_equal(rc, 0);
+	rc = dfs_get_snap_epoch(dfs_name, &epoch);
+	assert_int_equal(rc, 0);
+	assert_true(epoch == snap_epoch);
+	dfs_test_check_file(dfs_name, "file", "original");
+
+	print_message("mount the snapshot by epoch\n");
+	rc = dfs_mount_snap(arg->pool.poh, coh, O_RDONLY, snap_epoch, NULL, &dfs_epoch);
+	assert_int_equal(rc, 0);
+	rc = dfs_get_snap_epoch(dfs_epoch, &epoch);
+	assert_int_equal(rc, 0);
+	assert_true(epoch == snap_epoch);
+	dfs_test_check_file(dfs_epoch, "file", "original");
+
+	print_message("a snapshot that does not exist cannot be mounted\n");
+	rc = dfs_mount_snap(arg->pool.poh, coh, O_RDONLY, 0, "no_such_snapshot", &dfs_glob);
+	assert_int_equal(rc, ENOENT);
+
+	print_message("the snapshot cannot be modified\n");
+	rc = dfs_open(dfs_name, NULL, "newfile", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_not_equal(rc, 0);
+	rc = dfs_remove(dfs_name, NULL, "file", false, NULL);
+	assert_int_not_equal(rc, 0);
+	dfs_test_check_file(dfs_name, "file", "original");
+
+	print_message("a global handle of the snapshot mount is still the snapshot\n");
+	rc = dfs_local2global(dfs_name, &ghdl);
+	assert_int_equal(rc, 0);
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
+	ghdl.iov_len = ghdl.iov_buf_len;
+	rc           = dfs_local2global(dfs_name, &ghdl);
+	assert_int_equal(rc, 0);
+	rc = dfs_global2local(arg->pool.poh, coh, 0, ghdl, &dfs_glob);
+	assert_int_equal(rc, 0);
+	rc = dfs_get_snap_epoch(dfs_glob, &epoch);
+	assert_int_equal(rc, 0);
+	assert_true(epoch == snap_epoch);
+	dfs_test_check_file(dfs_glob, "file", "original");
+	rc = dfs_open(dfs_glob, NULL, "newfile", S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_not_equal(rc, 0);
+	D_FREE(ghdl.iov_buf);
+
+	/** the live mount still sees the new content */
+	dfs_test_check_file(dfs, "file", "modified");
+
+	rc = dfs_umount(dfs_glob);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_epoch);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs_name);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+
+	epr.epr_hi = epr.epr_lo = snap_epoch;
+	rc                      = daos_cont_destroy_snap(coh, epr, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	uuid_unparse(cuuid, cuuid_str);
+	rc = daos_cont_destroy(arg->pool.poh, cuuid_str, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static void *
 dfs_test_connect_thread(void *arg)
 {
@@ -3815,6 +3962,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
      test_case_teardown},
     {"DFS_UNIT_TEST28: dfs open/lookup flags", dfs_test_oflags, async_disable, test_case_teardown},
     {"DFS_UNIT_TEST29: Symlinks with an absolute value", dfs_test_syml_abs, async_disable,
+     test_case_teardown},
+    {"DFS_UNIT_TEST30: dfs snapshot mount", dfs_test_snap_mount, async_disable,
      test_case_teardown},
 };
 

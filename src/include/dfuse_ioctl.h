@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +12,7 @@
 
 #define DFUSE_IOCTL_TYPE         0xA3 /* Arbitrary "unique" type of the IOCTL */
 #define DFUSE_IOCTL_REPLY_BASE   0xC1 /* Number of the IOCTL.  Also arbitrary */
-#define DFUSE_IOCTL_VERSION      7    /* Version of ioctl protocol */
+#define DFUSE_IOCTL_VERSION      8    /* Version of ioctl protocol */
 
 #define DFUSE_IOCTL_REPLY_CORE   (DFUSE_IOCTL_REPLY_BASE)
 
@@ -40,6 +41,8 @@ struct dfuse_il_reply {
 	uuid_t        fir_pool;
 	uuid_t        fir_cont;
 	uint64_t      fir_flags;
+	/* Epoch of the snapshot mounted by dfuse, or 0 if the container is not a snapshot mount */
+	daos_epoch_t  fir_snap_epoch;
 };
 
 /* Query for global pool/container handle sizes */

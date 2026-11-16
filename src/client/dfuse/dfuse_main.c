@@ -458,6 +458,28 @@ check_fd_mountpoint(const char *mountpoint)
 
 #define DEFAULT_DFUSE_JOBID "dfuse"
 
+/* Parse a snapshot epoch given in decimal or as 0x prefixed hexadecimal. Returns 0 on success. */
+static int
+parse_snap_epoch(const char *str, daos_epoch_t *epoch)
+{
+	char              *end = NULL;
+	unsigned long long val;
+	int                base = 10;
+
+	if (str[0] == '0' && (str[1] == 'x' || str[1] == 'X'))
+		base = 16;
+	else if (str[0] < '0' || str[0] > '9')
+		return EINVAL;
+
+	errno = 0;
+	val   = strtoull(str, &end, base);
+	if (errno != 0 || end == str || *end != '\0' || val == 0 || val == DAOS_EPOCH_MAX)
+		return EINVAL;
+
+	*epoch = val;
+	return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -608,10 +630,10 @@ main(int argc, char **argv)
 			dfuse_info->di_read_only = true;
 			break;
 		case 'N':
-			if (strncmp(optarg, "0x", 2) == 0)
-				snap_epoch = strtol(optarg + 2, NULL, 16);
-			else
-				snap_epoch = atol(optarg);
+			if (parse_snap_epoch(optarg, &snap_epoch) != 0) {
+				printf("Invalid snapshot epoch '%s'\n", optarg);
+				D_GOTO(out_debug, rc = -DER_INVAL);
+			}
 			dfuse_info->di_read_only = true;
 			break;
 		case 'h':
@@ -657,6 +679,18 @@ main(int argc, char **argv)
 		printf("Cannot dump and read handles file at the same time\n");
 		show_help(argv[0]);
 		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+	if (snap_name != NULL || snap_epoch != 0) {
+		if (snap_name != NULL && snap_epoch != 0) {
+			printf("--snap and --snap-epoch cannot be used together\n");
+			show_help(argv[0]);
+			D_GOTO(out_debug, rc = -DER_INVAL);
+		}
+		if (pool_name[0] == '\0' || cont_name[0] == '\0') {
+			printf("Mounting a snapshot requires both a pool and a container\n");
+			show_help(argv[0]);
+			D_GOTO(out_debug, rc = -DER_INVAL);
+		}
 	}
 
 	/* Follow the kernel's own default ratio */
