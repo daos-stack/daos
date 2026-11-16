@@ -744,6 +744,55 @@ heap_touch_umem_cache(struct palloc_heap *heap, void *addr, size_t size)
 	umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id, offset, size);
 }
 
+/*
+ * The active evictable MB and the active SOEMBs are being allocated into and
+ * are kept out of the usage queues; they are requeued on retire/demote.
+ */
+static inline bool
+heap_mbrt_ismb_active(struct palloc_heap *heap, struct mbrt *mb)
+{
+	return heap->rt->active_evictable_mb == mb || mb->is_soe_mb;
+}
+
+static inline enum mb_usage_hint
+mb_usage2hint(uint64_t usage)
+{
+	if (usage > MB_U90)
+		return MB_U90_HINT;
+	if (usage > MB_U75)
+		return MB_U75_HINT;
+	if (usage > MB_U30)
+		return MB_U30_HINT;
+	return MB_U0_HINT;
+}
+
+/*
+ * heap_mbrt_active_mb_sync_hint -- persist the usage hint of an active MB
+ *	(active evictable MB or SOEMB), which is kept out of the usage queues.
+ *	The hint is rewritten only when usage has moved by at least
+ *	MB_USAGE_DELTA since the last write and maps to a different hint
+ *	level; the delta avoids hint flapping when alloc/free hovers around a
+ *	level boundary. While the MB is active, prev_usage tracks the usage at
+ *	the last hint write. Must be called within a transaction.
+ */
+static void
+heap_mbrt_active_mb_sync_hint(struct palloc_heap *heap, struct mbrt *mb)
+{
+	enum mb_usage_hint cur, new;
+
+	D_ASSERT(mb->is_evictable && mb->qptr == NULL);
+
+	if (labs((int64_t)(mb->space_usage - mb->prev_usage)) < MB_USAGE_DELTA)
+		return;
+
+	new = mb_usage2hint(mb->space_usage);
+	heap_zinfo_get_usage(heap, mb->mb_id, &cur);
+	if (new != cur) {
+		heap_zinfo_set_usage(heap, mb->mb_id, new);
+		mb->prev_usage = mb->space_usage;
+	}
+}
+
 void
 heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage)
 {
@@ -760,7 +809,7 @@ heap_mbrt_setmb_usage(struct palloc_heap *heap, uint32_t zone_id, uint64_t usage
 
 	mb->space_usage = usage;
 
-	if (heap->rt->active_evictable_mb == mb || mb->is_soe_mb)
+	if (heap_mbrt_ismb_active(heap, mb))
 		return;
 
 	if (mb->qptr)
@@ -808,8 +857,10 @@ heap_mbrt_incrmb_usage(struct palloc_heap *heap, uint32_t zone_id, int size)
 
 	mb->space_usage += size;
 
-	if (heap->rt->active_evictable_mb == mb || mb->is_soe_mb)
+	if (heap_mbrt_ismb_active(heap, mb)) {
+		heap_mbrt_active_mb_sync_hint(heap, mb);
 		return;
+	}
 
 	if (heap_mbrt_ismb_evictable(heap, zone_id)) {
 		hint = mbrt_qbs_update_mb(&heap->rt->emb_qbs, mb);
