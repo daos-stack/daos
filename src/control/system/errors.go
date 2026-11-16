@@ -102,6 +102,34 @@ func IsNotLeader(err error) bool {
 	return ok
 }
 
+// ErrReplicaNoEngine indicates that a request was made to a Management Service
+// replica that has no running engines to service the request. Replicas lists
+// the other replicas the caller may retry.
+type ErrReplicaNoEngine struct {
+	Replicas []string
+}
+
+func (err *ErrReplicaNoEngine) Error() string {
+	msg := fmt.Sprintf("no running engine on %s replica", build.ManagementServiceName)
+	if len(err.Replicas) == 0 {
+		return msg
+	}
+	return fmt.Sprintf("%s (try one of %s)", msg, strings.Join(err.Replicas, ","))
+}
+
+// IsReplicaNoEngine returns a boolean indicating whether or not the
+// supplied error is an instance of ErrReplicaNoEngine.
+func IsReplicaNoEngine(err error) bool {
+	_, ok := errors.Cause(err).(*ErrReplicaNoEngine)
+	return ok
+}
+
+// IsRoutingError returns a boolean indicating whether or not the
+// supplied error tells the caller to retry the request on a different host.
+func IsRoutingError(err error) bool {
+	return IsNotReplica(err) || IsNotLeader(err) || IsReplicaNoEngine(err)
+}
+
 // ErrMemberExists indicates the failure of an operation that
 // expected the given member to not exist.
 type ErrMemberExists struct {

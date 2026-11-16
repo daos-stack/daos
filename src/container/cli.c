@@ -740,7 +740,7 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 		return -DER_NO_HDL;
 
 	sched = (task != NULL) ? tse_task2sched(task) : NULL;
-	rc = dc_pool_create_map_refresh_task(poh, pm_ver, sched, &ptask);
+	rc    = dc_pool_create_map_refresh_task(poh, pm_ver, CRT_NO_RANK, sched, &ptask);
 	if (rc != 0)
 		goto out;
 
@@ -838,7 +838,8 @@ cont_open_complete(tse_task_t *task, void *data)
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
 	rc = dc_cont_props_init(cont);
 	if (rc != 0) {
-		D_ERROR("container props failed to initialize\n");
+		D_ERROR("container props failed to initialize: " DF_RC "\n", DP_RC(rc));
+		d_list_del_init(&cont->dc_po_list);
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D_GOTO(out, rc);
 	}
@@ -1987,8 +1988,8 @@ out_resched:
 		D_DEBUG(DB_MD, DF_CONT ": resched: refresh_map=%d map_version=%u\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid), refresh_map, map_version);
 		if (refresh_map) {
-			rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl,
-							     map_version, sched, &ptask);
+			rc = dc_pool_create_map_refresh_task(
+			    arg->coaa_cont->dc_pool_hdl, map_version, CRT_NO_RANK, sched, &ptask);
 			if (rc != 0)
 				goto out;
 
