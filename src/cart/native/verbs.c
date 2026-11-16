@@ -239,7 +239,7 @@ verbs_connect(struct crt_native_ep *ep, const struct crt_native_address *remote)
 }
 
 static int
-verbs_register(struct crt_native_ep *ep, void *buffer, size_t length, bool remote_access,
+verbs_register(struct crt_native_ep *ep, void *buffer, size_t length, unsigned remote_access,
 	       struct crt_native_mr **output, struct crt_native_remote_memory *remote)
 {
 	struct crt_native_mr *mr;
@@ -248,10 +248,13 @@ verbs_register(struct crt_native_ep *ep, void *buffer, size_t length, bool remot
 	if (output == NULL)
 		return EINVAL;
 	*output = NULL;
-	if (ep == NULL || buffer == NULL || length == 0 || ep->closing || remote == NULL)
+	if (ep == NULL || buffer == NULL || length == 0 || ep->closing || remote == NULL ||
+	    (remote_access & ~(CRT_NATIVE_REMOTE_READ | CRT_NATIVE_REMOTE_WRITE)) != 0)
 		return EINVAL;
-	if (remote_access)
-		access |= IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+	if (remote_access & CRT_NATIVE_REMOTE_READ)
+		access |= IBV_ACCESS_REMOTE_READ;
+	if (remote_access & CRT_NATIVE_REMOTE_WRITE)
+		access |= IBV_ACCESS_REMOTE_WRITE;
 	mr = calloc(1, sizeof(*mr));
 	if (mr == NULL)
 		return ENOMEM;

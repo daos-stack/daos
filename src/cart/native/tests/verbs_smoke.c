@@ -87,7 +87,8 @@ main(int argc, char **argv)
 	} while (0)
 	CHECK(ops->open(&config, &ep));
 	CHECK(ops->address(ep, &address));
-	CHECK(ops->register_memory(ep, buffer, sizeof(buffer), true, &mr, &remote));
+	CHECK(ops->register_memory(ep, buffer, sizeof(buffer),
+				   CRT_NATIVE_REMOTE_READ | CRT_NATIVE_REMOTE_WRITE, &mr, &remote));
 	CHECK(ops->post(ep, CRT_NATIVE_RECV, mr, 64, 32, NULL, 0, NULL));
 	CHECK(ops->connect(ep, &address));
 	CHECK(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 32, NULL, 0, NULL));

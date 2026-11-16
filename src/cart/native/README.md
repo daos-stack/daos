@@ -75,6 +75,15 @@ handlers or DAOS operations, and they do not validate a real verbs provider.
 registers those frames, posts receives and drives the transport. The CaRT bridge
 must supply authenticated connections, payload codecs and handler integration.
 
+`bulk.h` provides connection-bound SGL registration, endian-safe remote memory
+descriptors, export leases and bounded chunked READ/WRITE execution. A dedicated
+bulk progress owner must route its completions: do not submit bulk operations
+onto the RPC channel's exclusively owned endpoint. Canceling a transfer stops
+unsubmitted chunks and retains local registrations until accepted chunks finish.
+Releasing an exported remote key requires a peer acknowledgment or established
+remote quiescence. The CaRT adapter does not yet provide that lifecycle binding;
+a local RPC timeout must never be treated as such an acknowledgment.
+
 1. Introduce transport-neutral context, address, request, and bulk state alongside
    the current Mercury state. Convert direct HG calls outside `crt_hg.c` and
    `crt_hg_proc.c` to that interface while preserving a Mercury implementation.

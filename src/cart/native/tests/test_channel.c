@@ -39,7 +39,7 @@ capacity(struct crt_native_ep *ep)
 	return 64;
 }
 static int
-reg(struct crt_native_ep *ep, void *base, size_t size, bool remote, struct crt_native_mr **out,
+reg(struct crt_native_ep *ep, void *base, size_t size, unsigned remote, struct crt_native_mr **out,
     struct crt_native_remote_memory *desc)
 {
 	(void)ep;

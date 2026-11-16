@@ -26,7 +26,10 @@ $(BUILD)/rpc.o: rpc.c rpc.h wire.h | $(BUILD)
 $(BUILD)/channel.o: channel.c channel.h rpc.h wire.h bootstrap.h transport.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -c $< -o $@
 
-$(BUILD)/libcrt_native_verbs.a: $(BUILD)/verbs.o $(BUILD)/wire.o $(BUILD)/bootstrap.o $(BUILD)/rpc.o $(BUILD)/channel.o
+$(BUILD)/bulk.o: bulk.c bulk.h transport.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -c $< -o $@
+
+$(BUILD)/libcrt_native_verbs.a: $(BUILD)/verbs.o $(BUILD)/wire.o $(BUILD)/bootstrap.o $(BUILD)/rpc.o $(BUILD)/channel.o $(BUILD)/bulk.o
 	$(AR) rcs $@ $^
 
 $(BUILD)/test_verbs: verbs.c transport.h tests/test_verbs.c tests/fake/infiniband/verbs.h | $(BUILD)
@@ -44,12 +47,16 @@ $(BUILD)/test_rpc: rpc.c rpc.h wire.c wire.h tests/test_rpc.c | $(BUILD)
 $(BUILD)/test_channel: channel.c channel.h transport.h bootstrap.h rpc.c rpc.h wire.c wire.h tests/test_channel.c | $(BUILD)
 	$(CC) $(CFLAGS) $(WARN) channel.c rpc.c wire.c tests/test_channel.c -o $@
 
-test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/test_rpc $(BUILD)/test_channel
+$(BUILD)/test_bulk: bulk.c bulk.h transport.h tests/test_bulk.c | $(BUILD)
+	$(CC) $(CFLAGS) $(WARN) bulk.c tests/test_bulk.c -o $@
+
+test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/test_rpc $(BUILD)/test_channel $(BUILD)/test_bulk
 	$(abspath $(BUILD))/test_verbs
 	$(abspath $(BUILD))/test_wire
 	$(abspath $(BUILD))/test_bootstrap
 	$(abspath $(BUILD))/test_rpc
 	$(abspath $(BUILD))/test_channel
+	$(abspath $(BUILD))/test_bulk
 
 $(BUILD)/verbs_smoke: tests/verbs_smoke.c $(BUILD)/libcrt_native_verbs.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -D_POSIX_C_SOURCE=200809L $^ -libverbs -o $@
@@ -60,3 +67,4 @@ clean:
 	$(RM) $(BUILD)/verbs.o $(BUILD)/wire.o $(BUILD)/bootstrap.o $(BUILD)/rpc.o $(BUILD)/channel.o
 	$(RM) $(BUILD)/libcrt_native_verbs.a $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap
 	$(RM) $(BUILD)/test_rpc $(BUILD)/test_channel $(BUILD)/verbs_smoke
+	$(RM) $(BUILD)/bulk.o $(BUILD)/test_bulk

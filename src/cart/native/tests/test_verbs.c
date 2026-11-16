@@ -199,7 +199,9 @@ test_lifetime(void)
 
 	assert(ops->open(&cfg, &ep) == 0);
 	assert(ops->address(ep, &address) == 0);
-	assert(ops->register_memory(ep, buffer, sizeof(buffer), true, &mr, &remote) == 0);
+	assert(ops->register_memory(ep, buffer, sizeof(buffer),
+				    CRT_NATIVE_REMOTE_READ | CRT_NATIVE_REMOTE_WRITE, &mr,
+				    &remote) == 0);
 	assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 8, NULL, 0, NULL) == ENOTCONN);
 	/* Receives may be preposted before QP connection. */
 	assert(ops->post(ep, CRT_NATIVE_RECV, mr, 0, 8, NULL, 0, buffer) == 0);
@@ -248,7 +250,9 @@ test_success_and_open_failure(void)
 	assert(ops->open(&cfg, &ep) == 0);
 	assert(ops->address(ep, &address) == 0);
 	assert(ops->connect(ep, &address) == 0);
-	assert(ops->register_memory(ep, buffer, sizeof(buffer), true, &mr, &remote) == 0);
+	assert(ops->register_memory(ep, buffer, sizeof(buffer),
+				    CRT_NATIVE_REMOTE_READ | CRT_NATIVE_REMOTE_WRITE, &mr,
+				    &remote) == 0);
 	for (int i = CRT_NATIVE_SEND; i <= CRT_NATIVE_WRITE; i++) {
 		assert(ops->post(ep, i, mr, 0, 8, &remote, 0, buffer + i) == 0);
 		completions[tail++] = (struct ibv_wc){

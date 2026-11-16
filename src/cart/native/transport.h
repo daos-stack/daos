@@ -29,6 +29,11 @@
 struct crt_native_ep;
 struct crt_native_mr;
 
+enum crt_native_access {
+	CRT_NATIVE_REMOTE_READ  = 1,
+	CRT_NATIVE_REMOTE_WRITE = 2,
+};
+
 enum crt_native_opcode {
 	CRT_NATIVE_SEND,
 	CRT_NATIVE_RECV,
@@ -75,7 +80,7 @@ struct crt_native_ops {
 	int (*open)(const struct crt_native_config *, struct crt_native_ep **);
 	int (*address)(struct crt_native_ep *, struct crt_native_address *);
 	int (*connect)(struct crt_native_ep *, const struct crt_native_address *);
-	int (*register_memory)(struct crt_native_ep *, void *, size_t, bool,
+	int (*register_memory)(struct crt_native_ep *, void *, size_t, unsigned,
 			       struct crt_native_mr **, struct crt_native_remote_memory *);
 	int (*deregister_memory)(struct crt_native_mr *);
 	int (*post)(struct crt_native_ep *, enum crt_native_opcode, struct crt_native_mr *, size_t,

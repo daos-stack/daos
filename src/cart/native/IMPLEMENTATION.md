@@ -12,7 +12,8 @@ implemented. Unit tests of individual modules are not DAOS-provider validation.
 | 1. Endpoint exchange | Implemented, hardware-free tests pass | Versioned endian-safe hello, peer-limit negotiation, bounded fragmented socket exchange, explicit incompatibility errors |
 | 2. Eager RPC matching | Implemented, hardware-free tests pass | Bounded generational request IDs, matching, separate request/reply queues, delayed replies, cancellation and send-buffer ownership without per-RPC allocation |
 | 2a. Registered channel driver | Implemented, hardware-free full-duplex tests pass | Registered buffer pools, receive replenishment, bounded transport progress, retry under posting backpressure; shutdown drains accepted I/O before deregistration |
-| 3. Bulk/codec | Pending | Native bulk descriptors, local/remote permissions and lifetimes, CaRT payload serialization independent of HG handles |
+| 3. Native bulk engine | Implemented, hardware-free tests pass | Endian-safe descriptors, NIC-enforced read/write permissions, export leases, bounded SGL slicing, chunk submission/retry, cancellation and completion-driven release |
+| 3a. CaRT codec/bulk binding | Pending | Replace Mercury bulk handles in native RPC payloads; bind export leases to actual RPC acknowledgment/connection quiescence; preserve CaRT encode/decode/free semantics |
 | 4. CaRT bridge | Pending | Listener and endpoint cache; context/progress, dispatch and completion integration; groups, context tags, SWIM and collective compatibility |
 | 5. Cancellation/teardown | Pending | Request deadlines, exact-once completion, native connection errors, remote quiescence, callback-safe shutdown |
 | 6. Build/provider selection | Pending | Optional build, control-plane discovery, YAML `doca+rc`, explicit unsupported-build errors, no silent fallback |
