@@ -310,8 +310,8 @@ class PoolMembershipTest(IorTestBase):
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable(stop=False)
 
-        # If we call check start immediately after check enable, checker may not detect
-        # the fault. Developer is fixing this issue.
+        # If we call check start immediately after check enable, checker may not detect the fault.
+        # Developer is fixing this issue.
         time.sleep(3)
 
         dmg_command.check_start()
