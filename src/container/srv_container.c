@@ -7042,7 +7042,8 @@ put:
 
 /*
  * Check whether the specified container exists in the container service or not.
- * If yes, return the container label via the @prop.
+ * If yes, return the container label via the @prop. If the container is being
+ * destroyed, return -DER_CONT_DESTROYING.
  */
 int
 ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop)
