@@ -18,6 +18,7 @@
 #include <daos/checker.h>
 
 #include "dlck_checker_ut_mock.h"
+#include "dlck_ut.h"
 
 #define INITIAL_WARNINGS 7
 
@@ -467,23 +468,12 @@ static const struct CMUnitTest dlck_checker_macros_tests[] = {
 int
 main(int argc, char **argv)
 {
-	d_register_alt_assert(mock_assert);
-#if CMOCKA_FILTER_SUPPORTED
-	if (argc > 1) {
-		char filter[256];
-		int  rc = snprintf(filter, sizeof(filter), "*%s*", argv[1]);
+	int rc = dlck_ut_filter(argc, argv);
 
-		if (rc > 0 && (size_t)rc < sizeof(filter)) {
-			cmocka_set_test_filter(filter);
-		} else {
-			fprintf(stderr, "ERROR: Test filter '%s' cannot be applied.\n", argv[1]);
-			return 1;
-		}
+	if (rc != 0) {
+		return rc;
 	}
-#else
-	(void)argc;
-	(void)argv;
-#endif
+	d_register_alt_assert(mock_assert);
 	return cmocka_run_group_tests_name("dlck_checker_macros_ut", dlck_checker_macros_tests,
 					   NULL, NULL);
 }

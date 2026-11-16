@@ -9,10 +9,9 @@
 ## Unit Tests
 
 - Use the CMocka framework.
-- Always add command-line CMocka filtering in each test binary's `main(int argc, char **argv)`.
-  Guard filtering with `#if CMOCKA_FILTER_SUPPORTED`. When `argc > 1`, wrap `argv[1]` in `*`
-  wildcards and call `cmocka_set_test_filter()` before running tests. With no argument, run the
-  full suite.
+- Always add command-line CMocka filtering in each test binary's `main(int argc, char **argv)`
+  using `dlck_ut_filter()` from `dlck_ut.h`. Return its non-zero status on error. With no
+  argument, run the full suite.
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
 - Separate module and header-macro tests.
@@ -36,6 +35,8 @@
 
 ## Mocking Functions
 
+- Shared per-area files provide memory, stdio, ABT mutex and checker callback mocks. Each test
+  binary compiles only the mock areas it needs and enables only its required linker wraps.
 - CMocka tests control the behavior of mocks by populating their respective queues with values.
   All of these values have to be later consumed by the mocks. CMocka queues are maintained per
   mock.
@@ -61,6 +62,8 @@
 - Define helpers that register CMocka `expect_*()` expectations as macros, not functions. CMocka
   records the expectation's source location, so a function helper makes unconsumed-expectation
   diagnostics point to the helper instead of the test call site.
+- Define such a macro only when it queues multiple coupled values or conditionally queues values;
+  write single expectations and return values inline. Place it next to the mock it feeds.
 
 ## Strict Mocks
 
@@ -73,20 +76,21 @@
 ## DLCK Checker Tests
 
 - Keep checker suites at the smallest useful boundary:
-  - `dlck_checker_common_ut.c` tests `ck_common_printf()` with a lightweight `ck_vprintf` callback.
+  - `dlck_checker_common_ut.c` tests `ck_common_printf()` with the shared `mock_ck_vprintf` callback.
     Do not initialize main or worker state for this callback-dispatch contract.
 - `dlck_checker_main_ut.c` and `dlck_checker_worker_ut.c` compile the checker implementation
-  into separate binaries with shared `dlck_checker_ut_mock.c`.
-- Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for successful payload
-  allocation; use `expect_checker_d_calloc(sizeof(payload), NULL)` for failure.
-- Reset `mock_vfprintf_check_output` in per-test setup. `__wrap_vfprintf` always checks its format.;
-  set the flag to also check rendered `va_list` output.
-- From the DAOS root, build/run a debug/gcc suite with:
+  into separate binaries with the shared checker payloads and required per-area mocks.
+- Use `EXPECT_D_CALLOC(1, sizeof(payload), &payload)` for successful payload allocation; use
+  `EXPECT_D_CALLOC(1, sizeof(payload), NULL)` for failure.
+- Reset `mock_vfprintf_check_output` and `mock_ck_vprintf_check_output` in per-test setup.
+  Both mocks always check the format; set the respective flag to also check rendered output.
+- From the DAOS root, activate the Python environment and build/run a dev/gcc suite with:
 
   ```sh
-  ./utils/build/build_daos.sh --build-deps=no BUILD_TYPE=debug \
-    build/debug/gcc/src/utils/dlck/tests/<binary>
-  build/debug/gcc/src/utils/dlck/tests/<binary>
+  . ~/.venvs/daos/bin/activate
+  ./utils/build/build_daos.sh --build-deps=no BUILD_TYPE=dev CMOCKA_FILTER_SUPPORTED=1
+  LD_LIBRARY_PATH=/opt/daos/lib64/daos_srv:/opt/daos/lib64 PMEMOBJ_CONF=sds.at_create=0 \
+    ./build/dev/gcc/src/utils/dlck/tests/<binary>
   ```
 
-  - Use Python virtual environment for the `build` step.
+- Pass a fragment of a test name as the first argument to run matching tests.
