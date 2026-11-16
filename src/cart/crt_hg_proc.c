@@ -12,10 +12,11 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
+#include "native/cart_proc.h"
 
 #define CRT_PROC_NULL (NULL)
 #define CRT_PROC_TYPE_FUNC(type)                                                                   \
-	int crt_proc_##type(crt_proc_t proc, crt_proc_op_t proc_op, type *data)                    \
+	int crt_hg_proc_##type(crt_proc_t proc, crt_proc_op_t proc_op, type *data)                 \
 	{                                                                                          \
 		type *buf;                                                                         \
 		if (FREEING(proc_op))                                                              \
@@ -52,7 +53,7 @@ crt_proc_op2hg(crt_proc_op_t crt_op, hg_proc_op_t *hg_op)
 }
 
 int
-crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
+crt_hg_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 {
 	hg_proc_op_t	hg_proc_op;
 	int		rc = 0;
@@ -88,8 +89,7 @@ out:
 }
 
 int
-crt_proc_memcpy(crt_proc_t proc, crt_proc_op_t proc_op,
-		void *data, size_t data_size)
+crt_hg_proc_memcpy(crt_proc_t proc, crt_proc_op_t proc_op, void *data, size_t data_size)
 {
 	void *buf;
 
@@ -148,7 +148,7 @@ crt_proc_crt_bulk_t_deferred(struct crt_bulk *bulk)
 }
 
 int
-crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bulk)
+crt_hg_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bulk)
 {
 	struct crt_bulk *bulk = NULL;
 	hg_bulk_t        hg_bulk;
@@ -260,7 +260,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 }
 
 int
-crt_proc_d_string_t(crt_proc_t proc, crt_proc_op_t proc_op, d_string_t *data)
+crt_hg_proc_d_string_t(crt_proc_t proc, crt_proc_op_t proc_op, d_string_t *data)
 {
 	hg_return_t	hg_ret;
 
@@ -270,8 +270,7 @@ crt_proc_d_string_t(crt_proc_t proc, crt_proc_op_t proc_op, d_string_t *data)
 }
 
 int
-crt_proc_d_const_string_t(crt_proc_t proc, crt_proc_op_t proc_op,
-			  d_const_string_t *data)
+crt_hg_proc_d_const_string_t(crt_proc_t proc, crt_proc_op_t proc_op, d_const_string_t *data)
 {
 	hg_return_t	hg_ret;
 
@@ -287,8 +286,7 @@ crt_proc_uuid_t(crt_proc_t proc, crt_proc_op_t proc_op, uuid_t *data)
 }
 
 int
-crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
-		       d_rank_list_t **data)
+crt_hg_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_rank_list_t **data)
 {
 	d_rank_list_t	*rank_list;
 	uint32_t	*buf;
@@ -343,7 +341,7 @@ out:
 }
 
 int
-crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
+crt_hg_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 {
 	int rc;
 
@@ -390,7 +388,7 @@ out:
 }
 
 int
-crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
+crt_hg_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 {
 	int		i;
 	int		rc;
@@ -462,6 +460,17 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 
 	if (FREEING(proc_op))
 		D_GOTO(out, rc = 0);
+
+	if (crt_native_cart_cursor(proc) != NULL) {
+		rc = crt_proc_uint32_t(proc, proc_op, &hdr->coh_grp_ver);
+		if (rc == 0)
+			rc = crt_proc_uint32_t(proc, proc_op, &hdr->coh_tree_topo);
+		if (rc == 0)
+			rc = crt_proc_uint32_t(proc, proc_op, &hdr->coh_root);
+		if (rc == 0)
+			rc = crt_proc_uint32_t(proc, proc_op, &hdr->coh_padding);
+		return rc;
+	}
 
 	buf = hg_proc_save_ptr(proc, 4 * sizeof(*buf));
 	if (ENCODING(proc_op)) {
@@ -750,6 +759,52 @@ crt_proc_output(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	return crf->crf_proc_out(proc, rpc_priv->crp_pub.cr_output);
 }
 
+struct native_payload {
+	struct crt_rpc_priv *rpc;
+	bool                 reply;
+};
+
+static int
+native_payload_proc(crt_proc_t proc, void *arg)
+{
+	struct native_payload *payload = arg;
+	struct crt_rpc_priv   *rpc     = payload->rpc;
+	struct crt_common_hdr *hdr     = payload->reply ? &rpc->crp_reply_hdr : &rpc->crp_req_hdr;
+	crt_proc_op_t          op;
+	int                    rc = crt_proc_get_op(proc, &op);
+	if (rc != 0)
+		return rc;
+	if (op != CRT_PROC_FREE) {
+		rc = crt_proc_common_hdr(proc, hdr);
+		if (rc != 0)
+			return rc;
+		/* Never decode a peer-selected opcode using a different body schema. */
+		if (hdr->cch_opc != rpc->crp_pub.cr_opc)
+			return -DER_PROTO;
+	}
+	if (!payload->reply && (hdr->cch_flags & CRT_RPC_FLAG_COLL)) {
+		rc = crt_proc_corpc_hdr(proc, &rpc->crp_coreq_hdr);
+		if (rc != 0)
+			return rc;
+	}
+	if (payload->reply && hdr->cch_rc != 0)
+		return 0; /* error replies carry no body */
+	if (payload->reply)
+		return rpc->crp_pub.cr_output == NULL ? 0 : crt_proc_output(rpc, proc);
+	return rpc->crp_pub.cr_input == NULL ? 0 : crt_proc_input(rpc, proc);
+}
+
+int
+crt_native_cart_payload(struct crt_rpc_priv *rpc, bool reply, crt_proc_op_t op, void *buffer,
+			size_t size, crt_native_cart_bulk_cb_t bulk, void *arg, size_t *used)
+{
+	struct native_payload payload = {.rpc = rpc, .reply = reply};
+	if (rpc == NULL || rpc->crp_opc_info == NULL || rpc->crp_opc_info->coi_crf == NULL)
+		return -DER_INVAL;
+	return crt_native_cart_run(native_payload_proc, &payload, op, buffer, size, bulk, arg,
+				   used);
+}
+
 int
 crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
@@ -985,6 +1040,9 @@ crt_proc_create(crt_context_t crt_ctx, void *buf, size_t buf_size,
 int
 crt_proc_destroy(crt_proc_t proc)
 {
+	/* Native cursors are scoped, stack-owned and destroyed by run(). */
+	if (crt_native_cart_cursor(proc) != NULL)
+		return -DER_INVAL;
 	hg_proc_t	hg_proc = (hg_proc_t)proc;
 	hg_return_t	hg_ret;
 	int		rc = 0;
@@ -1001,6 +1059,8 @@ crt_proc_destroy(crt_proc_t proc)
 int
 crt_proc_reset(crt_proc_t proc, void *buf, size_t buf_size, crt_proc_op_t proc_op)
 {
+	if (crt_native_cart_cursor(proc) != NULL)
+		return -DER_INVAL;
 	hg_proc_t	hg_proc = (hg_proc_t)proc;
 	hg_return_t	hg_ret;
 	hg_proc_op_t	hg_op = 0;
@@ -1021,6 +1081,9 @@ crt_proc_reset(crt_proc_t proc, void *buf, size_t buf_size, crt_proc_op_t proc_o
 size_t
 crp_proc_get_size_used(crt_proc_t proc)
 {
+	struct crt_native_proc *native = crt_native_cart_cursor(proc);
+	if (native != NULL)
+		return native->offset;
 	hg_proc_t	hg_proc = (hg_proc_t)proc;
 	hg_size_t	hg_size;
 
