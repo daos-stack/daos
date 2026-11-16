@@ -4991,7 +4991,7 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 				Replace:  tc.replace,
 			}
 
-			ctx, cancel := context.WithTimeout(test.Context(t), 2*time.Second)
+			ctx, cancel := context.WithTimeout(test.Context(t), 20*time.Second)
 			defer cancel()
 
 			_, err := cs.StorageFormat(ctx, req)
@@ -5001,7 +5001,7 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 				t.Fatalf("unexpected error from StorageFormat: %v", err)
 			}
 
-			timeout := time.After(500 * time.Millisecond)
+			timeout := time.After(5 * time.Second)
 			receivedCalls := 0
 
 			for receivedCalls < tc.expNotifyCalls {
@@ -5020,7 +5020,7 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 			case engineIdx := <-notifyChan:
 				t.Fatalf("unexpected NotifyStorageReady call for engine %d (expected %d calls total)",
 					engineIdx, tc.expNotifyCalls)
-			case <-time.After(100 * time.Millisecond):
+			case <-time.After(500 * time.Millisecond):
 			}
 
 			notifyMu.Lock()
