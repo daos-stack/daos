@@ -12,7 +12,7 @@ from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
-from recovery_utils import (clean_mounts, run_cmd_check_result, wait_for_check_complete)
+from recovery_utils import clean_mounts, run_cmd_check_result, wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
