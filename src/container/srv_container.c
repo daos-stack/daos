@@ -1369,6 +1369,10 @@ cont_destroy_bcast_create(struct cont_svc *svc, const uuid_t cont_uuid, crt_rpc_
 
 	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_POST))
 		return -DER_NOMEM;
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_POST_NEWLDR)) {
+		rdb_resign(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term);
+		return -DER_NOMEM;
+	}
 
 	rc = ds_cont_bcast_create(dss_get_module_info()->dmi_ctx, svc, CONT_TGT_DESTROY, &rpc);
 	if (rc != 0)
@@ -1397,12 +1401,7 @@ cont_destroy_bcast_process_rc(struct cont_svc *svc, const uuid_t cont_uuid, crt_
 	rc = out->tdo_rc;
 	if (rc == -DER_BUSY) {
 		D_INFO(DF_CONT ": some target busy\n", DP_CONT(svc->cs_pool_uuid, cont_uuid));
-		/*
-		 * Must return an error that ds_pool_svc_ops_save considers
-		 * retryable. Otherwise, when it is retried, this container
-		 * destroy operation would always get its result from svc_ops
-		 * without being executed.
-		 */
+		/* Return a retryable error, for this is a retryable condition. */
 		rc = -DER_TIMEDOUT;
 	} else if (rc != 0) {
 		DL_ERROR(rc, DF_CONT ": failed to destroy targets",
@@ -1911,12 +1910,6 @@ out:
 /* Max number of CONT_TGT_DESTROY bcasts in flight. */
 #define CONT_DESTROYER_INFLIGHT_MAX 16
 
-static inline struct cont_pool_metrics *
-cont_destroyer_metrics(struct cont_svc *svc)
-{
-	return svc->cs_pool->sp_metrics[DAOS_CONT_MODULE];
-}
-
 static void
 cont_destroyer_task_put(struct cont_destroyer_task *task)
 {
@@ -1929,8 +1922,10 @@ cont_destroyer_task_put(struct cont_destroyer_task *task)
 static void
 cont_destroyer_task_remove(struct cont_destroyer_task *task)
 {
+	struct cont_pool_metrics *metrics = task->csdt_svc->cs_pool->sp_metrics[DAOS_CONT_MODULE];
+
 	d_list_del_init(&task->csdt_link);
-	d_tm_dec_gauge(cont_destroyer_metrics(task->csdt_svc)->destroyer_tasks, 1);
+	d_tm_dec_gauge(metrics->destroyer_tasks, 1);
 	if (task->csdt_rpc != NULL) {
 		crt_req_decref(task->csdt_rpc);
 		task->csdt_rpc = NULL;
@@ -2013,7 +2008,7 @@ cont_destroyer_bcast_cb(const struct crt_cb_info *info)
 }
 
 static int
-cont_destroy_bcast_send(struct cont_svc *svc, struct cont_destroyer_task *task)
+cont_destroyer_bcast_send(struct cont_svc *svc, struct cont_destroyer_task *task)
 {
 	crt_rpc_t *rpc;
 	int        rc;
@@ -2078,7 +2073,7 @@ cont_destroyer_ult(void *arg)
 			destroyer->csd_inflight++;
 			ABT_mutex_unlock(destroyer->csd_mutex);
 
-			rc = cont_destroy_bcast_send(svc, task);
+			rc = cont_destroyer_bcast_send(svc, task);
 
 			ABT_mutex_lock(destroyer->csd_mutex);
 			if (rc != 0) {
@@ -2125,6 +2120,7 @@ static int
 cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
 {
 	struct cont_destroyer      *destroyer = &svc->cs_destroyer;
+	struct cont_pool_metrics   *metrics   = svc->cs_pool->sp_metrics[DAOS_CONT_MODULE];
 	struct cont_destroyer_task *task;
 	uint32_t                    attempts;
 	int                         rc = 0;
@@ -2163,7 +2159,7 @@ cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
 	task->csdt_ref     = 1; /* the list's */
 	task->csdt_backoff = CONT_DESTROYER_BACKOFF_MIN;
 	cont_destroyer_task_enqueue(destroyer, task);
-	d_tm_inc_gauge(cont_destroyer_metrics(svc)->destroyer_tasks, 1);
+	d_tm_inc_gauge(metrics->destroyer_tasks, 1);
 	ABT_cond_broadcast(destroyer->csd_cond);
 
 found:
@@ -2452,8 +2448,9 @@ retry:
 		ABT_rwlock_unlock(svc->cs_lock);
 		rdb_tx_end(&tx);
 		if (rc != 0) {
-			DL_CDEBUG(rc == -DER_NONEXIST, DB_MD, DLOG_ERR, rc,
-				  DF_CONT " cont_lookup failed", DP_CONT(pool_uuid, cont_uuid));
+			DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING, DB_MD,
+				  DLOG_ERR, rc, DF_CONT " cont_lookup failed",
+				  DP_CONT(pool_uuid, cont_uuid));
 			D_GOTO(out_put, rc);
 		}
 		cont_put(cont);
@@ -2693,7 +2690,7 @@ cont_agg_eph_store(struct cont_svc *svc, uuid_t cont_uuid, uint64_t ec_agg_eph, 
 	ABT_rwlock_wrlock(svc->cs_lock);
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0) {
-		DL_CDEBUG(rc != 0 && rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_CONT_DESTROYING, DLOG_ERR, DB_MD, rc,
 			  DF_CONT ": Failed to look container",
 			  DP_CONT(svc->cs_pool_uuid, cont_uuid));
 		D_GOTO(out_lock, rc);
@@ -2869,7 +2866,7 @@ cont_agg_eph_sync(struct ds_pool *pool, struct cont_svc *svc)
 			rc = cont_agg_eph_store(svc, eph_ldr->cte_cont_uuid, min_ec_agg_eph,
 						&eph_ldr->cte_rdb_ec_agg_eph);
 			if (rc) {
-				if (rc == -DER_NONEXIST) {
+				if (rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING) {
 					DL_INFO(rc, DF_CONT " container skipped",
 						DP_CONT(svc->cs_pool_uuid, eph_ldr->cte_cont_uuid));
 					continue;
