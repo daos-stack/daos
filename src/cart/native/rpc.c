@@ -7,11 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum state { FREE, HANDLING, QUEUED, IN_FLIGHT, WAIT_REPLY };
+enum state { FREE, HANDLING, QUEUED, IN_FLIGHT, WAIT_REPLY, FINISHING };
 struct entry {
 	enum state        state;
 	unsigned          next;
 	uint64_t          id;
+	uint64_t          deadline;
+	unsigned          heap_index;
 	uint32_t          generation, opcode, status;
 	size_t            size, response_size;
 	int               error;
@@ -34,6 +36,9 @@ struct crt_native_rpc {
 	crt_native_handler_t handler;
 	void                *handler_arg;
 	bool                 callback, encoding;
+	unsigned            *deadlines;
+	unsigned             deadline_count;
+	uint64_t             now_ns;
 };
 
 static void
@@ -69,6 +74,60 @@ slot_of(struct crt_native_rpc *rpc, uint64_t id, unsigned *slot)
 	return 0;
 }
 
+static bool
+earlier(struct crt_native_rpc *rpc, unsigned a, unsigned b)
+{
+	struct entry *x = &rpc->requests[rpc->deadlines[a]], *y = &rpc->requests[rpc->deadlines[b]];
+	return x->deadline < y->deadline || (x->deadline == y->deadline && x->id < y->id);
+}
+
+static void
+swap_deadlines(struct crt_native_rpc *rpc, unsigned a, unsigned b)
+{
+	unsigned slot                               = rpc->deadlines[a];
+	rpc->deadlines[a]                           = rpc->deadlines[b];
+	rpc->deadlines[b]                           = slot;
+	rpc->requests[rpc->deadlines[a]].heap_index = a;
+	rpc->requests[rpc->deadlines[b]].heap_index = b;
+}
+
+static void
+repair_deadline(struct crt_native_rpc *rpc, unsigned at)
+{
+	while (at != 0 && earlier(rpc, at, (at - 1) / 2)) {
+		unsigned parent = (at - 1) / 2;
+		swap_deadlines(rpc, at, parent);
+		at = parent;
+	}
+	for (;;) {
+		unsigned child = at * 2 + 1;
+		if (child >= rpc->deadline_count)
+			break;
+		if (child + 1 < rpc->deadline_count && earlier(rpc, child + 1, child))
+			child++;
+		if (!earlier(rpc, child, at))
+			break;
+		swap_deadlines(rpc, at, child);
+		at = child;
+	}
+}
+
+static void
+remove_deadline(struct crt_native_rpc *rpc, struct entry *e)
+{
+	unsigned index = e->heap_index;
+	e->deadline    = 0;
+	e->heap_index  = rpc->depth;
+	if (index == rpc->depth)
+		return;
+	unsigned last = rpc->deadlines[--rpc->deadline_count];
+	if (index == rpc->deadline_count)
+		return;
+	rpc->deadlines[index]          = last;
+	rpc->requests[last].heap_index = index;
+	repair_deadline(rpc, index);
+}
+
 static void
 finish_payload(struct crt_native_rpc *rpc, unsigned slot, const void *response)
 {
@@ -78,6 +137,8 @@ finish_payload(struct crt_native_rpc *rpc, unsigned slot, const void *response)
 	int               error  = e->error;
 	uint32_t          status = e->status;
 	size_t            size   = error ? 0 : e->response_size;
+	remove_deadline(rpc, e);
+	e->state = FINISHING;
 
 	/* Keep this slot unavailable until its callback returns, so a reentrant
 	 * call cannot overwrite the borrowed response while it is being consumed.
@@ -112,12 +173,14 @@ crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t ha
 	rpc = calloc(1, sizeof(*rpc));
 	if (rpc == NULL)
 		return ENOMEM;
-	rpc->requests = calloc(depth, sizeof(*rpc->requests));
-	rpc->replies  = calloc(depth, sizeof(*rpc->replies));
-	rpc->controls = calloc(depth, sizeof(*rpc->controls));
-	rpc->buffers  = calloc(4 * depth, frame_size);
+	rpc->requests  = calloc(depth, sizeof(*rpc->requests));
+	rpc->replies   = calloc(depth, sizeof(*rpc->replies));
+	rpc->controls  = calloc(depth, sizeof(*rpc->controls));
+	rpc->buffers   = calloc(4 * depth, frame_size);
+	rpc->deadlines = calloc(depth, sizeof(*rpc->deadlines));
 	if (rpc->requests == NULL || rpc->replies == NULL || rpc->controls == NULL ||
-	    rpc->buffers == NULL) {
+	    rpc->buffers == NULL || rpc->deadlines == NULL) {
+		free(rpc->deadlines);
 		free(rpc->controls);
 		free(rpc->buffers);
 		free(rpc->replies);
@@ -133,12 +196,13 @@ crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t ha
 	rpc->reply_head = rpc->reply_tail = depth;
 	rpc->control_head = rpc->control_tail = depth;
 	for (unsigned i = 0; i < depth; i++) {
-		rpc->requests[i].next     = i + 1;
-		rpc->requests[i].frame    = rpc->buffers + i * frame_size;
-		rpc->requests[i].response = rpc->buffers + (depth + i) * frame_size;
-		rpc->replies[i].frame     = rpc->buffers + (2 * depth + i) * frame_size;
-		rpc->controls[i].frame    = rpc->buffers + (3 * depth + i) * frame_size;
-		rpc->controls[i].next     = i + 1;
+		rpc->requests[i].next       = i + 1;
+		rpc->requests[i].heap_index = depth;
+		rpc->requests[i].frame      = rpc->buffers + i * frame_size;
+		rpc->requests[i].response   = rpc->buffers + (depth + i) * frame_size;
+		rpc->replies[i].frame       = rpc->buffers + (2 * depth + i) * frame_size;
+		rpc->controls[i].frame      = rpc->buffers + (3 * depth + i) * frame_size;
+		rpc->controls[i].next       = i + 1;
 	}
 	*output = rpc;
 	return 0;
@@ -351,7 +415,15 @@ crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 	slot = dequeue(rpc->replies, &rpc->reply_head, &rpc->reply_tail, rpc->depth);
 	if (slot == rpc->depth) {
 		reply = false;
-		slot  = dequeue(rpc->requests, &rpc->request_head, &rpc->request_tail, rpc->depth);
+		/* expire() is bounded. Do not admit another already-due request
+		 * while remaining expirations await the next progress invocation.
+		 */
+		if (rpc->request_head != rpc->depth) {
+			struct entry *head = &rpc->requests[rpc->request_head];
+			if (head->deadline && head->deadline <= rpc->now_ns)
+				return EAGAIN;
+		}
+		slot = dequeue(rpc->requests, &rpc->request_head, &rpc->request_tail, rpc->depth);
 	}
 	if (slot == rpc->depth)
 		return EAGAIN;
@@ -361,6 +433,24 @@ crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 	*tx = (struct crt_native_tx){
 	    .token = {.id = e->id, .reply = reply}, .data = e->frame, .length = e->size};
 	return 0;
+}
+
+int
+crt_native_rpc_tx_status(struct crt_native_rpc *rpc, struct crt_native_token token)
+{
+	unsigned slot;
+	if (rpc == NULL || slot_of(rpc, token.id, &slot) != 0)
+		return EINVAL;
+	struct entry *e = token.control ? &rpc->controls[slot]
+			  : token.reply ? &rpc->replies[slot]
+					: &rpc->requests[slot];
+	if (e->state != IN_FLIGHT || e->id != token.id)
+		return ENOENT;
+	if (token.control || token.reply)
+		return 0;
+	if (e->error)
+		return e->error;
+	return e->deadline && e->deadline <= rpc->now_ns ? ETIMEDOUT : 0;
 }
 
 int
@@ -477,6 +567,7 @@ crt_native_rpc_cancel(struct crt_native_rpc *rpc, uint64_t id, int error)
 		return ENOENT;
 	if (rpc->callback || rpc->encoding)
 		return EBUSY;
+	remove_deadline(rpc, e);
 	if (e->error == 0)
 		e->error = error;
 	if (e->state == IN_FLIGHT)
@@ -495,6 +586,56 @@ crt_native_rpc_cancel(struct crt_native_rpc *rpc, uint64_t id, int error)
 			rpc->request_tail = previous;
 	}
 	finish(rpc, slot);
+	return 0;
+}
+
+int
+crt_native_rpc_set_deadline(struct crt_native_rpc *rpc, uint64_t id, uint64_t deadline)
+{
+	unsigned slot;
+	if (rpc == NULL || slot_of(rpc, id, &slot) != 0)
+		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
+	struct entry *e = &rpc->requests[slot];
+	if (e->id != id || (e->state != QUEUED && e->state != IN_FLIGHT && e->state != WAIT_REPLY))
+		return ENOENT;
+	if (e->error)
+		return EALREADY;
+	remove_deadline(rpc, e);
+	if (deadline == 0)
+		return 0;
+	e->deadline                           = deadline;
+	e->heap_index                         = rpc->deadline_count;
+	rpc->deadlines[rpc->deadline_count++] = slot;
+	repair_deadline(rpc, e->heap_index);
+	return 0;
+}
+
+uint64_t
+crt_native_rpc_next_deadline(const struct crt_native_rpc *rpc)
+{
+	return rpc == NULL || rpc->deadline_count == 0 ? 0
+						       : rpc->requests[rpc->deadlines[0]].deadline;
+}
+
+int
+crt_native_rpc_expire(struct crt_native_rpc *rpc, uint64_t now, unsigned *expired)
+{
+	if (rpc == NULL || expired == NULL)
+		return EINVAL;
+	*expired = 0;
+	if (rpc->callback || rpc->encoding)
+		return EBUSY;
+	if (now > rpc->now_ns)
+		rpc->now_ns = now;
+	while (*expired < 32 && rpc->deadline_count && crt_native_rpc_next_deadline(rpc) <= now) {
+		uint64_t id = rpc->requests[rpc->deadlines[0]].id;
+		int      rc = crt_native_rpc_cancel(rpc, id, ETIMEDOUT);
+		if (rc != 0)
+			return rc;
+		(*expired)++;
+	}
 	return 0;
 }
 
@@ -538,6 +679,7 @@ crt_native_rpc_destroy(struct crt_native_rpc *rpc)
 	    rpc->callback || rpc->encoding)
 		return EBUSY;
 	free(rpc->buffers);
+	free(rpc->deadlines);
 	free(rpc->controls);
 	free(rpc->replies);
 	free(rpc->requests);

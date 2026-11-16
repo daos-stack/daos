@@ -20,7 +20,8 @@ implemented. Unit tests of individual modules are not DAOS-provider validation.
 | 3e. CaRT bulk API binding | Implemented source and adapter tests | Concrete decoded crt_bulk wrappers, bounded registration cache, worker submission/release queues, native GET/PUT routing, completion-driven references, abort routing and deadline checks; context must call binding progress |
 | 3f. CaRT RPC/runtime lifecycle binding | Pending | Instantiate peer channels/sessions/bindings; drive their progress; acquire/release RX leases in actual CaRT dispatch/destruction; HLC/routing/deadline validation before dispatch; handle forwarded/bound bulk descriptors |
 | 4. CaRT bridge | Pending | Listener and endpoint cache; context/progress, dispatch and completion integration; groups, context tags, SWIM and collective compatibility |
-| 5. Cancellation/teardown | Partially implemented | Bulk cancellation, deadline checks, DMA drain and remote quiescence implemented; RPC deadlines and CaRT connection-wide cancellation/completion integration remain |
+| 5a. Native deadlines and cancellation | Implemented, portable tests pass | Bulk deadline/cancel with accepted-DMA drain; preallocated RPC deadline heap; bounded expiration; no posting expired queued/retry frames; exact-once completion waits for SEND CQE |
+| 5b. CaRT cancellation/teardown integration | Pending | Map CaRT deadlines and aborts to native calls; combine connection failures and request tracking with the CaRT completion path; drain peers/contexts callback-safely |
 | 6. Build/provider selection | Pending | Optional build, control-plane discovery, YAML `doca+rc`, explicit unsupported-build errors, no silent fallback |
 | 7. End-to-end validation | Pending, user will run hardware tests | Linux compile/link, two-node RPC and DAOS functional/failure tests; RPC-rate and CPU comparisons |
 

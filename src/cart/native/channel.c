@@ -2,12 +2,16 @@
  * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
 #include "channel.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
 #include <limits.h>
+#include <time.h>
 
 enum io_state { IDLE, POSTED, HELD, PINNED };
 struct channel_io {
@@ -221,6 +225,18 @@ crt_native_channel_queue_release(struct crt_native_channel *c, uint64_t id)
 }
 
 int
+crt_native_channel_set_deadline(struct crt_native_channel *c, uint64_t id, uint64_t deadline)
+{
+	return c == NULL ? EINVAL : crt_native_rpc_set_deadline(c->rpc, id, deadline);
+}
+
+uint64_t
+crt_native_channel_next_deadline(const struct crt_native_channel *c)
+{
+	return c == NULL ? 0 : crt_native_rpc_next_deadline(c->rpc);
+}
+
+int
 crt_native_channel_retain(struct crt_native_channel *c, const void *view, size_t size,
 			  struct crt_native_rx_lease *lease)
 {
@@ -321,6 +337,15 @@ send_queued(struct crt_native_channel *c)
 				return rc;
 			c->has_waiting = true;
 		}
+		rc = crt_native_rpc_tx_status(c->rpc, c->waiting.token);
+		if (rc != 0) {
+			int completion_rc =
+			    crt_native_rpc_tx_complete(c->rpc, c->waiting.token, rc);
+			c->has_waiting = false;
+			if (completion_rc != 0)
+				return completion_rc;
+			continue;
+		}
 		rc = c->ops->post(c->ep, CRT_NATIVE_SEND, c->tx_mr,
 				  (const uint8_t *)c->waiting.data - c->tx_buffer,
 				  c->waiting.length, NULL, 0, io);
@@ -348,7 +373,20 @@ crt_native_channel_progress(struct crt_native_channel *c, unsigned *completed)
 		return EINVAL;
 	*completed = 0;
 	c->running = true;
-	rc         = c->ops->progress(c->ep, batch, 32, &count);
+	if (c->error == 0 && crt_native_rpc_next_deadline(c->rpc) != 0) {
+		struct timespec now;
+		unsigned        expired;
+		if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
+			stop(c, EIO);
+		else {
+			rc = crt_native_rpc_expire(
+			    c->rpc, (uint64_t)now.tv_sec * UINT64_C(1000000000) + now.tv_nsec,
+			    &expired);
+			if (rc != 0)
+				stop(c, rc);
+		}
+	}
+	rc = c->ops->progress(c->ep, batch, 32, &count);
 	if (rc != 0)
 		stop(c, rc);
 	/* Process TX completions first to release reply records before RX frames

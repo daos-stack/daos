@@ -57,6 +57,7 @@ pipeline(void)
 		for (unsigned i = 0; i < 4; i++) {
 			assert(crt_native_rpc_call(a, 17, "hello", 5, done, &results[i], &ids[i]) ==
 			       0);
+			assert(crt_native_rpc_set_deadline(a, ids[i], 100 + i) == 0);
 			assert(crt_native_rpc_next_tx(a, &requests[i]) == 0);
 		}
 		assert(crt_native_rpc_call(a, 17, NULL, 0, done, &results[0], &id) == EAGAIN);
@@ -85,6 +86,7 @@ pipeline(void)
 		}
 		if (round != 0)
 			assert(crt_native_rpc_receive(a, stale, stale_size) == 0);
+		assert(crt_native_rpc_next_deadline(a) == 0);
 	}
 	assert(handled == 4096);
 	assert(crt_native_rpc_destroy(a) == 0);
@@ -180,9 +182,86 @@ release_queue(void)
 	assert(crt_native_rpc_destroy(peer) == 0);
 }
 
+static void
+deadlines(void)
+{
+	struct crt_native_rpc *rpc;
+	struct result          results[128] = {0};
+	uint64_t               ids[128], times[128];
+	unsigned               handled = 0, expired;
+	assert(crt_native_rpc_create(128, 64, echo, &handled, &rpc) == 0);
+	for (unsigned i = 0; i < 128; i++) {
+		assert(crt_native_rpc_call(rpc, 17, NULL, 0, done, &results[i], &ids[i]) == 0);
+		times[i] = 1000 + (i * 53) % 128;
+		assert(crt_native_rpc_set_deadline(rpc, ids[i], times[i]) == 0);
+	}
+	for (unsigned i = 0; i < 128; i++) {
+		if (i % 3 == 0)
+			times[i] += 5000;
+		if (i % 5 == 0)
+			times[i] = 0;
+		if (i % 7 == 0)
+			times[i] = 100 + i;
+		assert(crt_native_rpc_set_deadline(rpc, ids[i], times[i]) == 0);
+	}
+	unsigned total = 0;
+	while (crt_native_rpc_next_deadline(rpc) && crt_native_rpc_next_deadline(rpc) <= 2000) {
+		assert(crt_native_rpc_expire(rpc, 2000, &expired) == 0 && expired > 0 &&
+		       expired <= 32);
+		total += expired;
+	}
+	unsigned expected = 0;
+	for (unsigned i = 0; i < 128; i++) {
+		if (times[i] && times[i] <= 2000) {
+			expected++;
+			assert(results[i].count == 1 && results[i].error == ETIMEDOUT);
+			assert(crt_native_rpc_set_deadline(rpc, ids[i], 1) == ENOENT);
+		} else {
+			assert(results[i].count == 0);
+			assert(crt_native_rpc_set_deadline(rpc, ids[i], 0) == 0);
+		}
+	}
+	assert(total == expected && crt_native_rpc_next_deadline(rpc) == 0);
+	/* More expired requests than one tick's budget must not leak into TX. */
+	for (unsigned i = 0; i < 128; i++) {
+		if (results[i].count == 0)
+			assert(crt_native_rpc_set_deadline(rpc, ids[i], 3000) == 0);
+	}
+	assert(crt_native_rpc_expire(rpc, 3000, &expired) == 0 && expired <= 32);
+	struct crt_native_tx blocked;
+	assert(crt_native_rpc_next_tx(rpc, &blocked) == EAGAIN);
+	assert(crt_native_rpc_fail(rpc, ECANCELED) == 0);
+	for (unsigned i = 0; i < 128; i++)
+		assert(results[i].count == 1);
+	assert(crt_native_rpc_destroy(rpc) == 0);
+
+	struct result        result = {0};
+	struct crt_native_tx tx;
+	uint64_t             id;
+	assert(crt_native_rpc_create(1, 64, echo, &handled, &rpc) == 0);
+	assert(crt_native_rpc_call(rpc, 17, NULL, 0, done, &result, &id) == 0);
+	assert(crt_native_rpc_next_tx(rpc, &tx) == 0);
+	assert(crt_native_rpc_set_deadline(rpc, id, 10) == 0);
+	assert(crt_native_rpc_expire(rpc, 9, &expired) == 0 && expired == 0);
+	assert(crt_native_rpc_expire(rpc, 10, &expired) == 0 && expired == 1);
+	assert(crt_native_rpc_next_deadline(rpc) == 0 && result.count == 0);
+	assert(crt_native_rpc_set_deadline(rpc, id, 20) == EALREADY);
+	assert(crt_native_rpc_destroy(rpc) == EBUSY);
+	assert(crt_native_rpc_tx_complete(rpc, tx.token, 0) == 0);
+	assert(result.count == 1 && result.error == ETIMEDOUT);
+	assert(crt_native_rpc_call(rpc, 17, NULL, 0, done, &result, &id) == 0);
+	assert(crt_native_rpc_next_tx(rpc, &tx) == 0);
+	assert(crt_native_rpc_tx_complete(rpc, tx.token, 0) == 0);
+	assert(crt_native_rpc_set_deadline(rpc, id, 20) == 0);
+	assert(crt_native_rpc_expire(rpc, 20, &expired) == 0 && expired == 1);
+	assert(result.count == 2 && result.error == ETIMEDOUT);
+	assert(crt_native_rpc_destroy(rpc) == 0);
+}
+
 int
 main(void)
 {
+	deadlines();
 	release_queue();
 	pipeline();
 	cancellation();

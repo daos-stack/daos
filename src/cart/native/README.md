@@ -229,6 +229,21 @@ the listener/context/dispatch integration and full Linux CaRT validation.
 
 ## Remaining integration work
 
+Native RPC deadlines use absolute local `CLOCK_MONOTONIC` nanoseconds through
+`crt_native_channel_set_deadline()`. A preallocated min-heap gives constant-time
+next-deadline lookup and logarithmic insert/update/removal. Progress expires up
+to 32 calls per tick without scanning every request. Remaining already-due calls
+cannot enter TX while waiting for the next tick; control ACKs and replies still
+make progress. Clock reads are skipped when no deadlines are armed.
+
+A driver-owned frame whose post returned EAGAIN is checked before retrying: if
+it has timed out/canceled, completion is synthesized without posting it. Already
+accepted SENDs retain their frames and delay the callback until their CQEs,
+including when a reply arrived early. Successful responses, cancellation and
+session failure remove heap entries before callbacks/reuse. The CaRT context
+adapter still needs to convert CaRT deadlines into this local clock domain and
+connect its request-tracking/completion path; the private heap is not that bridge.
+
 1. Introduce transport-neutral context, address, request, and bulk state alongside
    the current Mercury state. Convert direct HG calls outside `crt_hg.c` and
    `crt_hg_proc.c` to that interface while preserving a Mercury implementation.

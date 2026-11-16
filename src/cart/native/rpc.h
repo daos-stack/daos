@@ -77,10 +77,25 @@ int
 crt_native_rpc_next_tx(struct crt_native_rpc *, struct crt_native_tx *);
 int
 crt_native_rpc_tx_complete(struct crt_native_rpc *, struct crt_native_token, int error);
+/* Driver-owned but not yet accepted frames: check before retrying a rejected
+ * post. A nonzero status must be passed to tx_complete without posting/DMA.
+ */
+int
+crt_native_rpc_tx_status(struct crt_native_rpc *, struct crt_native_token);
 int
 crt_native_rpc_receive(struct crt_native_rpc *, const void *, size_t);
 int
 crt_native_rpc_cancel(struct crt_native_rpc *, uint64_t id, int error);
+/* Absolute CLOCK_MONOTONIC nanoseconds, local only; zero disables a deadline.
+ * expire processes at most 32 deadlines and uses the normal cancellation/DMA
+ * ownership path. It never completes an accepted SEND before its CQE.
+ */
+int
+crt_native_rpc_set_deadline(struct crt_native_rpc *, uint64_t id, uint64_t deadline_ns);
+uint64_t
+crt_native_rpc_next_deadline(const struct crt_native_rpc *);
+int
+crt_native_rpc_expire(struct crt_native_rpc *, uint64_t now_ns, unsigned *expired);
 /* Fail all calls; accepted send buffers stay pinned until tx_complete(). */
 int
 crt_native_rpc_fail(struct crt_native_rpc *, int error);

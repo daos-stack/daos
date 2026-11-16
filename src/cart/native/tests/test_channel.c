@@ -307,6 +307,21 @@ main(void)
 		assert(ra.done == target && rb.done == target && ra.failed == 0 && rb.failed == 0);
 	}
 	assert(handled == 8192);
+	struct result timeout = {0};
+	assert(crt_native_channel_call(ca, 17, "hello", 5, done, &timeout, &id) == 0);
+	assert(crt_native_channel_set_deadline(ca, id, 1) == 0);
+	assert(crt_native_channel_next_deadline(ca) == 1);
+	assert(crt_native_channel_progress(ca, &completed) == 0);
+	assert(timeout.done == 1 && timeout.failed == 1 && handled == 8192);
+	assert(crt_native_channel_next_deadline(ca) == 0);
+	struct result pending_timeout = {0};
+	a.send_block                  = 1;
+	assert(crt_native_channel_call(ca, 17, "hello", 5, done, &pending_timeout, &id) == 0);
+	assert(crt_native_channel_set_deadline(ca, id, UINT64_MAX) == 0);
+	assert(crt_native_channel_progress(ca, &completed) == 0 && pending_timeout.done == 0);
+	assert(crt_native_channel_set_deadline(ca, id, 1) == 0);
+	assert(crt_native_channel_progress(ca, &completed) == 0);
+	assert(pending_timeout.done == 1 && pending_timeout.failed == 1 && handled == 8192);
 	/* Shutdown an engine-owned frame which has not yet been accepted by the
 	 * transport. Its callback must complete without waiting for a nonexistent CQE.
 	 */
