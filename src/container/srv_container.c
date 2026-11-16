@@ -242,6 +242,8 @@ static int cont_svc_eph_track_leader_start(struct cont_svc *svc);
 static void cont_svc_eph_track_leader_stop(struct cont_svc *svc);
 static int
 cont_destroyer_start(struct cont_svc *svc);
+static bool
+cont_destroyer_started(struct cont_svc *svc);
 static void
 cont_destroyer_stop(struct cont_svc *svc);
 
@@ -259,10 +261,12 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	}
 	D_ASSERT(svc->cs_pool != NULL);
 
-	rc = cont_destroyer_start(svc);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID ": start cont destroyer failed", DP_UUID(svc->cs_pool_uuid));
-		goto err_pool;
+	if (!ds_pool_restricted(svc->cs_pool, false)) {
+		rc = cont_destroyer_start(svc);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": start cont destroyer failed", DP_UUID(svc->cs_pool_uuid));
+			goto err_pool;
+		}
 	}
 
 	rc = cont_svc_eph_track_leader_start(svc);
@@ -275,7 +279,8 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	return 0;
 
 err_destroyer:
-	cont_destroyer_stop(svc);
+	if (cont_destroyer_started(svc))
+		cont_destroyer_stop(svc);
 err_pool:
 	ds_pool_put(svc->cs_pool);
 	svc->cs_pool = NULL;
@@ -287,7 +292,8 @@ void
 ds_cont_svc_step_down(struct cont_svc *svc)
 {
 	cont_svc_eph_track_leader_stop(svc);
-	cont_destroyer_stop(svc);
+	if (cont_destroyer_started(svc))
+		cont_destroyer_stop(svc);
 	D_ASSERT(svc->cs_pool != NULL);
 	ds_pool_put(svc->cs_pool);
 	svc->cs_pool = NULL;
@@ -2112,7 +2118,8 @@ cont_destroyer_ult(void *arg)
  * Queue a destroy task for cont_uuid (if no existing task for the same UUID).
  * If wait is true, block until a new attempt of the task completes and return
  * its result; otherwise return immediately. A failed attempt does not remove
- * the task: the destroyer keeps retrying it in the background.
+ * the task: the destroyer keeps retrying it in the background. If the destroyer
+ * is not started, return -DER_CONT_DESTROYING.
  */
 static int
 cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
@@ -2123,7 +2130,23 @@ cont_destroyer_request(struct cont_svc *svc, uuid_t cont_uuid, bool wait)
 	int                         rc = 0;
 
 	ABT_mutex_lock(destroyer->csd_mutex);
-	D_ASSERT(!destroyer->csd_stop);
+
+	if (destroyer->csd_stop) {
+		/*
+		 * Actually, we should never reach here with the current PS
+		 * leader code, which drains all leader references before
+		 * stopping the destroyer.
+		 */
+		rc = -DER_NOTLEADER;
+		goto out;
+	}
+
+	if (destroyer->csd_ult == ABT_THREAD_NULL) {
+		D_DEBUG(DB_MD, DF_CONT ": destroyer not started\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid));
+		rc = -DER_CONT_DESTROYING;
+		goto out;
+	}
 
 	task = cont_destroyer_task_lookup(destroyer, cont_uuid);
 	if (task != NULL)
@@ -2238,6 +2261,8 @@ cont_destroyer_start(struct cont_svc *svc)
 	struct cont_destroyer_iter_args args = {0};
 	int                             rc;
 
+	D_DEBUG(DB_MD, DF_UUID ": starting destroyer\n", DP_UUID(svc->cs_pool_uuid));
+
 	ABT_mutex_lock(destroyer->csd_mutex);
 	D_ASSERT(!destroyer->csd_stop);
 	D_ASSERT(d_list_empty(&destroyer->csd_idle));
@@ -2282,12 +2307,27 @@ err_ult:
 	return rc;
 }
 
+static bool
+cont_destroyer_started(struct cont_svc *svc)
+{
+	struct cont_destroyer *destroyer = &svc->cs_destroyer;
+	bool started;
+
+	ABT_mutex_lock(destroyer->csd_mutex);
+	started = (destroyer->csd_ult != ABT_THREAD_NULL);
+	ABT_mutex_unlock(destroyer->csd_mutex);
+	return started;
+}
+
 static void
 cont_destroyer_stop(struct cont_svc *svc)
 {
 	struct cont_destroyer *destroyer = &svc->cs_destroyer;
 
+	D_DEBUG(DB_MD, DF_UUID ": stopping destroyer\n", DP_UUID(svc->cs_pool_uuid));
+
 	ABT_mutex_lock(destroyer->csd_mutex);
+	D_ASSERT(destroyer->csd_ult != ABT_THREAD_NULL);
 	destroyer->csd_stop = true;
 	ABT_cond_broadcast(destroyer->csd_cond);
 	ABT_mutex_unlock(destroyer->csd_mutex);
