@@ -786,12 +786,11 @@ to mount a snapshot that does not exist.
 A snapshot is always mounted read-only, as if `--read-only` had been given, and any attempt to
 modify it fails. The live container can be mounted at the same time on another mount point.
 
-Both interception libraries, `libioil` and `libpil4dfs`, work with a snapshot mount and read the
-data of the snapshot, not the live data of the container. DFuse gives them the epoch of the
-snapshot, so one process can use a snapshot mount and a mount of the live container, which share
-the same container, together. The interception libraries and DFuse have to come from the same DAOS
-version, otherwise the ioctl protocol versions differ and the interception libraries do not
-intercept the file.
+DFuse gives the interception libraries, `libioil` and `libpil4dfs`, the epoch of the snapshot, so
+that they read the data of the snapshot and not the live data of the container, and so that one
+process can use a snapshot mount and a mount of the live container, which share the same container,
+together. The interception libraries and DFuse have to come from the same DAOS version, otherwise
+the ioctl protocol versions differ and the interception libraries do not intercept the file.
 
 Only a whole mount can be a snapshot, there is no `.snapshot` directory in the live container.
 Unmount a snapshot before destroying it, the behavior of a mounted snapshot that is destroyed is

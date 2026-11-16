@@ -77,8 +77,10 @@ class DfuseSnapshot(TestWithServers):
         engaged = None
         if il_lib:
             lib_path = os.path.join(self.prefix, 'lib64', il_lib)
-            env = f'export LD_PRELOAD={lib_path}; '
-            report_env = env + 'export D_IL_REPORT=1; export D_IL_NO_BYPASS=1; '
+            # D_IL_NO_BYPASS makes libpil4dfs intercept every application, by default it skips
+            # many commands, such as ls, touch, rm, mv and truncate used below
+            env = f'export LD_PRELOAD={lib_path}; export D_IL_NO_BYPASS=1; '
+            report_env = env + 'export D_IL_REPORT=1; '
             engaged = '[libioil] Performed' if il_lib == 'libioil.so' else 'interception ON'
 
         # The interception libraries only intercept when the kernel caches are off
@@ -92,10 +94,10 @@ class DfuseSnapshot(TestWithServers):
         live = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, live, pool, container, **dfuse_params)
         live_dir = live.mount_dir.value
-        self._run(f'mkdir {live_dir}/dir; '
-                  f'seq 1 200000 > {live_dir}/a.txt; '
-                  f'dd if=/dev/urandom of={live_dir}/dir/big.bin bs=1M count=4; '
-                  f'echo "deleted later" > {live_dir}/b.txt; '
+        self._run(f'mkdir {live_dir}/dir && '
+                  f'seq 1 200000 > {live_dir}/a.txt && '
+                  f'dd if=/dev/urandom of={live_dir}/dir/big.bin bs=1M count=4 && '
+                  f'echo "deleted later" > {live_dir}/b.txt && '
                   f'sync')
         original = {name: self._md5(f'{live_dir}/{name}') for name in ('a.txt', 'dir/big.bin',
                                                                       'b.txt')}
@@ -106,10 +108,10 @@ class DfuseSnapshot(TestWithServers):
         self.log.info('Snapshot %s created at epoch %s', snap_name, container.epoch)
 
         self.log_step('Changing the live container after the snapshot')
-        self._run(f'seq 1 10 > {live_dir}/a.txt; '
-                  f'rm {live_dir}/b.txt; '
-                  f'echo "new" > {live_dir}/new.txt; '
-                  f'dd if=/dev/urandom of={live_dir}/dir/big.bin bs=1M count=1; '
+        self._run(f'seq 1 10 > {live_dir}/a.txt && '
+                  f'rm {live_dir}/b.txt && '
+                  f'echo "new" > {live_dir}/new.txt && '
+                  f'dd if=/dev/urandom of={live_dir}/dir/big.bin bs=1M count=1 && '
                   f'sync')
         modified_a = self._md5(f'{live_dir}/a.txt')
         if modified_a == original['a.txt']:
@@ -136,7 +138,7 @@ class DfuseSnapshot(TestWithServers):
         self._run(f'test ! -e {snap_dir}/new.txt', env)
 
         self.log_step('Verifying the live container still shows the changes')
-        self._run(f'test ! -e {live_dir}/b.txt; test -e {live_dir}/new.txt')
+        self._run(f'test ! -e {live_dir}/b.txt && test -e {live_dir}/new.txt')
 
         if il_lib:
             self.log_step('Verifying the interception library is used on the snapshot')
