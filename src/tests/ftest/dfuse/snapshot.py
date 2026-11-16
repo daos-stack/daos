@@ -99,8 +99,9 @@ class DfuseSnapshot(TestWithServers):
                   f'dd if=/dev/urandom of={live_dir}/dir/big.bin bs=1M count=4 && '
                   f'echo "deleted later" > {live_dir}/b.txt && '
                   f'sync')
-        original = {name: self._md5(f'{live_dir}/{name}') for name in ('a.txt', 'dir/big.bin',
-                                                                      'b.txt')}
+        original = {
+                name: self._md5(f'{live_dir}/{name}')
+                for name in ('a.txt', 'dir/big.bin', 'b.txt')}
         original_listing = self._run(f'ls -R {live_dir} | sed "s|^{live_dir}|ROOT|"').joined_stdout
 
         self.log_step('Creating a snapshot')
@@ -204,7 +205,7 @@ class DfuseSnapshot(TestWithServers):
             Same as test_dfuse_snapshot but the snapshot is accessed with libioil and the live
             container and the snapshot, which share a container uuid, are read by one process.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfs,dfuse,ioil
         :avocado: tags=DfuseSnapshot,test_dfuse_snapshot_ioil
@@ -218,7 +219,7 @@ class DfuseSnapshot(TestWithServers):
             Same as test_dfuse_snapshot but the snapshot is accessed with libpil4dfs and the live
             container and the snapshot, which share a container uuid, are read by one process.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfs,dfuse,pil4dfs
         :avocado: tags=DfuseSnapshot,test_dfuse_snapshot_pil4dfs
