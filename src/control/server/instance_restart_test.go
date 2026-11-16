@@ -89,6 +89,10 @@ func startInstanceConsumer(ctx context.Context, instance *EngineInstance) {
 
 func waitForPendingRestart(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank) bool {
 	t.Helper()
+	// Add 5-second timeout to prevent indefinite waiting
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	pending := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(50 * time.Millisecond)
@@ -120,6 +124,11 @@ func waitForPendingRestart(ctx context.Context, t *testing.T, mgr *engineRestart
 }
 
 func waitForRestartRecorded(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank) bool {
+	t.Helper()
+	// Add 5-second timeout to prevent indefinite waiting
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	recorded := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
@@ -146,6 +155,46 @@ func waitForRestartRecorded(ctx context.Context, t *testing.T, mgr *engineRestar
 	case <-ctx.Done():
 		return false
 	case <-recorded:
+		return true
+	}
+}
+
+// waitForPendingRestartCleared polls until the pending restart timer for the given rank has
+// been removed from mgr.pendingRestart (i.e. the deferred restart has fired and completed
+// processing), or the timeout elapses. Using a poll here (rather than a fixed sleep) avoids
+// spurious failures when the goroutine scheduler is under load and the timer callback is
+// delayed beyond a fixed sleep window.
+func waitForPendingRestartCleared(ctx context.Context, t *testing.T, mgr *engineRestartManager, rank ranklist.Rank, timeout time.Duration) bool {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cleared := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				mgr.mu.RLock()
+				_, exists := mgr.pendingRestart[rank]
+				mgr.mu.RUnlock()
+
+				if !exists {
+					close(cleared)
+					return
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-cleared:
 		return true
 	}
 }
@@ -366,7 +415,14 @@ func TestServer_EngineRestartManager_Start_ProcessRequests(t *testing.T) {
 }
 
 func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
-	ctx, cancel := context.WithTimeout(test.Context(t), 20*time.Second)
+	// Give this test generous headroom: the restart timer itself only needs to fire after
+	// EngineAutoRestartMinDelay (2s), but under a loaded/CPU-constrained test environment
+	// goroutine scheduling of the timer callback and the subsequent request-channel dispatch
+	// can be delayed well beyond that. The outer context must stay alive long enough for the
+	// deferred restart to actually be processed (see waitForPendingRestartCleared below);
+	// if it expires first, the dispatch goroutine exits via ctx.Done() before draining the
+	// queued restart request, and the pending-restart entry will never be cleared.
+	ctx, cancel := context.WithTimeout(test.Context(t), 30*time.Second)
 	defer cancel()
 
 	instance, testRank := setupTestHarness(t, "1")
@@ -376,6 +432,7 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 
 	startInstanceConsumer(ctx, instance)
 	mgr.start(ctx)
+	defer mgr.stop()
 
 	// Set recent restart time
 	mgr.lastRestart[testRank] = time.Now()
@@ -397,20 +454,20 @@ func TestServer_EngineRestartManager_DeferredRestartExecutes(t *testing.T) {
 		t.Fatal("expected pending restart timer to be created")
 	}
 
-	// Wait for timer to fire (with buffer)
-	time.Sleep(5 * time.Second)
+	// Poll (rather than sleep a fixed duration) for the timer to fire and the restart to be
+	// processed, clearing the pending-restart entry. This avoids spurious failures when the
+	// timer callback is delayed by scheduler contention.
+	cleared := waitForPendingRestartCleared(ctx, t, mgr, testRank, 25*time.Second)
 
-	// Verify timer was cleaned up
+	// Cleanup any leftover timer regardless of outcome.
 	mgr.mu.RLock()
 	timer, exists = mgr.pendingRestart[testRank]
 	mgr.mu.RUnlock()
-
-	// Cleanup
 	if timer != nil {
 		timer.Stop()
 	}
 
-	if exists {
+	if !cleared {
 		t.Error("expected pending restart to be cleared after execution")
 	}
 }
@@ -428,6 +485,7 @@ func TestServer_EngineRestartManager_MultipleRanks(t *testing.T) {
 	startInstanceConsumer(ctx, instance1)
 	startInstanceConsumer(ctx, instance2)
 	mgr.start(ctx)
+	defer mgr.stop()
 
 	// Request restarts for both ranks
 	mgr.requestRestart(rank1, instance1)

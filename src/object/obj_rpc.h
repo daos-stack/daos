@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,8 @@
 #include <daos/event.h>
 #include <daos/object.h>
 #include <daos/rpc.h>
+
+#include <cart/rpc_gen_macros.h>
 
 #include "obj_ec.h"
 
@@ -422,6 +424,7 @@ CRT_RPC_DECLARE(obj_sync_v10, DAOS_ISEQ_OBJ_SYNC_V10, DAOS_OSEQ_OBJ_SYNC_V10)
 
 CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 
+/* clang-format off */
 #define DAOS_ISEQ_OBJ_EC_AGG	/* input fields */			\
 	((uuid_t)		(ea_pool_uuid)		CRT_VAR)	\
 	((uuid_t)		(ea_cont_uuid)		CRT_VAR)	\
@@ -435,7 +438,8 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
 	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
-	((uint32_t)		(ea_padding)		CRT_VAR)	\
+	/* sender's target index + 1, 0 if unknown (was padding) */	\
+	((uint32_t)		(ea_src_tgt)		CRT_VAR)	\
 	((struct daos_req_comm_in) (ea_comm_in)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
@@ -458,13 +462,16 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
 	((uint32_t)		(er_map_ver)		CRT_VAR)	\
-	((uint32_t)		(er_padding)		CRT_VAR)	\
+	/* sender's target index + 1, 0 if unknown (was padding) */	\
+	((uint32_t)		(er_src_tgt)		CRT_VAR)	\
 	((struct daos_req_comm_in) (er_comm_in)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_REP	/* output fields */		 \
 	((int32_t)		(er_status)		CRT_VAR) \
 	((uint32_t)		(er_map_ver)		CRT_VAR) \
 	((struct daos_req_comm_out) (er_comm_out)	CRT_VAR)
+
+/* clang-format on */
 
 CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 

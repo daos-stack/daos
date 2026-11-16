@@ -22,9 +22,13 @@
 
 #include <stdatomic.h>
 
+/** Legacy HG RPC ID, pre 3.0 **/
+#define CRT_HG_RPCID_LEGACY         (0xDA036868)
+#define CRT_HG_ONEWAY_RPCID_LEGACY  (0xDA036869)
+
 /** the shared HG RPC ID used for all CRT opc */
-#define CRT_HG_RPCID		(0xDA036868)
-#define CRT_HG_ONEWAY_RPCID	(0xDA036869)
+#define CRT_HG_RPCID                (0xDA03686A)
+#define CRT_HG_ONEWAY_RPCID         (0xDA03686B)
 
 /** MAX number of HG handles in pool */
 #define CRT_HG_POOL_MAX_NUM	(512)
@@ -45,8 +49,14 @@
 #define CRT_UCX_STR             "ucx"
 
 struct crt_rpc_priv;
-struct crt_common_hdr;
+struct crt_req_hdr;
+struct crt_reply_hdr;
 struct crt_corpc_hdr;
+
+int
+crt_proc_req_hdr(crt_proc_t proc, struct crt_req_hdr *hdr);
+int
+crt_proc_reply_hdr(crt_proc_t proc, struct crt_reply_hdr *hdr);
 
 /**
  * Enumeration specifying providers supported by the library

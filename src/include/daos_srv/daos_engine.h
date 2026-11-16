@@ -849,6 +849,33 @@ dss_select_module_version(int module_id, uint8_t *module_ver)
 		return dss_select_module_version(module_id, version);                              \
 	}
 
+/** Minimum timeout (in seconds) returned by dss_vos_create_timeout_by_size() */
+#define DSS_VOS_CREATE_TIMEOUT_MIN 15
+
+/**
+ * Compute the timeout (in seconds) of an RPC that creates \a size bytes of
+ * per-engine storage (e.g., pool targets or a replicated service replica).
+ * The tiers account for the time needed to allocate and format the storage,
+ * which on a slow engine may exceed the generic cart RPC timeout. This is a
+ * property of the storage being created, not of any particular RPC or
+ * caller: it is shared by mgmt (MGMT_TGT_CREATE) and rsvc (RSVC_START).
+ *
+ * \param[in]	size	size in bytes of the storage created on each engine
+ */
+static inline uint32_t
+dss_vos_create_timeout_by_size(uint64_t size)
+{
+	uint64_t gib = size >> 30;
+
+	if (gib < 32)
+		return DSS_VOS_CREATE_TIMEOUT_MIN;
+	else if (gib < 64)
+		return 30;
+	else if (gib < 128)
+		return 60;
+	return 90;
+}
+
 int
 dss_vos_pool_create(const char *path, unsigned char *uuid, daos_size_t scm_size,
 		    daos_size_t data_sz, daos_size_t meta_sz, unsigned int flags, uint32_t version,

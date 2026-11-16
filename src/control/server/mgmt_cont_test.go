@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2018-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -133,6 +134,9 @@ func TestMgmt_ListContainers(t *testing.T) {
 				tc.createMS = newTestMgmtSvc
 			}
 			svc := tc.createMS(t, log)
+			if svc != nil {
+				t.Cleanup(func() { svc.Close() })
+			}
 			addTestPoolService(t, svc.sysdb, testPoolService())
 
 			if tc.setupDrpc != nil {
@@ -223,6 +227,9 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 				tc.createMS = newTestMgmtSvc
 			}
 			svc := tc.createMS(t, log)
+			if svc != nil {
+				t.Cleanup(func() { svc.Close() })
+			}
 			addTestPoolService(t, svc.sysdb, testPoolService())
 
 			if tc.setupDrpc != nil {

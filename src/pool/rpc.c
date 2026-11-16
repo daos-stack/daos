@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,9 +82,9 @@ crt_proc_struct_pool_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
+CRT_RPC_DEFINE(pool_connect_v7, DAOS_ISEQ_POOL_CONNECT_V7, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT, DAOS_OSEQ_POOL_DISCONNECT)
-CRT_RPC_DEFINE(pool_query_v6, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY_V6)
 CRT_RPC_DEFINE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
 CRT_RPC_DEFINE(pool_attr_list, DAOS_ISEQ_POOL_ATTR_LIST, DAOS_OSEQ_POOL_ATTR_LIST)
 CRT_RPC_DEFINE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
@@ -102,9 +102,7 @@ CRT_RPC_DEFINE(pool_drain, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DEFINE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
 CRT_RPC_DEFINE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
-CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
-		DAOS_OSEQ_POOL_TGT_DISCONNECT)
-CRT_RPC_DEFINE(pool_tgt_query_v6, DAOS_ISEQ_POOL_TGT_QUERY, DAOS_OSEQ_POOL_TGT_QUERY_V6)
+CRT_RPC_DEFINE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT, DAOS_OSEQ_POOL_TGT_DISCONNECT)
 CRT_RPC_DEFINE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY, DAOS_OSEQ_POOL_TGT_QUERY)
 CRT_RPC_DEFINE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
 		DAOS_OSEQ_POOL_TGT_DIST_HDLS)
@@ -195,7 +193,6 @@ crt_proc_daos_pool_cont_filter_t(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 CRT_RPC_DEFINE(pool_filter_cont, DAOS_ISEQ_POOL_FILTER_CONT, DAOS_OSEQ_POOL_FILTER_CONT)
-CRT_RPC_DEFINE(pool_query_info_v6, DAOS_ISEQ_POOL_QUERY_INFO, DAOS_OSEQ_POOL_QUERY_INFO_V6)
 CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO, DAOS_OSEQ_POOL_QUERY_INFO)
 CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL_TGT_QUERY_MAP)
 CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
@@ -216,23 +213,23 @@ CRT_RPC_DEFINE(pool_recov_cont, DAOS_ISEQ_POOL_RECOV_CONT, DAOS_OSEQ_POOL_RECOV_
 	.prf_co_ops  = NULL,	\
 },
 
-static struct crt_proto_rpc_format pool_proto_rpc_fmt_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
-								  POOL_PROTO_SRV_RPC_LIST(6)};
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v7[] = {POOL_PROTO_CLI_RPC_LIST(7)
 								  POOL_PROTO_SRV_RPC_LIST(7)};
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v8[] = {POOL_PROTO_CLI_RPC_LIST(8)
+								  POOL_PROTO_SRV_RPC_LIST(8)};
 
 #undef X
-
-struct crt_proto_format pool_proto_fmt_v6 = {.cpf_name  = "pool",
-					     .cpf_ver   = 6,
-					     .cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v6),
-					     .cpf_prf   = pool_proto_rpc_fmt_v6,
-					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)};
 
 struct crt_proto_format pool_proto_fmt_v7 = {.cpf_name  = "pool",
 					     .cpf_ver   = 7,
 					     .cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v7),
 					     .cpf_prf   = pool_proto_rpc_fmt_v7,
+					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)};
+
+struct crt_proto_format pool_proto_fmt_v8 = {.cpf_name  = "pool",
+					     .cpf_ver   = 8,
+					     .cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v8),
+					     .cpf_prf   = pool_proto_rpc_fmt_v8,
 					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)};
 
 uint64_t
@@ -338,6 +335,12 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 			bits |= DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE;
+			break;
+		case DAOS_PROP_PO_CA_CERT:
+			bits |= DAOS_PO_QUERY_PROP_CA_CERT;
+			break;
+		case DAOS_PROP_PO_CERT_WATERMARKS:
+			bits |= DAOS_PO_QUERY_PROP_CERT_WATERMARKS;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

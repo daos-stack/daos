@@ -49,6 +49,24 @@ cont2req(struct ds_cont_child *cont, bool vos_agg)
 	return vos_agg ? cont->sc_agg_req : cont->sc_ec_agg_req;
 }
 
+/*
+ * An excluded (DOWN/DOWNOUT) target may still be alive and hold stale shards.
+ * It must not run EC aggregation: it could become the "parity leader" for those
+ * stale shards, encode parity from stale replicas, and ask the peers (the new
+ * owners of the shards) to remove their replicas, which corrupts the real data.
+ */
+static bool
+cont_tgt_excluded(struct ds_cont_child *cont)
+{
+	if (!ds_pool_tgt_excluded(cont->sc_pool->spc_pool, dss_self_rank(),
+				  dss_get_module_info()->dmi_tgt_id))
+		return false;
+
+	D_DEBUG(DB_EPC, DF_CONT ": skip EC aggregation on excluded target.\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+	return true;
+}
+
 int
 agg_rate_ctl(void *arg)
 {
@@ -213,6 +231,9 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 			atomic_load(&pool->sp_rebuilding), atomic_load(&pool->sp_rebuild_enum));
 		return false;
 	}
+
+	if (!vos_agg && cont_tgt_excluded(cont))
+		return false;
 
 	if (vos_agg) {
 		if (!cont->sc_vos_agg_active)
@@ -2841,10 +2862,12 @@ ds_cont_eph_report(struct ds_pool *pool)
 		}
 
 		/* if aggregation enabled, make sure to report ec_agg_eph at the start phase
-		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero.
+		 * when min_ec_agg_eph and cte_last_ec_agg_epoch are both zero. Also report a
+		 * zero min_ec_agg_eph after a target of this rank is reintegrated, so that the
+		 * leader knows some target waits for the boundary.
 		 */
 		if (min_ec_agg_eph == DAOS_EPOCH_MAX || min_stable_eph == DAOS_EPOCH_MAX ||
-		    (ec_eph->cte_last_ec_agg_epoch != 0 &&
+		    (min_ec_agg_eph != 0 && ec_eph->cte_last_ec_agg_epoch != 0 &&
 		     min_ec_agg_eph <= ec_eph->cte_last_ec_agg_epoch &&
 		     min_stable_eph <= ec_eph->cte_last_stable_epoch)) {
 			if (min_ec_agg_eph > 0 && min_stable_eph > 0 &&

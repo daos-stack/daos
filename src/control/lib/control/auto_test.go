@@ -1076,6 +1076,36 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 			expErr: errors.New(errInsufNrProvGroups),
 		},
+		"single engine requested; all ssds on numa 1; all devices assigned to that engine": {
+			nrEngines: 1,
+			sd: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3)...),
+				},
+			},
+			nd: networkDetails{
+				ProviderIfaces: providerIfaceMap{
+					"ofi+psm2": {0: ib0, 1: ib1},
+				},
+			},
+			expNumaSet: []int{1},
+			expSD: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3)...),
+				},
+			},
+			expND: networkDetails{
+				NumaIfaces: numaNetIfaceMap{1: ib1},
+			},
+		},
 		"single engine requested; both numa match criteria; select max nr ssds": {
 			nrEngines: 1,
 			sd: storageDetails{

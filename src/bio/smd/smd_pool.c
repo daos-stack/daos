@@ -89,8 +89,13 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 
 		rc = smd_pool_find_tgt(&pool, tgt_id);
 		if (rc >= 0) {
-			D_ERROR("Dup target %d, idx: %d\n", tgt_id, rc);
-			return -DER_EXIST;
+			if (!recreate) {
+				D_ERROR("Dup target %d, idx: %d\n", tgt_id, rc);
+				return -DER_EXIST;
+			}
+			/* Replace the stale blob mapping during pool recreation. */
+			pool.sp_blobs[rc] = blob_id;
+			goto upsert;
 		}
 
 		pool.sp_tgts[pool.sp_tgt_cnt] = tgt_id;
@@ -116,6 +121,7 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 		return rc;
 	}
 
+upsert:
 	rc = smd_db_upsert(table_name, &id, sizeof(id), &pool, sizeof(pool));
 	if (rc)
 		D_ERROR("Update pool "DF_UUID" failed. "DF_RC"\n",

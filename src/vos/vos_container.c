@@ -147,14 +147,25 @@ cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+cont_df_rec_check(struct btr_instance *tins, struct btr_record *rec, struct checker *ck)
+{
+	/**
+	 * NOP. The container is checked during the vos_cont_open_ex() call using with a checker
+	 * provided.
+	 */
+	return 0;
+}
+
 static btr_ops_t vct_ops = {
-	.to_rec_msize	= cont_df_rec_msize,
-	.to_hkey_size	= cont_df_hkey_size,
-	.to_hkey_gen	= cont_df_hkey_gen,
-	.to_rec_alloc	= cont_df_rec_alloc,
-	.to_rec_free	= cont_df_rec_free,
-	.to_rec_fetch	= cont_df_rec_fetch,
-	.to_rec_update  = cont_df_rec_update,
+    .to_rec_msize  = cont_df_rec_msize,
+    .to_hkey_size  = cont_df_hkey_size,
+    .to_hkey_gen   = cont_df_hkey_gen,
+    .to_rec_alloc  = cont_df_rec_alloc,
+    .to_rec_free   = cont_df_rec_free,
+    .to_rec_fetch  = cont_df_rec_fetch,
+    .to_rec_update = cont_df_rec_update,
+    .to_rec_check  = cont_df_rec_check,
 };
 
 static int
@@ -375,7 +386,7 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 	 */
 	rc = cont_lookup(&ukey, &pkey, &cont, pool->vp_sysdb);
 	if (rc == 0) {
-		CK_PRINT(ck, "Container is already opened.\n");
+		CK_PRINTF(ck, "Container is already opened.\n");
 		cont->vc_open_count++;
 		D_DEBUG(DB_TRACE, "Found handle for cont "DF_UUID
 			" in DRAM hash table, open count: %d\n",
@@ -390,14 +401,14 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		rc = daos_errno2der(daos_fail_value_get());
 	}
 	if (rc) {
-		CK_PRINT(ck, "Container does not exist.\n");
+		CK_PRINTF_ERR(ck, "Container does not exist.\n");
 		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
 
 	if (IS_CHECKER(ck)) {
-		CK_PRINT(ck, "uuid... ");
+		CK_PRINTF(ck, "uuid... ");
 		if (uuid_compare(args.ca_cont_df->cd_id, co_uuid) != 0 ||
 		    DAOS_FAIL_CHECK(DAOS_FAULT_CONT_OPEN_UUID)) {
 			CK_APPENDFL_ERR(ck, "mismatch (" DF_UUIDF " != " DF_UUIDF ")\n",
@@ -409,7 +420,7 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		const bool error_on_non_zero_padding =
 		    (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR);
 
-		CK_PRINT(ck, "Padding (cd_pad)... ");
+		CK_PRINTF(ck, "Padding (cd_pad)... ");
 		if (args.ca_cont_df->cd_pad != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_CONT_INV_PAD)) {
 			if (error_on_non_zero_padding) {
 				CK_APPENDFL_ERR(ck, CK_NON_ZERO_FMT(PRIx32),
@@ -422,7 +433,7 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		}
 		CK_APPENDL_OK(ck);
 
-		CK_PRINT(ck, "Padding (cd_used)... ");
+		CK_PRINTF(ck, "Padding (cd_used)... ");
 		if (args.ca_cont_df->cd_used != 0 || DAOS_FAIL_CHECK(DAOS_FAULT_CONT_INV_USED)) {
 			if (error_on_non_zero_padding) {
 				CK_APPENDFL_ERR(ck, CK_NON_ZERO_FMT(PRIx64),
@@ -435,7 +446,7 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		}
 		CK_APPENDL_OK(ck);
 
-		CK_PRINT(ck, "Reserved (cd_reserv_upgrade)... ");
+		CK_PRINTF(ck, "Reserved (cd_reserv_upgrade)... ");
 		if (args.ca_cont_df->cd_reserv_upgrade != 0 ||
 		    DAOS_FAIL_CHECK(DAOS_FAULT_CONT_INV_RESERV_UPGRADE)) {
 			if (error_on_non_zero_padding) {
@@ -449,11 +460,10 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 		}
 		CK_APPENDL_OK(ck);
 
-		CK_PRINT(ck, CK_OBJ_TREE_STR "...\n");
-		CK_INDENT(ck,
-			  rc = dbtree_check_inplace(&args.ca_cont_df->cd_obj_root, &pool->vp_uma,
-						    ck_report, ck, error_on_non_zero_padding));
-		CK_PRINTL_RC(ck, rc, CK_OBJ_TREE_STR);
+		CK_PRINTF(ck, CK_OBJ_TREE_STR "...\n");
+		CK_INDENT(ck, rc = dbtree_check_inplace(&args.ca_cont_df->cd_obj_root,
+							&pool->vp_uma, pool, ck));
+		CK_PRINTFL_RC(ck, rc, CK_OBJ_TREE_STR);
 		if (rc != DER_SUCCESS) {
 			D_GOTO(exit, rc);
 		}
@@ -560,9 +570,9 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 	 */
 	cont->vc_mod_epoch_bound = d_hlc_get();
 
-	CK_PRINT(ck, CK_ACT_DBD_LIST_STR "...\n");
+	CK_PRINTF(ck, CK_ACT_DBD_LIST_STR "...\n");
 	CK_INDENT(ck, rc = vos_dtx_act_reindex(cont, ck));
-	CK_PRINTL_RC(ck, rc, CK_ACT_DBD_LIST_STR);
+	CK_PRINTFL_RC(ck, rc, CK_ACT_DBD_LIST_STR);
 	if (rc != 0) {
 		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
 		goto exit;
@@ -585,7 +595,7 @@ exit:
 		cont_free_internal(cont);
 
 	checker_print_indent_dec(ck);
-	CK_PRINTL_RC(ck, rc, "Check container");
+	CK_PRINTFL_RC(ck, rc, "Check container");
 
 	return rc;
 }

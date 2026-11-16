@@ -34,10 +34,11 @@ func newMockControlServiceFromBackends(t *testing.T, log logging.Logger, cfg *co
 	syp := system.NewMockSysProvider(log, smsc)
 	mp := mount.NewProvider(log, syp)
 	sp := scm.NewProvider(&scm.ProviderConfig{
-		Log:     log,
-		Backend: smb,
-		Sys:     syp,
-		Mounter: mp,
+		Log:       log,
+		Backend:   smb,
+		Sys:       syp,
+		Mounter:   mp,
+		KernelCfg: system.KernelConfig{},
 	})
 
 	mscs := NewMockStorageControlService(log, cfg.Engines, syp, sp, bp, nil)
@@ -48,6 +49,8 @@ func newMockControlServiceFromBackends(t *testing.T, log logging.Logger, cfg *co
 		events:                events.NewPubSub(test.Context(t), log),
 		srvCfg:                cfg,
 	}
+
+	t.Cleanup(func() { cs.Close() })
 
 	started := make([]bool, len(cfg.Engines))
 	for idx := range started {

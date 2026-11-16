@@ -171,7 +171,7 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	if (rc == -DER_CSUM && is_ec_obj) {
 		uint32_t tgt_idx;
 
-		tgt_idx = rw_args->shard_args->auxi.shard % obj_get_grp_size(obj);
+		tgt_idx = rw_args->shard_args->auxi.ec_tgt_idx;
 		rc = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
 		if (rc) {
 			D_ERROR(DF_OID" fail info insert"
@@ -603,8 +603,15 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				goto unlock;
 			}
 
+			/* A -DER_REC2BIG from another shard is the long-singv-overwritten-by-
+			 * short-singv case, which is ignored below when the short singv lives
+			 * on a single target. The size conflict is still real in that case, so
+			 * it must be evaluated or a torn read reaches checksum verification
+			 * with a stale singv layout.
+			 */
 			if (fetch_stat->sfs_size_other != 0 && fetch_rc == 0 &&
-			    fetch_stat->sfs_rc_other == 0) {
+			    (fetch_stat->sfs_rc_other == 0 ||
+			     fetch_stat->sfs_rc_other == -DER_REC2BIG)) {
 				conflict = dc_shard_singv_size_conflict(oca,
 						fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 			}
@@ -648,6 +655,18 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				conflict = dc_shard_singv_size_conflict(oca,
 					fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 		}
+
+		/* The size conflict is a property of the whole fetch, not of whichever
+		 * shard reply happens to be in hand - both sizes live in the shared
+		 * fetch_stat. Re-check it here so that any callback observing the
+		 * conflict fails the fetch. Without this a callback whose branch did not
+		 * compute the conflict proceeds to checksum verification against a stale
+		 * singv layout and wrongly burns an EC shard.
+		 */
+		if (!conflict && fetch_rc == 0 && fetch_stat->sfs_size != 0 &&
+		    fetch_stat->sfs_size_other != 0)
+			conflict = dc_shard_singv_size_conflict(oca, fetch_stat->sfs_size_other,
+								fetch_stat->sfs_size);
 
 		if (conflict && !reasb_req->orr_size_fetch && rc == 0)
 			fetch_again = true;
@@ -874,7 +893,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
 		    rc == -DER_EXIST || rc == -DER_RF || rc == -DER_UPDATE_AGAIN ||
-		    rc == -DER_FETCH_AGAIN)
+		    rc == -DER_FETCH_AGAIN || rc == -DER_REBUILD_DELAY)
 			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -899,8 +918,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				uint32_t		 tgt_idx;
 
 				sa = &rw_args->shard_args->auxi;
-				tgt_idx = sa->shard %
-					  obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
+				tgt_idx = sa->ec_tgt_idx;
 				rc = obj_ec_fail_info_insert(reasb_req, tgt_idx);
 				if (rc)
 					D_ERROR(DF_OID" fail info insert: " DF_RC"\n",
@@ -1696,8 +1714,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 
 		rc = daos_csummer_verify_key(args->csummer, &enum_type_val, ci_to_compare);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
-				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
+			D_ERROR("daos_csummer_verify_key error for %s: " DF_RC "\n",
+				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", DP_RC(rc));
 			return rc;
 		}
 		break;
@@ -1828,8 +1846,8 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			if (timeout > *enum_args->max_delay)
 				*enum_args->max_delay = timeout;
 		} else {
-			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
-				enum_args->rpc, opc, DP_RC(rc));
+			DL_CDEBUG(rc == -DER_REBUILD_DELAY, DLOG_DBG, DLOG_ERR, rc,
+				  "rpc %p RPC %d failed", enum_args->rpc, opc);
 		}
 		D_GOTO(out, rc);
 	}
@@ -2085,6 +2103,7 @@ out_put:
 struct obj_query_key_cb_args {
 	crt_rpc_t		*rpc;
 	unsigned int		*map_ver;
+	d_rank_t                *map_ver_rank;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
@@ -2141,6 +2160,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	oqma.oqma_max_delay = cb_args->max_delay;
 	oqma.oqma_queue_id = cb_args->queue_id;
 	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_tgt_map_ver_rank = cb_args->map_ver_rank;
 	oqma.oqma_flags = okqi->okqi_api_flags;
 	oqma.oqma_opc = DAOS_OBJ_RPC_QUERY_KEY;
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
@@ -2159,11 +2179,11 @@ out:
 
 int
 dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
-		       uint32_t req_map_ver, struct dc_object *obj,
-		       daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
-		       daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task,
-		       uint32_t *max_delay, uint64_t *queue_id)
+		       uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
+		       daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
+		       const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
+		       uint32_t *map_ver, d_rank_t *map_ver_rank, daos_handle_t th,
+		       tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id)
 {
 	struct dc_pool			*pool = obj_shard_ptr2pool(shard);
 	struct obj_query_key_in		*okqi;
@@ -2190,6 +2210,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	crt_req_addref(req);
 	cb_args.rpc		= req;
 	cb_args.map_ver		= map_ver;
+	cb_args.map_ver_rank    = map_ver_rank;
 	cb_args.dkey		= dkey;
 	cb_args.akey		= akey;
 	cb_args.recx		= recx;
@@ -2286,6 +2307,7 @@ obj_shard_coll_query_cb(tse_task_t *task, void *data)
 	oqma.oqma_max_delay = cb_args->max_delay;
 	oqma.oqma_queue_id = cb_args->queue_id;
 	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_tgt_map_ver_rank = cb_args->map_ver_rank;
 	oqma.oqma_flags = ocqi->ocqi_api_flags;
 	oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
@@ -2316,9 +2338,9 @@ dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uin
 			uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
 			daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
 			const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
-			uint32_t *map_ver, struct daos_coll_target *tgts, uint32_t tgt_nr,
-			uint32_t max_tgt_size, uint32_t disp_width, daos_handle_t th,
-			tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id)
+			uint32_t *map_ver, d_rank_t *map_ver_rank, struct daos_coll_target *tgts,
+			uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t disp_width,
+			daos_handle_t th, tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id)
 {
 	struct dc_pool			*pool = obj->cob_pool;
 	struct obj_coll_query_in	*ocqi;
@@ -2342,6 +2364,7 @@ dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uin
 	crt_req_addref(req);
 	cb_args.rpc = req;
 	cb_args.map_ver = map_ver;
+	cb_args.map_ver_rank = map_ver_rank;
 	cb_args.dkey = dkey;
 	cb_args.akey = akey;
 	cb_args.recx = recx;
@@ -2711,7 +2734,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.epoch = &args->ka_auxi.epoch;
 	cb_args.th = &obj_args->th;
 	cb_args.anchor = args->ka_anchor;
-	cb_args.shard = obj_shard->do_shard_idx;
+	cb_args.shard       = obj_shard->do_shard;
 	cb_args.enqueue_id = &args->ka_auxi.enqueue_id;
 	cb_args.max_delay = &args->ka_auxi.obj_auxi->max_delay;
 	cb_args.send_time   = daos_client_metric ? daos_get_ntime() : 0;

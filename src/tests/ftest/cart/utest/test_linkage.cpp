@@ -17,6 +17,7 @@
 #include <gurt/list.h>
 #include <cart/api.h>
 #include <cart/types.h>
+#include <cart/rpc_gen_macros.h>
 #include "wrap_cmocka.h"
 
 using namespace std;

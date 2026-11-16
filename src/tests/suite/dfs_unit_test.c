@@ -385,6 +385,7 @@ dfs_test_lookup(void **state)
 	char			*path_sym1 = "/sym1";
 	char			*filename_sym2 = "sym2";
 	char			*path_sym2 = "/dir1/sym2";
+	char                     long_name[DFS_MAX_NAME + 2];
 	mode_t			create_mode = S_IWUSR | S_IRUSR;
 	struct stat		stbuf;
 	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
@@ -486,6 +487,12 @@ dfs_test_lookup(void **state)
 	/** Close dir1 */
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
+
+	/** Lookup with a name exceeding the max allowed length */
+	memset(long_name, 'a', sizeof(long_name) - 1);
+	long_name[sizeof(long_name) - 1] = '\0';
+	rc = dfs_lookup_rel(dfs_mt, NULL, long_name, O_RDWR, &obj, NULL, NULL);
+	assert_int_equal(rc, ENAMETOOLONG);
 }
 
 static void
@@ -3681,6 +3688,7 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 	mode_t		create_mode = S_IWUSR | S_IRUSR;
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 	char		*dirname = "pipeline_dir";
+	uint64_t         expected_matched = 0;
 	int		rc;
 
 	d_getenv_bool("DAOS_PIPELINE", &pipeline_enabled);
@@ -3699,6 +3707,8 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 			sprintf(name, "dir.%d", i);
 			rc = dfs_mkdir(dfs_mt, dir1, name, create_mode | S_IFDIR, 0);
 			assert_int_equal(rc, 0);
+			/** directories are always returned so the tree can be traversed */
+			expected_matched++;
 		} else {
 			daos_obj_id_t oid;
 
@@ -3712,6 +3722,10 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 
 			rc = dfs_release(f1);
 			assert_int_equal(rc, 0);
+
+			/** files match if created after the timestamp and the name contains ".6" */
+			if (i > NUM_ENTRIES / 2 && strstr(name, ".6") != NULL)
+				expected_matched++;
 		}
 
 		if (i == NUM_ENTRIES / 2) {
@@ -3721,8 +3735,11 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 		}
 	}
 
-	/** sleep to avoid DER_INPROGRESS errors since pipeline currently does not retry */
-	sleep(10);
+	/**
+	 * sleep past DTX_COMMIT_THRESHOLD_AGE to avoid DER_INPROGRESS errors since pipeline
+	 * currently does not retry.
+	 */
+	sleep(15);
 
 	dfs_predicate_t pred = {0};
 	dfs_pipeline_t *dpipe = NULL;
@@ -3763,24 +3780,8 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 			nr = NR_ENUM;
 			rc = dfs_readdir_with_filter(dfs_mt, dir1, dpipe, anchor, &nr, dents, oids,
 						     csizes, &nr_scanned);
-			/*
-			 * It is still possible to get INPROGRESS even with the sleep, so let's just
-			 * skip the test in this case.
-			 */
-			if (rc == -DER_INPROGRESS) {
-				print_message("dfs_readdir_with_filter() returned -DER_INPROGRESS; "
-					      "skipping test!\n");
-				free(dents);
-				free(anchors);
-				free(oids);
-				free(csizes);
-				dfs_pipeline_destroy(dpipe);
-				rc = dfs_release(dir1);
-				assert_int_equal(rc, 0);
-				rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
-				assert_int_equal(rc, 0);
-				skip();
-			}
+			if (rc == EINPROGRESS)
+				goto skip_inprogress;
 			assert_int_equal(rc, 0);
 
 			nr_total += nr_scanned;
@@ -3802,6 +3803,30 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 
 	print_message("total entries scanned = %"PRIu64"\n", nr_total);
 	print_message("total entries matched = %"PRIu64"\n", nr_matched);
+	/** every entry must be scanned exactly once across all splits */
+	assert_int_equal(nr_total, NUM_ENTRIES);
+	assert_int_equal(nr_matched, expected_matched);
+
+	/** same with a single (non-split) anchor walking all shards */
+	daos_anchor_t full_anchor = {0};
+
+	nr_total   = 0;
+	nr_matched = 0;
+	while (!daos_anchor_is_eof(&full_anchor)) {
+		uint32_t nr = NR_ENUM;
+
+		rc = dfs_readdir_with_filter(dfs_mt, dir1, dpipe, &full_anchor, &nr, dents, oids,
+					     csizes, &nr_scanned);
+		if (rc == EINPROGRESS)
+			goto skip_inprogress;
+		assert_int_equal(rc, 0);
+		nr_total += nr_scanned;
+		nr_matched += nr;
+	}
+	print_message("full enumeration: scanned = %" PRIu64 ", matched = %" PRIu64 "\n", nr_total,
+		      nr_matched);
+	assert_int_equal(nr_total, NUM_ENTRIES);
+	assert_int_equal(nr_matched, expected_matched);
 
 	free(dents);
 	free(anchors);
@@ -3814,6 +3839,24 @@ test_pipeline_find(void **state, daos_oclass_id_t dir_oclass)
 	assert_int_equal(rc, 0);
 	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
 	assert_int_equal(rc, 0);
+	return;
+
+skip_inprogress:
+	/*
+	 * It is still possible to get INPROGRESS even with the sleep, so let's just skip the test
+	 * in this case.
+	 */
+	print_message("dfs_readdir_with_filter() returned EINPROGRESS; skipping test!\n");
+	free(dents);
+	free(anchors);
+	free(oids);
+	free(csizes);
+	dfs_pipeline_destroy(dpipe);
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	assert_int_equal(rc, 0);
+	skip();
 }
 
 static void

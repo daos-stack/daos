@@ -35,7 +35,7 @@ user_is_root(struct checker *ck)
 	uid_t euid = geteuid();
 	if (euid == 0) {
 		/** The root user is not always named "root" but its uid is always 0. */
-		CK_PRINT(ck, EFFECTIVE_USER_STR "root\n");
+		CK_PRINTF(ck, EFFECTIVE_USER_STR "root\n");
 		return true;
 	}
 
@@ -88,7 +88,7 @@ user_belongs_to_group(const char *group_name, struct checker *ck)
 	}
 	if (rc < 0) {
 		rc = daos_errno2der(errno);
-		CK_PRINTL_RC(ck, rc, "getgroups() failed");
+		CK_PRINTFL_RC(ck, rc, "getgroups() failed");
 		return false;
 	}
 
@@ -120,7 +120,7 @@ check_user_privileges(struct checker *ck)
 		return;
 	}
 
-	CK_PRINT(ck, UNEXPECTED_USER_WARNING_MSG);
+	CK_PRINTF(ck, UNEXPECTED_USER_WARNING_MSG);
 }
 
 int

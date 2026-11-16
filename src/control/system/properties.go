@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -96,6 +97,7 @@ func GetUserProperties(db SysAttrGetter, sysProps daos.SystemPropertyMap, keys [
 		}
 	} else {
 		// Otherwise, fill in any unset properties with the default values.
+		reqProps := make(map[string]string)
 		for _, k := range keys {
 			if _, ok := userProps[k]; !ok {
 				prop, ok := sysProps.Get(k)
@@ -104,7 +106,9 @@ func GetUserProperties(db SysAttrGetter, sysProps daos.SystemPropertyMap, keys [
 				}
 				userProps[k] = prop.Value.String()
 			}
+			reqProps[k] = userProps[k]
 		}
+		userProps = reqProps
 	}
 
 	return userProps, nil

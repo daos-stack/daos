@@ -1077,6 +1077,28 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		enum bio_mc_flags flags, struct bio_meta_context **mc);
 
 /*
+ * Verify the Meta and WAL blob headers of a pool without opening a meta context. Read-only: unlike
+ * bio_mc_open(), it upgrades no header and writes nothing to the blobs. Intended for offline
+ * inspection tools: a pool whose headers pass this check can be opened with bio_mc_open() and its
+ * WAL queried with bio_wal_query() without tripping the consistency assertions.
+ *
+ * \param[in]	xs_ctxt		Per-xstream NVMe context
+ * \param[in]	pool_id		Pool UUID
+ * \param[in]	flags		bio_mc_flags (BIO_MC_FL_RDB selects the RDB SMD table)
+ *
+ * \retval	0		Success, or when MD-on-SSD is not configured
+ *				(no meta/WAL blob to verify)
+ * \retval	-DER_NONEXIST	No meta or WAL blob for this pool on this target
+ * \retval	-DER_UNINIT	Unknown header magic
+ * \retval	-DER_DF_INCOMPT	Unsupported header version
+ * \retval	-DER_CSUM	Header checksum mismatch
+ * \retval	-DER_DF_INVAL	Inconsistent header content (details in the log)
+ * \retval	-DER_*		Other I/O or SPDK error
+ */
+int
+    bio_mc_hdr_verify(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags);
+
+/*
  * Close Meta/Data/WAL blobs, free meta context
  *
  * \param[in]	mc		BIO meta context
