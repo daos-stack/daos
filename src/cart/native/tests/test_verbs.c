@@ -21,6 +21,7 @@ static unsigned           head, tail;
 static uint64_t           accepted[32];
 static unsigned           num_accepted;
 static int                post_error, poll_error;
+static unsigned           poll_calls;
 static int                create_qp_error;
 static unsigned           destroyed_qps, destroyed_cqs, destroyed_pds, closed_devices;
 
@@ -172,15 +173,15 @@ int
 ibv_poll_cq(struct ibv_cq *c, int n, struct ibv_wc *wc)
 {
 	(void)c;
-	(void)n;
+	poll_calls++;
 	if (poll_error) {
 		poll_error = 0;
 		return -1;
 	}
-	if (head == tail)
-		return 0;
-	*wc = completions[head++];
-	return 1;
+	int count = 0;
+	while (head != tail && count < n)
+		wc[count++] = completions[head++];
+	return count;
 }
 
 static void
@@ -253,7 +254,9 @@ test_success_and_open_failure(void)
 		completions[tail++] = (struct ibv_wc){
 		    .wr_id = accepted[--num_accepted], .status = IBV_WC_SUCCESS, .byte_len = 4};
 	}
+	poll_calls = 0;
 	assert(ops->progress(ep, out, 4, &count) == 0 && count == 4);
+	assert(poll_calls == 1);
 	for (unsigned i = 0; i < count; i++) {
 		assert(out[i].cookie == buffer + i && out[i].error == 0);
 		assert(out[i].bytes == (i == CRT_NATIVE_RECV ? 4 : 8));
@@ -268,11 +271,57 @@ test_success_and_open_failure(void)
 	assert(ops->open(NULL, &ep) == EINVAL && ep == NULL);
 }
 
+static void
+test_slot_recycling(void)
+{
+	const struct crt_native_ops *ops = &crt_native_verbs_ops;
+	struct crt_native_config  cfg = {.device = "mock0", .port = 1, .gid_index = -1, .depth = 4};
+	struct crt_native_ep     *ep;
+	struct crt_native_address address;
+	struct crt_native_mr     *mr;
+	struct crt_native_remote_memory remote;
+	struct crt_native_completion    out[4];
+	char                            buffer[64];
+	unsigned                        count;
+
+	create_qp_error = 0;
+	assert(ops->open(&cfg, &ep) == 0);
+	assert(ops->address(ep, &address) == 0);
+	assert(ops->connect(ep, &address) == 0);
+	assert(ops->register_memory(ep, buffer, sizeof(buffer), false, &mr, &remote) == 0);
+	for (unsigned iteration = 0; iteration < 1024; iteration++) {
+		head = tail = num_accepted = 0;
+		/* A rejected post must not consume a free-list entry. */
+		post_error = EAGAIN;
+		assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 8, NULL, 0, NULL) == EAGAIN);
+		post_error = 0;
+		for (unsigned i = 0; i < cfg.depth; i++) {
+			assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 8, NULL, 0, buffer + i) == 0);
+			for (unsigned j = 0; j < i; j++)
+				assert(accepted[j] != accepted[i]);
+		}
+		assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 8, NULL, 0, NULL) == EAGAIN);
+		/* Recycling must not assume posting-order completions. */
+		while (num_accepted != 0)
+			completions[tail++] = (struct ibv_wc){.wr_id  = accepted[--num_accepted],
+							      .status = IBV_WC_SUCCESS};
+		poll_calls = 0;
+		assert(ops->progress(ep, out, 4, &count) == 0 && count == 4);
+		assert(poll_calls == 1);
+		for (unsigned i = 0; i < count; i++)
+			assert(out[i].cookie == buffer + 3 - i && out[i].error == 0);
+	}
+	assert(ops->deregister_memory(mr) == 0);
+	assert(ops->close_begin(ep) == 0);
+	assert(ops->close(ep) == 0);
+}
+
 int
 main(void)
 {
 	test_lifetime();
 	test_success_and_open_failure();
+	test_slot_recycling();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }

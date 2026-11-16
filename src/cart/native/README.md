@@ -11,9 +11,16 @@ It does not yet run DAOS RPCs or replace Mercury serialization. Do not set
 - CPU host-memory RC verbs endpoint creation, address export, and connection.
 - SEND/RECV and one-sided READ/WRITE using registered buffers.
 - Bounded outstanding work with `EAGAIN` backpressure and completion cookies.
+- Preallocated operation state with constant-time free-list allocation and
+  recycling; bounded CQ polling batches of up to 32 entries. No allocation is
+  performed on the posting or completion paths. All accepted work remains
+  signaled; selective signaling and chained posting are not implemented.
 - Registration lifetime tracking, error/flush completion handling, and busy close.
 - A versioned, big-endian request/reply envelope with strict frame validation.
 - Hardware-free fault/ownership tests and a separate real-HCA smoke executable.
+
+DC is deferred. These optimizations reduce local software work but have not been
+benchmarked on an RDMA device and establish no end-to-end RPC-rate improvement.
 
 The endpoint is owned by one serialized execution context. Posting, polling,
 registration, deregistration, and closing must not run concurrently on it. Every

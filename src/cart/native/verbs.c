@@ -20,6 +20,7 @@ struct operation {
 	void                  *cookie;
 	enum crt_native_opcode opcode;
 	size_t                 length;
+	unsigned               next_free;
 	bool                   active;
 };
 
@@ -32,6 +33,7 @@ struct crt_native_ep {
 	struct crt_native_address local;
 	struct operation         *operations;
 	unsigned                  outstanding;
+	unsigned                  free_head;
 	unsigned                  registrations;
 	bool                      connected;
 	bool                      closing;
@@ -100,6 +102,8 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 		rc = ENOMEM;
 		goto fail;
 	}
+	for (unsigned i = 0; i < cfg->depth; i++)
+		ep->operations[i].next_free = i + 1;
 	devices = ibv_get_device_list(&count);
 	if (devices == NULL) {
 		rc = errno != 0 ? errno : ENODEV;
@@ -312,9 +316,7 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 		    length > UINT64_MAX - (remote->address + remote_offset))
 			return EINVAL;
 	}
-	for (slot = 0; slot < ep->config.depth; slot++)
-		if (!ep->operations[slot].active)
-			break;
+	slot = ep->free_head;
 	if (slot == ep->config.depth)
 		return EAGAIN;
 	sge = (struct ibv_sge){.addr   = (uintptr_t)mr->mr->addr + offset,
@@ -340,6 +342,7 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 		rc = ibv_post_send(ep->qp, &send, &bad_send);
 	}
 	if (rc == 0) {
+		ep->free_head        = ep->operations[slot].next_free;
 		ep->operations[slot] = (struct operation){
 		    .mr = mr, .cookie = cookie, .opcode = opcode, .length = length, .active = true};
 		ep->outstanding++;
@@ -363,9 +366,9 @@ static int
 verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, unsigned capacity,
 	       unsigned *count)
 {
-	struct ibv_wc     wc;
+	struct ibv_wc     batch[32];
 	struct operation *op;
-	int               rc;
+	int               rc, error;
 
 	if (count == NULL)
 		return EINVAL;
@@ -373,32 +376,50 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 	if (ep == NULL || output == NULL || capacity == 0)
 		return EINVAL;
 	while (*count < capacity) {
-		rc = ibv_poll_cq(ep->cq, 1, &wc);
+		unsigned budget = capacity - *count;
+
+		if (budget > sizeof(batch) / sizeof(batch[0]))
+			budget = sizeof(batch) / sizeof(batch[0]);
+		rc = ibv_poll_cq(ep->cq, (int)budget, batch);
 		if (rc < 0) {
 			verbs_close_begin(ep);
 			return EIO;
 		}
 		if (rc == 0)
 			break;
-		if (wc.wr_id >= ep->config.depth || !ep->operations[wc.wr_id].active) {
-			verbs_close_begin(ep);
-			return EPROTO;
+		error = 0;
+		/* A poll removes the whole batch from the CQ. Even if one entry is
+		 * corrupt, account for every other entry before returning an error.
+		 */
+		for (int i = 0; i < rc; i++) {
+			struct ibv_wc wc = batch[i];
+
+			if (wc.wr_id >= ep->config.depth || !ep->operations[wc.wr_id].active) {
+				error = EPROTO;
+				continue;
+			}
+			op             = &ep->operations[wc.wr_id];
+			output[*count] = (struct crt_native_completion){
+			    .cookie = op->cookie,
+			    .opcode = op->opcode,
+			    .error  = wc.status == IBV_WC_SUCCESS        ? 0
+				      : wc.status == IBV_WC_WR_FLUSH_ERR ? ECANCELED
+									 : EIO,
+			    .bytes  = wc.status != IBV_WC_SUCCESS     ? 0
+				      : op->opcode == CRT_NATIVE_RECV ? wc.byte_len
+								      : op->length,
+			};
+			op->mr->references--;
+			op->active    = false;
+			op->next_free = ep->free_head;
+			ep->free_head = (unsigned)wc.wr_id;
+			ep->outstanding--;
+			(*count)++;
 		}
-		op             = &ep->operations[wc.wr_id];
-		output[*count] = (struct crt_native_completion){
-		    .cookie = op->cookie,
-		    .opcode = op->opcode,
-		    .error  = wc.status == IBV_WC_SUCCESS        ? 0
-			      : wc.status == IBV_WC_WR_FLUSH_ERR ? ECANCELED
-								 : EIO,
-		    .bytes  = wc.status != IBV_WC_SUCCESS     ? 0
-			      : op->opcode == CRT_NATIVE_RECV ? wc.byte_len
-							      : op->length,
-		};
-		op->mr->references--;
-		op->active = false;
-		ep->outstanding--;
-		(*count)++;
+		if (error != 0) {
+			verbs_close_begin(ep);
+			return error;
+		}
 	}
 	return 0;
 }
