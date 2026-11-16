@@ -158,9 +158,6 @@ exit:
 	return;
 }
 
-/* Value based on default daos runs with 16 targets + 2 service contexts */
-#define CRT_SRV_CONTEXT_NUM_MIN (16 + 2)
-
 static int
 prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool primary,
 	       crt_init_options_t *opt)
@@ -190,12 +187,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider, bool p
 			D_WARN("ctx_max_num %u exceeds max %u, using max\n", ctx_max_num,
 			       CRT_SRV_CONTEXT_NUM);
 			ctx_max_num = CRT_SRV_CONTEXT_NUM;
-		}
-		/* To be able to run on VMs */
-		if (ctx_max_num < CRT_SRV_CONTEXT_NUM_MIN) {
-			D_INFO("ctx_max_num %u is less than min %u, using min\n", ctx_max_num,
-			       CRT_SRV_CONTEXT_NUM_MIN);
-			ctx_max_num = CRT_SRV_CONTEXT_NUM_MIN;
 		}
 	}
 
