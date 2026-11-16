@@ -1,0 +1,89 @@
+/*
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+#ifndef CRT_NATIVE_TRANSPORT_H
+#define CRT_NATIVE_TRANSPORT_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+/* Experimental private interface; no public CaRT ABI. All entry points on an
+ * endpoint and its memory registrations must be serialized by their owner.
+ * Errors are positive errno values. A successful post accepts an operation;
+ * its buffer and completion object remain owned until returned by progress().
+ * Failed posts do not generate completions. Neither QP errors nor close_begin()
+ * release buffers: their flush completions must be consumed first.
+ * progress() may return both an error and nonzero count: consume all returned
+ * completions. Memory exposed to a peer must additionally remain registered
+ * until that peer has relinquished its remote key; local references alone
+ * cannot establish remote quiescence. Memory registration currently takes host
+ * buffers only. Device-memory support requires an explicit interface extension.
+ *
+ * CPU and future GPU implementations share connection/registration semantics,
+ * but not queue layout or host/device completion mechanisms. No verbs types
+ * escape this interface. A future GPU extension must explicitly negotiate its
+ * memory and execution capabilities rather than accept a CPU pointer as VRAM.
+ */
+struct crt_native_ep;
+struct crt_native_mr;
+
+enum crt_native_opcode {
+	CRT_NATIVE_SEND,
+	CRT_NATIVE_RECV,
+	CRT_NATIVE_READ,
+	CRT_NATIVE_WRITE,
+};
+
+struct crt_native_completion {
+	void                  *cookie;
+	enum crt_native_opcode opcode;
+	int                    error;
+	size_t                 bytes;
+};
+
+/* Exchanged using an authenticated bootstrap supplied by the RPC layer.
+ * This structure is host-endian and MUST NOT be sent verbatim on the wire.
+ */
+struct crt_native_address {
+	uint32_t qpn;
+	uint32_t psn;
+	uint16_t lid;
+	uint8_t  gid[16];
+	uint8_t  mtu;
+	bool     global;
+};
+
+struct crt_native_remote_memory {
+	uint64_t address;
+	uint64_t length;
+	uint32_t key;
+};
+
+struct crt_native_config {
+	const char *device;
+	uint8_t     port;
+	int         gid_index;
+	unsigned    depth;
+};
+
+struct crt_native_ops {
+	const char *name;
+	int (*open)(const struct crt_native_config *, struct crt_native_ep **);
+	int (*address)(struct crt_native_ep *, struct crt_native_address *);
+	int (*connect)(struct crt_native_ep *, const struct crt_native_address *);
+	int (*register_memory)(struct crt_native_ep *, void *, size_t, bool,
+			       struct crt_native_mr **, struct crt_native_remote_memory *);
+	int (*deregister_memory)(struct crt_native_mr *);
+	int (*post)(struct crt_native_ep *, enum crt_native_opcode, struct crt_native_mr *, size_t,
+		    size_t, const struct crt_native_remote_memory *, size_t, void *);
+	int (*progress)(struct crt_native_ep *, struct crt_native_completion *, unsigned,
+			unsigned *);
+	int (*close_begin)(struct crt_native_ep *);
+	int (*close)(struct crt_native_ep *);
+};
+
+extern const struct crt_native_ops crt_native_verbs_ops;
+
+#endif
