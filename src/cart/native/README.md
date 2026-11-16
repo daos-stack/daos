@@ -72,8 +72,10 @@ handlers or DAOS operations, and they do not validate a real verbs provider.
 
 `bootstrap.h` exchanges endpoint parameters over a caller-owned socket;
 `rpc.h` matches requests/replies and owns preallocated frames; `channel.h`
-registers those frames, posts receives and drives the transport. The CaRT bridge
-must supply authenticated connections, payload codecs and handler integration.
+registers those frames, posts receives and drives the transport. `proc.h` supplies
+an allocation-free native payload codec. The CaRT bridge must supply authenticated
+connections, map existing CaRT proc callbacks/headers onto this codec, and integrate
+handler dispatch. The codec is not yet a replacement for `crt_hg_proc.c`.
 
 `bulk.h` provides connection-bound SGL registration, endian-safe remote memory
 descriptors, export leases and bounded chunked READ/WRITE execution. A dedicated
@@ -83,6 +85,45 @@ unsubmitted chunks and retains local registrations until accepted chunks finish.
 Releasing an exported remote key requires a peer acknowledgment or established
 remote quiescence. The CaRT adapter does not yet provide that lifecycle binding;
 a local RPC timeout must never be treated as such an acknowledgment.
+
+## Serialization and copy ownership
+
+`crt_native_rpc_call_encoded()` and `crt_native_rpc_reply_encoded()` invoke a
+synchronous encoder directly on the payload region of the registered SEND slab.
+Initialize a stack `crt_native_proc` on that region, serialize fields, then return
+the length from `crt_native_proc_finish()`. An encoder failure queues no frame;
+a failed reply encoder leaves the handler token available for retry. Encoder
+callbacks must not reenter the RPC engine or retain the buffer. Accepted frames
+remain owned by the transport until SEND completion as before.
+
+The codec uses an eight-byte `CRTP`/version-1 prefix, fixed-width big-endian
+integers (including signed two's-complement values), one-byte canonical booleans,
+and no alignment padding. Strings and byte fields have u64 byte counts; strings
+include their terminating NUL (zero count denotes NULL). Bulk fields contain a
+u32 descriptor length and the existing versioned native descriptor, with zero
+denoting NULL. Lengths are bounded before access, errors remain sticky, decode
+requires exact consumption, and malformed/trailing input is rejected. Raw fields
+are opaque bytes, never an excuse to transmit C structs with native layout.
+
+| Path | Payload copies performed by this layer |
+| --- | --- |
+| Encode scalars/headers | Direct stores into the final registered frame |
+| Encode existing application strings/bytes | One copy into the final frame |
+| Produce bytes using `u64()` + `span()` | None; producer writes the reserved final span |
+| Decode request strings/bytes | None; borrowed views into RX |
+| Decode reply after SEND completion | None; callback borrows RX before repost |
+| Reply received before SEND completion | One copy into the preallocated response slab |
+| Bulk payload | No codec copy; only descriptors are serialized, data uses RDMA |
+
+This is not universal end-to-end zero copy. Borrowed views expire when the handler
+or completion callback returns; asynchronous CaRT dispatch still needs an RX
+lease (or a deliberate copy). `FREE` only resets borrowed views and does not free
+their backing memory. It must not release bulk export leases; those remain the
+RPC lifecycle owner's responsibility. Large fields should use the bulk path;
+there is no eager fragmentation/rendezvous fallback yet. No performance claim
+follows from the hardware-free codec tests.
+
+## Remaining integration work
 
 1. Introduce transport-neutral context, address, request, and bulk state alongside
    the current Mercury state. Convert direct HG calls outside `crt_hg.c` and

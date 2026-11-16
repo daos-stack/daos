@@ -21,6 +21,8 @@ struct crt_native_tx {
 /* Single-owner eager RPC engine; no CaRT, verbs or CUDA dependencies. All
  * buffers and request records are allocated at create time. Payload pointers
  * passed to handlers/completions are borrowed for the duration of the callback.
+ * Requests and replies whose SEND has completed decode directly from RX. An
+ * early reply is copied into the preallocated response slab until SEND completes.
  * Callbacks may call call()/reply(), but must not cancel, recursively drive
  * receive()/tx_complete() or destroy the session.
  *
@@ -37,6 +39,13 @@ typedef void (*crt_native_done_t)(void *arg, int error, uint32_t remote_status, 
 				  size_t size);
 typedef void (*crt_native_handler_t)(void    *arg, struct crt_native_rpc *, struct crt_native_token,
 				     uint32_t opcode, const void *payload, size_t size);
+/* Encode directly in the registered payload region; no staging copy. Called
+ * synchronously, once, with bounded capacity. Return positive errno on error.
+ * On success set used <= capacity. Do not retain the pointer or reenter any
+ * RPC operation from this callback. Failure queues no frame/callback; a failed
+ * reply encoder leaves its handler token valid for retry.
+ */
+typedef int (*crt_native_encoder_t)(void *arg, void *payload, size_t capacity, size_t *used);
 
 int
 crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t, void *,
@@ -45,8 +54,14 @@ int
 crt_native_rpc_call(struct crt_native_rpc *, uint32_t opcode, const void *, size_t,
 		    crt_native_done_t, void *, uint64_t *id);
 int
+crt_native_rpc_call_encoded(struct crt_native_rpc *, uint32_t opcode, crt_native_encoder_t,
+			    void *encoder_arg, crt_native_done_t, void *done_arg, uint64_t *id);
+int
 crt_native_rpc_reply(struct crt_native_rpc *, struct crt_native_token, uint32_t status,
 		     const void *, size_t);
+int
+crt_native_rpc_reply_encoded(struct crt_native_rpc *, struct crt_native_token, uint32_t status,
+			     crt_native_encoder_t, void *encoder_arg);
 int
 crt_native_rpc_next_tx(struct crt_native_rpc *, struct crt_native_tx *);
 int

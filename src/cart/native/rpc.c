@@ -29,7 +29,7 @@ struct crt_native_rpc {
 	uint8_t             *buffers;
 	crt_native_handler_t handler;
 	void                *handler_arg;
-	bool                 callback;
+	bool                 callback, encoding;
 };
 
 static void
@@ -66,15 +66,14 @@ slot_of(struct crt_native_rpc *rpc, uint64_t id, unsigned *slot)
 }
 
 static void
-finish(struct crt_native_rpc *rpc, unsigned slot)
+finish_payload(struct crt_native_rpc *rpc, unsigned slot, const void *response)
 {
-	struct entry     *e        = &rpc->requests[slot];
-	crt_native_done_t done     = e->done;
-	void             *arg      = e->arg;
-	int               error    = e->error;
-	uint32_t          status   = e->status;
-	size_t            size     = error ? 0 : e->response_size;
-	const void       *response = e->response;
+	struct entry     *e      = &rpc->requests[slot];
+	crt_native_done_t done   = e->done;
+	void             *arg    = e->arg;
+	int               error  = e->error;
+	uint32_t          status = e->status;
+	size_t            size   = error ? 0 : e->response_size;
 
 	/* Keep this slot unavailable until its callback returns, so a reentrant
 	 * call cannot overwrite the borrowed response while it is being consumed.
@@ -86,6 +85,12 @@ finish(struct crt_native_rpc *rpc, unsigned slot)
 	e->next        = rpc->free_head;
 	rpc->free_head = slot;
 	rpc->active_calls--;
+}
+
+static void
+finish(struct crt_native_rpc *rpc, unsigned slot)
+{
+	finish_payload(rpc, slot, rpc->requests[slot].response);
 }
 
 int
@@ -130,8 +135,21 @@ crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t ha
 }
 
 static int
-encode_frame(struct crt_native_rpc *rpc, struct entry *e, bool reply, const void *data, size_t size)
+encode_frame(struct crt_native_rpc *rpc, struct entry *e, bool reply, crt_native_encoder_t encode,
+	     void *arg)
 {
+	size_t size = 0;
+	int    rc;
+	if (rpc->encoding)
+		return EBUSY;
+	rpc->encoding = true;
+	rc            = encode(arg, e->frame + CRT_NATIVE_HEADER_SIZE,
+			       rpc->frame_size - CRT_NATIVE_HEADER_SIZE, &size);
+	rpc->encoding = false;
+	if (rc != 0)
+		return rc > 0 ? rc : EINVAL;
+	if (size > rpc->frame_size - CRT_NATIVE_HEADER_SIZE)
+		return EMSGSIZE;
 	struct crt_native_header h = {
 	    .type         = reply ? CRT_NATIVE_REPLY : CRT_NATIVE_REQUEST,
 	    .request_id   = e->id,
@@ -139,26 +157,26 @@ encode_frame(struct crt_native_rpc *rpc, struct entry *e, bool reply, const void
 	    .payload_size = (uint32_t)size,
 	    .status       = e->status,
 	};
-	int rc = crt_native_encode(&h, e->frame, rpc->frame_size);
+	rc = crt_native_encode(&h, e->frame, rpc->frame_size);
 	if (rc != 0)
 		return rc;
-	if (size != 0)
-		memcpy(e->frame + CRT_NATIVE_HEADER_SIZE, data, size);
 	e->size = CRT_NATIVE_HEADER_SIZE + size;
 	return 0;
 }
 
 int
-crt_native_rpc_call(struct crt_native_rpc *rpc, uint32_t opcode, const void *data, size_t size,
-		    crt_native_done_t done, void *arg, uint64_t *id)
+crt_native_rpc_call_encoded(struct crt_native_rpc *rpc, uint32_t opcode,
+			    crt_native_encoder_t encode, void *encoder_arg, crt_native_done_t done,
+			    void *arg, uint64_t *id)
 {
 	struct entry *e;
 	unsigned      slot;
 	int           rc;
 
-	if (rpc == NULL || done == NULL || id == NULL || (size != 0 && data == NULL) ||
-	    size > rpc->frame_size - CRT_NATIVE_HEADER_SIZE)
+	if (rpc == NULL || done == NULL || id == NULL || encode == NULL)
 		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
 	if (rpc->failed)
 		return rpc->failed;
 	slot = rpc->free_head;
@@ -176,7 +194,7 @@ crt_native_rpc_call(struct crt_native_rpc *rpc, uint32_t opcode, const void *dat
 	e->response_size = 0;
 	e->done          = done;
 	e->arg           = arg;
-	rc               = encode_frame(rpc, e, false, data, size);
+	rc               = encode_frame(rpc, e, false, encode, encoder_arg);
 	if (rc != 0)
 		return rc;
 	rpc->free_head = e->next;
@@ -188,28 +206,69 @@ crt_native_rpc_call(struct crt_native_rpc *rpc, uint32_t opcode, const void *dat
 }
 
 int
-crt_native_rpc_reply(struct crt_native_rpc *rpc, struct crt_native_token token, uint32_t status,
-		     const void *data, size_t size)
+crt_native_rpc_reply_encoded(struct crt_native_rpc *rpc, struct crt_native_token token,
+			     uint32_t status, crt_native_encoder_t encode, void *arg)
 {
 	unsigned      slot;
 	struct entry *e;
 	int           rc;
 
-	if (rpc == NULL || !token.reply || slot_of(rpc, token.id, &slot) != 0 ||
-	    (size != 0 && data == NULL) || size > rpc->frame_size - CRT_NATIVE_HEADER_SIZE)
+	if (rpc == NULL || !token.reply || slot_of(rpc, token.id, &slot) != 0 || encode == NULL)
 		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
 	if (rpc->failed)
 		return rpc->failed;
 	e = &rpc->replies[slot];
 	if (e->state != HANDLING || e->id != token.id)
 		return ENOENT;
 	e->status = status;
-	rc        = encode_frame(rpc, e, true, data, size);
+	rc        = encode_frame(rpc, e, true, encode, arg);
 	if (rc != 0)
 		return rc;
 	e->state = QUEUED;
 	enqueue(rpc->replies, &rpc->reply_head, &rpc->reply_tail, slot, rpc->depth);
 	return 0;
+}
+
+struct copy_payload {
+	const void *data;
+	size_t      size;
+};
+
+static int
+copy_payload(void *arg, void *buffer, size_t capacity, size_t *used)
+{
+	struct copy_payload *p = arg;
+	if (p->size > capacity || (p->size != 0 && p->data == NULL))
+		return EINVAL;
+	if (p->size)
+		memcpy(buffer, p->data, p->size);
+	*used = p->size;
+	return 0;
+}
+
+int
+crt_native_rpc_call(struct crt_native_rpc *rpc, uint32_t opcode, const void *data, size_t size,
+		    crt_native_done_t done, void *arg, uint64_t *id)
+{
+	struct copy_payload p = {data, size};
+	/* Preserve validation before consuming a generation. */
+	if (rpc == NULL || size > rpc->frame_size - CRT_NATIVE_HEADER_SIZE ||
+	    (size && data == NULL))
+		return EINVAL;
+	return crt_native_rpc_call_encoded(rpc, opcode, copy_payload, &p, done, arg, id);
+}
+
+int
+crt_native_rpc_reply(struct crt_native_rpc *rpc, struct crt_native_token token, uint32_t status,
+		     const void *data, size_t size)
+{
+	struct copy_payload p = {data, size};
+	if (rpc == NULL || size > rpc->frame_size - CRT_NATIVE_HEADER_SIZE ||
+	    (size && data == NULL))
+		return EINVAL;
+	return crt_native_rpc_reply_encoded(rpc, token, status, copy_payload, &p);
 }
 
 int
@@ -221,6 +280,8 @@ crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 
 	if (rpc == NULL || tx == NULL)
 		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
 	if (rpc->failed)
 		return rpc->failed;
 	/* Replies have independent records and priority over new requests. */
@@ -246,6 +307,8 @@ crt_native_rpc_tx_complete(struct crt_native_rpc *rpc, struct crt_native_token t
 
 	if (rpc == NULL || rpc->callback || error < 0 || slot_of(rpc, token.id, &slot) != 0)
 		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
 	e = token.reply ? &rpc->replies[slot] : &rpc->requests[slot];
 	if (e->state != IN_FLIGHT || e->id != token.id)
 		return ENOENT;
@@ -273,6 +336,8 @@ crt_native_rpc_receive(struct crt_native_rpc *rpc, const void *frame, size_t siz
 
 	if (rpc == NULL || rpc->callback || size > rpc->frame_size)
 		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
 	if (rpc->failed)
 		return rpc->failed;
 	rc = crt_native_decode(frame, size, &h);
@@ -285,13 +350,16 @@ crt_native_rpc_receive(struct crt_native_rpc *rpc, const void *frame, size_t siz
 			return 0;
 		if (e->state == QUEUED || e->received || e->opcode != h.opcode)
 			return EPROTO;
-		e->received      = true;
-		e->status        = h.status;
-		e->response_size = h.payload_size;
-		memcpy(e->response, (const uint8_t *)frame + CRT_NATIVE_HEADER_SIZE,
-		       h.payload_size);
+		e->received         = true;
+		e->status           = h.status;
+		e->response_size    = h.payload_size;
+		const void *payload = (const uint8_t *)frame + CRT_NATIVE_HEADER_SIZE;
 		if (e->state == WAIT_REPLY)
-			finish(rpc, slot);
+			/* SEND is complete: callback consumes RX before repost. */
+			finish_payload(rpc, slot, payload);
+		else
+			/* Preserve early replies until the accepted SEND completes. */
+			memcpy(e->response, payload, h.payload_size);
 		return 0;
 	}
 	e = &rpc->replies[slot];
@@ -321,7 +389,7 @@ crt_native_rpc_cancel(struct crt_native_rpc *rpc, uint64_t id, int error)
 	e = &rpc->requests[slot];
 	if (e->state == FREE || e->id != id)
 		return ENOENT;
-	if (rpc->callback)
+	if (rpc->callback || rpc->encoding)
 		return EBUSY;
 	if (e->error == 0)
 		e->error = error;
@@ -349,6 +417,8 @@ crt_native_rpc_fail(struct crt_native_rpc *rpc, int error)
 {
 	if (rpc == NULL || error <= 0 || rpc->callback)
 		return EINVAL;
+	if (rpc->encoding)
+		return EBUSY;
 	if (rpc->failed == 0)
 		rpc->failed = error;
 	for (unsigned i = 0; i < rpc->depth; i++) {
@@ -370,7 +440,8 @@ crt_native_rpc_destroy(struct crt_native_rpc *rpc)
 {
 	if (rpc == NULL)
 		return EINVAL;
-	if (rpc->active_calls || rpc->active_servers || rpc->driver_owned || rpc->callback)
+	if (rpc->active_calls || rpc->active_servers || rpc->driver_owned || rpc->callback ||
+	    rpc->encoding)
 		return EBUSY;
 	free(rpc->buffers);
 	free(rpc->replies);
@@ -383,7 +454,7 @@ bool
 crt_native_rpc_idle(const struct crt_native_rpc *rpc)
 {
 	return rpc != NULL && rpc->active_calls == 0 && rpc->active_servers == 0 &&
-	       rpc->driver_owned == 0 && !rpc->callback;
+	       rpc->driver_owned == 0 && !rpc->callback && !rpc->encoding;
 }
 
 int

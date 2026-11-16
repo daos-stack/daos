@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include "../bulk.h"
+#include "../proc.h"
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -139,6 +140,24 @@ main(void)
 	assert(ep.active == 2 && ep.access == CRT_NATIVE_REMOTE_READ);
 	assert(crt_native_bulk_acquire(bulk, UINT64_C(0x1122334455667788), &lease) == 0);
 	assert(crt_native_bulk_acquire(bulk, 2, &lease) == EBUSY);
+	assert(crt_native_bulk_destroy(bulk) == EBUSY);
+	/* Descriptor codec writes straight into the final frame and does not
+	 * release the export lease, even on insufficient frame space or FREE.
+	 */
+	struct crt_native_proc proc;
+	uint8_t                payload[128];
+	assert(crt_native_proc_init(&proc, CRT_NATIVE_ENCODE, payload, 16) == 0);
+	assert(crt_native_proc_bulk(&proc, &lease, NULL) == EMSGSIZE);
+	assert(crt_native_bulk_destroy(bulk) == EBUSY);
+	assert(crt_native_proc_init(&proc, CRT_NATIVE_ENCODE, payload, sizeof(payload)) == 0);
+	assert(crt_native_proc_bulk(&proc, &lease, NULL) == 0);
+	assert(crt_native_proc_finish(&proc, &used) == 0);
+	assert(crt_native_proc_init(&proc, CRT_NATIVE_DECODE, payload, used) == 0);
+	assert(crt_native_proc_bulk(&proc, NULL, &remote) == 0);
+	assert(crt_native_proc_finish(&proc, &used) == 0);
+	assert(remote.lease_id == lease.id && remote.length == 96 && remote.count == 2);
+	assert(crt_native_proc_init(&proc, CRT_NATIVE_FREE, NULL, 0) == 0);
+	assert(crt_native_proc_bulk(&proc, NULL, &remote) == 0);
 	assert(crt_native_bulk_destroy(bulk) == EBUSY);
 	assert(crt_native_bulk_pack(&lease, frame, sizeof(frame) - 1, &used) == EMSGSIZE);
 	assert(crt_native_bulk_pack(&lease, frame, sizeof(frame), &used) == 0 &&
