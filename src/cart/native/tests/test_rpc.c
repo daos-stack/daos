@@ -1,0 +1,155 @@
+/*
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+#include "../rpc.h"
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+
+struct result {
+	unsigned count;
+	int      error;
+	uint32_t status;
+	char     data[32];
+};
+static void
+done(void *arg, int error, uint32_t status, const void *data, size_t size)
+{
+	struct result *r = arg;
+	r->count++;
+	r->error  = error;
+	r->status = status;
+	assert(size < sizeof(r->data));
+	memset(r->data, 0, sizeof(r->data));
+	memcpy(r->data, data, size);
+}
+static void
+echo(void *arg, struct crt_native_rpc *rpc, struct crt_native_token token, uint32_t opcode,
+     const void *data, size_t size)
+{
+	unsigned *calls = arg;
+	(*calls)++;
+	assert(opcode == 17);
+	assert(crt_native_rpc_reply(rpc, token, 123, data, size) == 0);
+	assert(crt_native_rpc_reply(rpc, token, 123, data, size) == ENOENT);
+}
+
+static void
+pipeline(void)
+{
+	struct crt_native_rpc *a, *b;
+	struct crt_native_tx   requests[4], response, ignored;
+	struct result          results[4] = {0};
+	unsigned               handled    = 0;
+	uint64_t               ids[4], id;
+	char                   stale[256];
+	size_t                 stale_size = 0;
+	void                  *slab;
+	size_t                 slab_size;
+
+	assert(crt_native_rpc_create(4, 256, echo, &handled, &a) == 0);
+	assert(crt_native_rpc_create(4, 256, echo, &handled, &b) == 0);
+	assert(crt_native_rpc_buffers(a, &slab, &slab_size) == 0 && slab != NULL &&
+	       slab_size == 3 * 4 * 256);
+	for (unsigned round = 0; round < 1024; round++) {
+		for (unsigned i = 0; i < 4; i++) {
+			assert(crt_native_rpc_call(a, 17, "hello", 5, done, &results[i], &ids[i]) ==
+			       0);
+			assert(crt_native_rpc_next_tx(a, &requests[i]) == 0);
+		}
+		assert(crt_native_rpc_call(a, 17, NULL, 0, done, &results[0], &id) == EAGAIN);
+		assert(crt_native_rpc_next_tx(a, &ignored) == EAGAIN);
+		assert(crt_native_rpc_destroy(a) == EBUSY);
+		/* Replies may arrive before the local SEND completion. They must not
+		 * recycle a frame still used by DMA or trigger an early callback.
+		 */
+		for (unsigned i = 0; i < 4; i++) {
+			assert(crt_native_rpc_receive(b, requests[i].data, requests[i].length) ==
+			       0);
+			assert(crt_native_rpc_next_tx(b, &response) == 0);
+			if (round == 0 && i == 0) {
+				stale_size = response.length;
+				memcpy(stale, response.data, stale_size);
+			}
+			assert(crt_native_rpc_receive(a, response.data, response.length) == 0);
+			assert(results[i].count == round);
+			assert(crt_native_rpc_tx_complete(b, response.token, 0) == 0);
+		}
+		for (unsigned i = 4; i-- != 0;) {
+			assert(crt_native_rpc_tx_complete(a, requests[i].token, 0) == 0);
+			assert(results[i].count == round + 1 && results[i].error == 0 &&
+			       results[i].status == 123 && strcmp(results[i].data, "hello") == 0);
+			assert(crt_native_rpc_tx_complete(a, requests[i].token, 0) == ENOENT);
+		}
+		if (round != 0)
+			assert(crt_native_rpc_receive(a, stale, stale_size) == 0);
+	}
+	assert(handled == 4096);
+	assert(crt_native_rpc_destroy(a) == 0);
+	assert(crt_native_rpc_destroy(b) == 0);
+}
+
+static void
+cancellation(void)
+{
+	struct crt_native_rpc *rpc;
+	struct crt_native_tx   tx;
+	struct result          r       = {0};
+	unsigned               handled = 0;
+	uint64_t               id;
+
+	assert(crt_native_rpc_create(1, 64, echo, &handled, &rpc) == 0);
+	assert(crt_native_rpc_call(rpc, 17, "x", 1, done, &r, &id) == 0);
+	assert(crt_native_rpc_cancel(rpc, id, ETIMEDOUT) == 0);
+	assert(r.count == 1 && r.error == ETIMEDOUT);
+	assert(crt_native_rpc_next_tx(rpc, &tx) == EAGAIN);
+	assert(crt_native_rpc_call(rpc, 17, "x", 1, done, &r, &id) == 0);
+	assert(crt_native_rpc_next_tx(rpc, &tx) == 0);
+	assert(crt_native_rpc_cancel(rpc, id, ECANCELED) == 0);
+	assert(r.count == 1);
+	assert(crt_native_rpc_destroy(rpc) == EBUSY);
+	assert(crt_native_rpc_tx_complete(rpc, tx.token, 0) == 0);
+	assert(r.count == 2 && r.error == ECANCELED);
+	assert(crt_native_rpc_call(rpc, 17, "x", 1, done, &r, &id) == 0);
+	assert(crt_native_rpc_next_tx(rpc, &tx) == 0);
+	assert(crt_native_rpc_fail(rpc, ECONNRESET) == 0);
+	assert(crt_native_rpc_destroy(rpc) == EBUSY && r.count == 2);
+	assert(crt_native_rpc_tx_complete(rpc, tx.token, ECANCELED) == 0);
+	assert(r.count == 3 && r.error == ECONNRESET);
+	assert(crt_native_rpc_call(rpc, 17, "x", 1, done, &r, &id) == ECONNRESET);
+	assert(crt_native_rpc_destroy(rpc) == 0);
+}
+
+static void
+reply_before_request_and_bad_frame(void)
+{
+	struct crt_native_rpc   *rpc;
+	struct result            r       = {0};
+	unsigned                 handled = 0;
+	uint64_t                 id;
+	char                     frame[64];
+	struct crt_native_header h = {.type = CRT_NATIVE_REPLY, .opcode = 17};
+
+	assert(crt_native_rpc_create(1, 64, echo, &handled, &rpc) == 0);
+	assert(crt_native_rpc_call(rpc, 17, NULL, 0, done, &r, &id) == 0);
+	h.request_id = id;
+	assert(crt_native_encode(&h, frame, sizeof(frame)) == 0);
+	assert(crt_native_rpc_receive(rpc, frame, CRT_NATIVE_HEADER_SIZE) == EPROTO);
+	assert(r.count == 0);
+	assert(crt_native_rpc_fail(rpc, EPROTO) == 0);
+	assert(r.count == 1 && r.error == EPROTO);
+	assert(crt_native_rpc_destroy(rpc) == 0);
+}
+
+int
+main(void)
+{
+	pipeline();
+	cancellation();
+	reply_before_request_and_bad_frame();
+	puts("RPC engine: pipelining, matching, generations, cancellation and pinned-send tests "
+	     "passed");
+	return 0;
+}
