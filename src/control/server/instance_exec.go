@@ -89,13 +89,30 @@ func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInf
 	return ch, errors.Wrap(err, "runner Start")
 }
 
-// waitReady awaits ready signal from I/O Engine before starting
+// exitBeforeReadyError is returned by waitReady when the engine process exits before sending its
+// ready notification.
+type exitBeforeReadyError struct {
+	pid int
+	err error
+}
+
+func (e *exitBeforeReadyError) Error() string {
+	return fmt.Sprintf("pid %d exited before ready: %s", e.pid, e.err)
+}
+
+func (e *exitBeforeReadyError) Unwrap() error {
+	return e.err
+}
+
+// waitReady awaits ready signal from I/O Engine, or its exit if that comes first, before starting
 // management service on MS replicas immediately so other instances can join.
 // I/O Engine modules are then loaded.
-func (ei *EngineInstance) waitReady(ctx context.Context) error {
+func (ei *EngineInstance) waitReady(ctx context.Context, runnerExitCh engine.RunnerExitChan) error {
 	select {
 	case <-ctx.Done(): // propagated harness exit
 		return ctx.Err()
+	case runnerExit := <-runnerExitCh:
+		return &exitBeforeReadyError{pid: runnerExit.PID, err: runnerExit.Error}
 	case ready := <-ei.awaitDrpcReady():
 		if err := ei.finishStartup(ctx, ready); err != nil {
 			return err
@@ -213,7 +230,16 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 	}
 	ei.waitDrpc.SetTrue()
 
-	return runnerExitChan, ei.waitReady(ctx)
+	if err = ei.waitReady(ctx, runnerExitChan); err != nil {
+		var exitErr *exitBeforeReadyError
+		if errors.As(err, &exitErr) {
+			// The runner closes the channel after its single send; it must not reach the loop.
+			return nil, err
+		}
+		return runnerExitChan, err
+	}
+
+	return runnerExitChan, nil
 }
 
 // requestStart makes a request to (re-)start the engine, and blocks
@@ -249,8 +275,14 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 
 				runnerExitCh, err = ei.startRunner(ctx)
 				if err != nil {
-					ei.log.Errorf("runner exited without starting process: %+v", err)
-					ei.handleExit(ctx, 0, err)
+					var exitErr *exitBeforeReadyError
+					if errors.As(err, &exitErr) {
+						ei.log.Errorf("instance %d exited before signalling ready: %s", ei.Index(), exitErr.err)
+						ei.handleExit(ctx, exitErr.pid, exitErr.err)
+					} else {
+						ei.log.Errorf("runner exited without starting process: %+v", err)
+						ei.handleExit(ctx, 0, err)
+					}
 					continue
 				}
 			case runnerExit := <-runnerExitCh:
