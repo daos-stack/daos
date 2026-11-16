@@ -2065,9 +2065,40 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	}
 
 	if (rc > 0) {
+		struct dc_tx_req_group *dtrg = &dtrgs[tx->tx_leader_tgt];
+
 		rc              = 0;
-		leader_oid      = tx->tx_leader_oid;
 		leader_dtrg_idx = tx->tx_leader_tgt;
+
+		/*
+		 * The former leader_oid may be not for the (new) leader target, and the TX content
+		 * may be changed if the TX is restarted. So re-locate the leader_oid from the sub
+		 * requests on the leader target. If cannot find the former one, then use the last
+		 * sub request on the leader target, the read sub requests are ahead of write ones.
+		 */
+		j = dtrg->dtrg_read_cnt + dtrg->dtrg_write_cnt;
+		D_ASSERT(j > 0);
+
+		dcri                = &dtrg->dtrg_req_idx[j - 1];
+		obj                 = tx->tx_req_cache[start + dcri->dcri_req_idx].dcsr_obj;
+		leader_oid.id_pub   = obj->cob_md.omd_id;
+		leader_oid.id_shard = dcri->dcri_shard_id;
+
+		for (i = 0; i < j - 1; i++) {
+			dcri = &dtrg->dtrg_req_idx[i];
+			obj  = tx->tx_req_cache[start + dcri->dcri_req_idx].dcsr_obj;
+			if (dcri->dcri_shard_id == tx->tx_leader_oid.id_shard &&
+			    daos_oid_cmp(obj->cob_md.omd_id, tx->tx_leader_oid.id_pub) == 0) {
+				leader_oid.id_pub   = obj->cob_md.omd_id;
+				leader_oid.id_shard = dcri->dcri_shard_id;
+				break;
+			}
+		}
+
+		/* Keep the same DMF_SRDG_REP flag as the non-resend case does. */
+		if (mod_grp_cnt == 1 && act_grp_cnt == 1 &&
+		    !obj_is_ec(tx->tx_req_cache[dc_tx_leftmost_req(tx, true)].dcsr_obj))
+			mbs->dm_flags |= DMF_SRDG_REP;
 	} else if (mod_grp_cnt == 1) {
 		/* Modification within single RDG, elect leader as standalone modification does. */
 		uint8_t	*bit_map;

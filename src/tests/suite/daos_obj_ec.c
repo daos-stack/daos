@@ -3539,6 +3539,136 @@ clone_epoch_skew(void **state)
 	ioreq_fini(&req);
 }
 
+/*
+ * A partial update against EC object only involves parts of the shards in the redundancy group:
+ * the touched data cell(s) and the parity shard(s). The update must be forwarded to all of them,
+ * no more, no less, in spite of how many other shards are skipped.
+ *
+ * Update each possible range of contiguous cells in a stripe, then verify that the data can be
+ * fetched when any shard(s) within the redundancy are unavailable: if some involved shard missed
+ * the update, then it will be exposed when the shard(s) holding the other copies are unavailable.
+ */
+static void
+ec_partial_update_shards_oc(test_arg_t *arg, daos_oclass_id_t oc)
+{
+	struct ioreq  req;
+	daos_obj_id_t oid;
+	daos_recx_t   recx;
+	daos_size_t   size;
+	daos_size_t   buf_size;
+	uint64_t      idx = 0;
+	const char   *akey;
+	char          dkey[32];
+	char         *data;
+	void         *buf;
+	int           data_nr;
+	int           tgt_nr;
+	int           start;
+	int           nr;
+	int           i;
+	int           j;
+
+	oid      = daos_test_oid_gen(arg->coh, oc, 0, 0, arg->myrank);
+	data_nr  = ec_data_nr_get(oid);
+	tgt_nr   = ec_tgt_nr_get(oid);
+	buf_size = (daos_size_t)data_nr * ec_cell_size + 123;
+
+	print_message("EC partial update with %d data shards and %d parity shards\n", data_nr,
+		      tgt_nr - data_nr);
+
+	D_ALLOC(data, buf_size);
+	assert_non_null(data);
+	D_ALLOC(buf, buf_size);
+	assert_non_null(buf);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	for (start = 0; start < data_nr; start++) {
+		for (nr = 1; start + nr <= data_nr; nr++) {
+			/* Different dkeys are hashed to different start shards. */
+			snprintf(dkey, sizeof(dkey), "dkey_%d_%d", start, nr);
+			for (i = 0; i < nr; i++)
+				memset(data + i * ec_cell_size, 'a' + start + i, ec_cell_size);
+
+			req.iod_type = DAOS_IOD_ARRAY;
+			recx.rx_idx  = (uint64_t)start * ec_cell_size;
+			recx.rx_nr   = (uint64_t)nr * ec_cell_size;
+			insert_recxs(dkey, "akey", 1, DAOS_TX_NONE, &recx, 1, data, recx.rx_nr,
+				     &req);
+
+			ec_verify_parity_data(&req, dkey, "akey", recx.rx_idx, recx.rx_nr, data,
+					      DAOS_TX_NONE, false);
+			for (i = 0; i < tgt_nr; i++) {
+				/* Any single shard is unavailable. */
+				ec_verify_parity_data_fail2shards(&req, dkey, "akey", recx.rx_idx,
+								  recx.rx_nr, data, DAOS_TX_NONE, i,
+								  i);
+				/*
+				 * Any two shards are unavailable, otherwise the update missed
+				 * on one parity shard may be covered by another parity shard.
+				 */
+				for (j = i + 1; tgt_nr - data_nr > 1 && j < tgt_nr; j++)
+					ec_verify_parity_data_fail2shards(&req, dkey, "akey",
+									  recx.rx_idx, recx.rx_nr,
+									  data, DAOS_TX_NONE, i, j);
+			}
+		}
+	}
+
+	/* Single value: the small one and the large one that is distributed to all the shards. */
+	dts_buf_render(data, buf_size);
+	req.iod_type = DAOS_IOD_SINGLE;
+	insert_single("dkey_sv", "akey_small", 0, data, 64, DAOS_TX_NONE, &req);
+	insert_single("dkey_sv", "akey_large", 0, data, buf_size, DAOS_TX_NONE, &req);
+
+	memset(buf, 0, buf_size);
+	lookup_single("dkey_sv", "akey_small", 0, buf, 64, DAOS_TX_NONE, &req);
+	assert_memory_equal(buf, data, 64);
+
+	memset(buf, 0, buf_size);
+	lookup_single("dkey_sv", "akey_large", 0, buf, buf_size, DAOS_TX_NONE, &req);
+	assert_memory_equal(buf, data, buf_size);
+
+	/* Punch akey and dkey, they are sent to all the shards in the redundancy group. */
+	punch_akey("dkey_sv", "akey_small", DAOS_TX_NONE, &req);
+
+	akey = "akey_small";
+	size = DAOS_REC_ANY;
+	lookup("dkey_sv", 1, &akey, &idx, &size, &buf, &buf_size, DAOS_TX_NONE, &req, false);
+	assert_int_equal(size, 0);
+
+	memset(buf, 0, buf_size);
+	lookup_single("dkey_sv", "akey_large", 0, buf, buf_size, DAOS_TX_NONE, &req);
+	assert_memory_equal(buf, data, buf_size);
+
+	punch_dkey("dkey_sv", DAOS_TX_NONE, &req);
+
+	akey = "akey_large";
+	size = DAOS_REC_ANY;
+	lookup("dkey_sv", 1, &akey, &idx, &size, &buf, &buf_size, DAOS_TX_NONE, &req, false);
+	assert_int_equal(size, 0);
+
+	ioreq_fini(&req);
+	D_FREE(buf);
+	D_FREE(data);
+}
+
+static void
+ec_partial_update_shards(void **state)
+{
+	test_arg_t *arg = *state;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	ec_partial_update_shards_oc(arg, OC_EC_2P1G1);
+	ec_partial_update_shards_oc(arg, OC_EC_2P2G1);
+	ec_partial_update_shards_oc(arg, OC_EC_4P1G1);
+	ec_partial_update_shards_oc(arg, OC_EC_4P2G1);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
     {"EC0: ec dkey list and punch test", ec_dkey_list_punch, async_disable, test_case_teardown},
@@ -3594,6 +3724,8 @@ static const struct CMUnitTest ec_tests[] = {
     {"EC34: cont clone copy of a random workload", ec_clone_random, async_disable,
      test_case_teardown},
     {"EC35: cont clone copy under a snapshot", clone_epoch_skew, async_disable, test_case_teardown},
+    {"EC36: ec partial update with parts of the shards", ec_partial_update_shards, async_disable,
+     test_case_teardown},
 };
 
 int

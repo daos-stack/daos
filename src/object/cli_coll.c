@@ -746,7 +746,15 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	if (rc != 0)
 		goto out;
 
-	D_ASSERT(candidate >= 0);
+	/*
+	 * All the shards may be lost, for example, related targets are excluded (the pool RF
+	 * allows that or by force) and the shards are relocated but still in rebuilding.
+	 */
+	if (unlikely(candidate < 0)) {
+		D_ERROR(DF_OID " all the shards are failed or in-rebuilding\n",
+			DP_OID(obj->cob_md.omd_id));
+		D_GOTO(out, rc = -DER_IO);
+	}
 
 	rc = obj_shard_open(obj, candidate, map_ver, &shard);
 	if (rc != 0)

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -5368,6 +5369,93 @@ io_57(void **state)
 	reintegrate_single_pool_rank(arg, 0, false);
 }
 
+/*
+ * If all the targets that hold the object shards are excluded from the pool (the pool RF allows
+ * that, or the exclusion is forced), then all the object shards are relocated to other targets
+ * and marked as in-rebuilding until related rebuild is done. During that, collective punch can
+ * not find any healthy shard as the leader, it should fail with -DER_IO instead of assertion.
+ */
+static void
+io_58(void **state)
+{
+	test_arg_t             *arg    = *state;
+	struct daos_obj_layout *layout = NULL;
+	struct daos_shard_loc  *loc;
+	struct ioreq            req;
+	daos_obj_id_t           oid;
+	d_rank_t                leader;
+	int                     rc;
+	int                     i;
+	int                     j;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("Collective punch object with all shards in rebuilding\n");
+
+	if (!test_runable(arg, 6))
+		skip();
+
+	/* 24 shards, more than the threshold for collective operation. */
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G8, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+	insert_single("dkey", "akey", 0, "data", strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_obj_layout_get(arg->coh, oid, &layout);
+		assert_rc_equal(rc, 0);
+
+		rc = test_get_leader(arg, &leader);
+		assert_rc_equal(rc, 0);
+
+		/* Hang the rebuild, then the relocated shards will be kept as in-rebuilding. */
+		test_set_engine_fail_loc(arg, CRT_NO_RANK,
+					 DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_ALWAYS);
+		/* Allow to exclude the targets even if that exceeds the pool RF. */
+		test_set_engine_fail_loc(arg, leader,
+					 DAOS_POOL_TGT_UPDATE_SKIP_RF_CHECK | DAOS_FAIL_ALWAYS);
+
+		for (i = 0; i < layout->ol_nr; i++) {
+			for (j = 0; j < layout->ol_shards[i]->os_replica_nr; j++) {
+				loc = &layout->ol_shards[i]->os_shard_loc[j];
+				print_message("Excluding the target %u/%u for shard %d/%d\n",
+					      loc->sd_rank, loc->sd_tgt_idx, i, j);
+				rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+						      arg->group, loc->sd_rank, loc->sd_tgt_idx);
+				assert_success(rc);
+			}
+		}
+
+		rc = daos_obj_layout_free(layout);
+		assert_rc_equal(rc, 0);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	/*
+	 * Refresh the pool map on client, and re-open the object to generate the object layout
+	 * based on the new pool map.
+	 */
+	rc = test_get_leader(arg, &leader);
+	assert_rc_equal(rc, 0);
+	ioreq_fini(&req);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	print_message("Collective punch object without healthy shard\n");
+	rc = daos_obj_punch(req.oh, DAOS_TX_NONE, 0, NULL);
+	print_message("Collective punch object: " DF_RC "\n", DP_RC(rc));
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+		test_rebuild_wait(&arg, 1);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	assert_rc_equal(rc, -DER_IO);
+	ioreq_fini(&req);
+}
+
+/* clang-format off */
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -5482,7 +5570,10 @@ static const struct CMUnitTest io_tests[] = {
 	  io_56, async_disable, test_case_teardown},
 	{ "IO57: collective object query with rank_0 excluded",
 	  io_57, rebuild_sub_rf1_setup, test_teardown},
+	{ "IO58: collective punch object with all shards in rebuilding",
+	  io_58, rebuild_sub_rf1_setup, test_teardown},
 };
+/* clang-format on */
 
 int
 obj_setup_internal(void **state)

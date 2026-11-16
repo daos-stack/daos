@@ -1589,8 +1589,13 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 
 	if (flags & OBJ_TGT_FLAG_FW_LEADER_INFO) {
 		obj_auxi->flags |= ORF_CONTAIN_LEADER;
-		/* Single RDG modification: do not forward the unused slots of skipped shards. */
-		req_tgts->ort_grp_size -= skipped;
+		/*
+		 * Single RDG modification: only forward to the shards that have been packed. Do
+		 * not calculate that via 'skipped': for EC update, it also counts the shards out
+		 * of the bit_map, but those shards are not contained in the shard_cnt.
+		 */
+		D_ASSERT(grp_nr == 1);
+		req_tgts->ort_grp_size  = tgt - req_tgts->ort_shard_tgts;
 		obj_auxi->former_leader = req_tgts->ort_shard_tgts[0].st_shard_id;
 	}
 
