@@ -53,6 +53,16 @@ class StorageFormatReplaceTest(TestWithServers):
         result = run_remote(self.log, host, f"sudo rm -rf {scm_mount}")
         if not result.passed:
             self.fail(f"Unable to clear {scm_mount} on {host}")
+
+        if self.server_managers[0].manager.job.using_control_metadata:
+            # In MD-on-SSD mode the superblock lives under control_metadata, not the ramdisk, so
+            # it must also be wiped or the engine will find its old identity and skip format.
+            metadata_path = self.server_managers[0].manager.job.control_metadata.path.value
+            self.log.info(
+                "Wiping control metadata path %s on %s to simulate storage media loss",
+                metadata_path, host)
+            self.server_managers[0].clean_mount(host, metadata_path)
+
         self.server_managers[0].restart(host, start_ranks=False)
         self.wait_for_rank_states(rank)
 
