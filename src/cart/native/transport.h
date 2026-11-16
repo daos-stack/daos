@@ -48,7 +48,8 @@ struct crt_native_completion {
 	size_t                 bytes;
 };
 
-/* Exchanged using an authenticated bootstrap supplied by the RPC layer.
+/* Exchanged using a trusted bootstrap supplied by the RPC layer. The current
+ * native TCP bootstrap provides no peer authentication or encryption.
  * This structure is host-endian and MUST NOT be sent verbatim on the wire.
  */
 struct crt_native_address {
@@ -77,6 +78,9 @@ struct crt_native_ops {
 	const char *name;
 	/* Maximum combined outstanding SEND/RECV/READ/WRITE operations. */
 	unsigned (*capacity)(struct crt_native_ep *);
+	/* Failed opens may return a partial endpoint when cleanup also fails.
+	 * Only retry close on that handle; it must remain reachable until closed.
+	 */
 	int (*open)(const struct crt_native_config *, struct crt_native_ep **);
 	int (*address)(struct crt_native_ep *, struct crt_native_address *);
 	int (*connect)(struct crt_native_ep *, const struct crt_native_address *);

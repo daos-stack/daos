@@ -34,8 +34,10 @@ $(BUILD)/proc.o: proc.c proc.h bulk.h transport.h | $(BUILD)
 
 $(BUILD)/bulk_session.o: bulk_session.c bulk_session.h bulk.h transport.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -c $< -o $@
+$(BUILD)/net.o: net.c net.h channel.h bulk_session.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -c $< -o $@
 
-$(BUILD)/libcrt_native_verbs.a: $(BUILD)/verbs.o $(BUILD)/wire.o $(BUILD)/bootstrap.o $(BUILD)/rpc.o $(BUILD)/channel.o $(BUILD)/bulk.o $(BUILD)/proc.o $(BUILD)/bulk_session.o
+$(BUILD)/libcrt_native_verbs.a: $(BUILD)/verbs.o $(BUILD)/wire.o $(BUILD)/bootstrap.o $(BUILD)/rpc.o $(BUILD)/channel.o $(BUILD)/bulk.o $(BUILD)/proc.o $(BUILD)/bulk_session.o $(BUILD)/net.o
 	$(AR) rcs $@ $^
 
 $(BUILD)/test_verbs: verbs.c transport.h tests/test_verbs.c tests/fake/infiniband/verbs.h | $(BUILD)
@@ -68,7 +70,10 @@ $(BUILD)/test_bulk_session: bulk_session.c bulk_session.h bulk.c bulk.h rpc.c rp
 $(BUILD)/test_cart_bulk: cart_bulk.c cart_bulk.h cart_proc.c cart_proc.h bulk_session.c bulk_session.h proc.c proc.h bulk.c bulk.h tests/test_cart_bulk.c tests/mercury_proc_stubs.c | $(BUILD)
 	$(CC) $(CFLAGS) $(WARN) -pthread -Itests/compat -I../../include cart_bulk.c cart_proc.c bulk_session.c proc.c bulk.c tests/mercury_proc_stubs.c tests/test_cart_bulk.c -o $@
 
-test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/test_rpc $(BUILD)/test_channel $(BUILD)/test_bulk $(BUILD)/test_proc $(BUILD)/test_cart_proc $(BUILD)/test_bulk_session $(BUILD)/test_cart_bulk
+$(BUILD)/test_net: net.c net.h channel.c channel.h rpc.c rpc.h bulk_session.c bulk_session.h bootstrap.c bootstrap.h bulk.c bulk.h wire.c wire.h tests/test_net.c | $(BUILD)
+	$(CC) $(CFLAGS) $(WARN) -pthread net.c channel.c rpc.c bulk_session.c bootstrap.c bulk.c wire.c tests/test_net.c -o $@
+
+test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/test_rpc $(BUILD)/test_channel $(BUILD)/test_bulk $(BUILD)/test_proc $(BUILD)/test_cart_proc $(BUILD)/test_bulk_session $(BUILD)/test_cart_bulk $(BUILD)/test_net
 	$(abspath $(BUILD))/test_verbs
 	$(abspath $(BUILD))/test_wire
 	$(abspath $(BUILD))/test_bootstrap
@@ -79,6 +84,7 @@ test: $(BUILD)/test_verbs $(BUILD)/test_wire $(BUILD)/test_bootstrap $(BUILD)/te
 	$(abspath $(BUILD))/test_cart_proc
 	$(abspath $(BUILD))/test_bulk_session
 	$(abspath $(BUILD))/test_cart_bulk
+	$(abspath $(BUILD))/test_net
 
 $(BUILD)/verbs_smoke: tests/verbs_smoke.c $(BUILD)/libcrt_native_verbs.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARN) -D_POSIX_C_SOURCE=200809L $^ -libverbs -o $@
@@ -94,3 +100,4 @@ clean:
 	$(RM) $(BUILD)/test_cart_proc
 	$(RM) $(BUILD)/bulk_session.o $(BUILD)/test_bulk_session
 	$(RM) $(BUILD)/test_cart_bulk
+	$(RM) $(BUILD)/net.o $(BUILD)/test_net

@@ -24,6 +24,7 @@ struct bulk_operation {
 	unsigned                        incoming_next;
 	bool                            initialized;
 	int                             setup_error;
+	int                             final_result;
 	atomic_bool                     active;
 	atomic_bool                     cancel;
 };
@@ -45,6 +46,8 @@ struct crt_native_cart_bulk {
 	unsigned                                 incoming_pending;
 	struct crt_native_cart_bulk             *registry_next;
 	bool                                     progressing;
+	bool                                     defer_callbacks, dispatching;
+	unsigned                                 completed_head, completed_tail;
 	atomic_int                               error;
 };
 
@@ -117,6 +120,7 @@ crt_native_cart_bulk_create(const struct crt_native_ops *ops, struct crt_native_
 		return -DER_NOMEM;
 	}
 	b->pending_head = b->pending_tail = capacity;
+	b->completed_head = b->completed_tail = capacity;
 	for (unsigned i = 0; i < capacity; i++) {
 		b->operations[i].next = i + 1;
 		atomic_init(&b->operations[i].cancel, false);
@@ -151,7 +155,7 @@ crt_native_cart_bulk_destroy(struct crt_native_cart_bulk *b)
 {
 	if (b == NULL)
 		return -DER_INVAL;
-	if (b->progressing)
+	if (b->progressing || b->dispatching)
 		return -DER_AGAIN;
 	b->closing = true;
 	crt_native_cart_bulk_progress(b);
@@ -494,6 +498,53 @@ crt_native_cart_bulk_try_abort(crt_context_t context, crt_bulk_opid_t id, int *r
 	return found;
 }
 
+static void
+deliver_completion(struct crt_native_cart_bulk *b, unsigned slot)
+{
+	struct bulk_operation  *op   = &b->operations[slot];
+	struct crt_bulk_cb_info info = {.bci_bulk_desc   = &op->descriptor,
+					.bci_arg         = op->arg,
+					.bci_rc          = op->final_result,
+					.bci_complete_cb = op->complete};
+	op->verify(&info);
+	crt_bulk_free(op->descriptor.bd_remote_hdl);
+	crt_bulk_free(op->descriptor.bd_local_hdl);
+	crt_req_decref(op->descriptor.bd_rpc);
+	pthread_mutex_lock(&registry_lock);
+	op->next          = b->free_operation;
+	b->free_operation = slot;
+	pthread_mutex_unlock(&registry_lock);
+	b->active_operations--;
+}
+
+int
+crt_native_cart_bulk_defer_callbacks(struct crt_native_cart_bulk *b)
+{
+	if (b == NULL || b->active_operations)
+		return -DER_INVAL;
+	b->defer_callbacks = true;
+	return 0;
+}
+
+unsigned
+crt_native_cart_bulk_dispatch(struct crt_native_cart_bulk *b)
+{
+	if (b == NULL || b->progressing || b->dispatching)
+		return 0;
+	b->dispatching = true;
+	unsigned count = 0;
+	while (count < 32 && b->completed_head != b->capacity) {
+		unsigned slot     = b->completed_head;
+		b->completed_head = b->operations[slot].next;
+		if (b->completed_head == b->capacity)
+			b->completed_tail = b->capacity;
+		deliver_completion(b, slot);
+		count++;
+	}
+	b->dispatching = false;
+	return count;
+}
+
 static int
 progress_transfers(struct crt_native_cart_bulk *b)
 {
@@ -590,21 +641,18 @@ progress_transfers(struct crt_native_cart_bulk *b)
 		pthread_mutex_lock(&registry_lock);
 		op->active = false;
 		pthread_mutex_unlock(&registry_lock);
-		struct crt_bulk_cb_info info = {.bci_bulk_desc   = &op->descriptor,
-						.bci_arg         = op->arg,
-						.bci_rc          = b->error ? result(b->error)
-								   : op->setup_error ? op->setup_error
-										     : result(status),
-						.bci_complete_cb = op->complete};
-		op->verify(&info);
-		crt_bulk_free(op->descriptor.bd_remote_hdl);
-		crt_bulk_free(op->descriptor.bd_local_hdl);
-		crt_req_decref(op->descriptor.bd_rpc);
-		pthread_mutex_lock(&registry_lock);
-		op->next          = b->free_operation;
-		b->free_operation = slot;
-		pthread_mutex_unlock(&registry_lock);
-		b->active_operations--;
+		op->final_result = b->error          ? result(b->error)
+				   : op->setup_error ? op->setup_error
+						     : result(status);
+		if (b->defer_callbacks) {
+			op->next = b->capacity;
+			if (b->completed_tail != b->capacity)
+				b->operations[b->completed_tail].next = slot;
+			else
+				b->completed_head = slot;
+			b->completed_tail = slot;
+		} else
+			deliver_completion(b, slot);
 	}
 	return result(b->error);
 }

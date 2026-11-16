@@ -235,7 +235,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 		str_size = CRT_ADDR_STR_MAX_LEN;
 
 		D_MUTEX_LOCK(&ctx->cc_mutex);
-		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, NULL, &str_size);
+		rc = crt_transport_get_addr(&ctx->cc_hg_ctx, NULL, &str_size);
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		if (rc != 0) {
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -259,8 +259,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 		rc = 0;
 
 		D_MUTEX_LOCK(&ctx->cc_mutex);
-		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, addr_str,
-				     &str_size);
+		rc = crt_transport_get_addr(&ctx->cc_hg_ctx, addr_str, &str_size);
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
 		if (rc != 0) {

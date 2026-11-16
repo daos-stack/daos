@@ -28,6 +28,10 @@ crt_native_cart_bulk_destroy(struct crt_native_cart_bulk *);
 int
 crt_native_cart_bulk_progress(struct crt_native_cart_bulk *);
 int
+crt_native_cart_bulk_defer_callbacks(struct crt_native_cart_bulk *);
+unsigned
+crt_native_cart_bulk_dispatch(struct crt_native_cart_bulk *);
+int
 crt_native_cart_bulk_transfer(struct crt_native_cart_bulk *, struct crt_bulk_desc *,
 			      crt_bulk_cb_t verify, crt_bulk_cb_t complete, void *,
 			      crt_bulk_opid_t *);

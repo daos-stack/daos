@@ -532,12 +532,17 @@ class PreReqComponent():
         opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests',
                               cmocka_filter_supported()))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
+        opts.Add(BoolVariable('CART_NATIVE_RC', 'Build experimental native doca+rc transport',
+                              False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
                               False))
         opts.Add(ListVariable('PROVIDERS', "List of providers to build", 'all',
                               ['all', 'ofi', 'ucx']))
 
         opts.Update(self.__env)
+
+        if self.__env.get('CART_NATIVE_RC'):
+            self.__env.AppendUnique(CPPDEFINES=['CRT_HAVE_NATIVE_RC'])
 
         self._setup_compiler()
 

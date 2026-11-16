@@ -72,7 +72,8 @@ crt_native_bulk_transfer_fini(struct crt_native_bulk_transfer *);
 /* Registration is connection-bound: ep must be the bulk QP's endpoint. It is
  * not interchangeable with an independently allocated control-QP protection
  * domain. Both peers exchange these descriptors on the control channel only
- * after the bulk endpoints have been bootstrapped and authenticated.
+ * after a trusted bootstrap has connected the bulk endpoints. Authentication
+ * is the bootstrap owner's responsibility, not a property of this descriptor.
  * Partial rollback errors return a non-NULL handle for retrying destroy().
  */
 int

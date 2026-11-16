@@ -66,6 +66,8 @@ struct crt_common_hdr_legacy {
 	};
 };
 
+#include "crt_native.h"
+
 struct crt_corpc_hdr {
 	/* internal group ID name */
 	d_string_t		 coh_grpid;
@@ -329,6 +331,10 @@ struct crt_rpc_priv {
 	struct crt_reply_hdr     crp_reply_hdr; /* header for reply */
 	struct crt_req_hdr       crp_req_hdr;   /* header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
+	struct crt_native_rpc_state *crp_native;
+#ifdef CRT_HAVE_NATIVE_RC
+	struct crt_native_rpc_state crp_native_storage;
+#endif
 };
 
 static inline void

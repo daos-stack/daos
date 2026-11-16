@@ -24,6 +24,7 @@ static int                post_error, poll_error;
 static unsigned           poll_calls;
 static int                create_qp_error;
 static int                destroy_qp_error;
+static int                modify_qp_error;
 static unsigned           destroyed_qps, destroyed_cqs, destroyed_pds, closed_devices;
 
 struct ibv_device **
@@ -126,6 +127,8 @@ ibv_destroy_qp(struct ibv_qp *q)
 int
 ibv_modify_qp(struct ibv_qp *q, struct ibv_qp_attr *a, int mask)
 {
+	if (modify_qp_error)
+		return modify_qp_error;
 	(void)q;
 	(void)mask;
 	if (a->qp_state == IBV_QPS_ERR) {
@@ -283,6 +286,14 @@ test_success_and_open_failure(void)
 	assert(ops->open(&cfg, &ep) == ENOMEM && ep == NULL);
 	assert(destroyed_qps == 2 && destroyed_cqs == 3 && destroyed_pds == 3 &&
 	       closed_devices == 3);
+	create_qp_error  = 0;
+	modify_qp_error  = EINVAL;
+	destroy_qp_error = EIO;
+	assert(ops->open(&cfg, &ep) == EINVAL && ep != NULL);
+	modify_qp_error = destroy_qp_error = 0;
+	assert(ops->close(ep) == 0);
+	assert(destroyed_qps == 3 && destroyed_cqs == 4 && destroyed_pds == 4 &&
+	       closed_devices == 4);
 	assert(ops->open(NULL, &ep) == EINVAL && ep == NULL);
 }
 

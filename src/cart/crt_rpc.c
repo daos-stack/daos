@@ -1281,6 +1281,15 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	int                      rc2;
 
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+	if (crt_ctx->cc_hg_ctx.chc_provider == CRT_PROV_DOCA_RC) {
+		void *native_addr;
+		rc = crt_native_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
+					    &native_addr);
+		if (rc != 0)
+			return rc;
+		hg_addr = native_addr;
+		goto cache_address;
+	}
 
 	hg_ret = HG_Addr_lookup2(crt_ctx->cc_hg_ctx.chc_hgcla,
 				 rpc_priv->crp_tgt_uri, &hg_addr);
@@ -1290,6 +1299,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
+cache_address:
 	rc = crt_grp_hg_addr_cache_insert(rpc_priv->crp_grp_priv, crt_ctx,
 					  rpc_priv->crp_pub.cr_ep.ep_rank,
 					  rpc_priv->crp_pub.cr_ep.ep_tag, &hg_addr);
@@ -1328,7 +1338,7 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 			rc, req->cr_opc);
 		D_GOTO(out, rc);
 	}
-	D_ASSERT(rpc_priv->crp_hg_hdl != NULL);
+	D_ASSERT(rpc_priv->crp_hg_hdl != NULL || rpc_priv->crp_native != NULL);
 
 	/* Errors reported in the callback */
 	crt_hg_req_send(rpc_priv);

@@ -230,6 +230,12 @@ crt_native_channel_set_deadline(struct crt_native_channel *c, uint64_t id, uint6
 	return c == NULL ? EINVAL : crt_native_rpc_set_deadline(c->rpc, id, deadline);
 }
 
+int
+crt_native_channel_cancel(struct crt_native_channel *c, uint64_t id, int error)
+{
+	return c == NULL ? EINVAL : crt_native_rpc_cancel(c->rpc, id, error);
+}
+
 uint64_t
 crt_native_channel_next_deadline(const struct crt_native_channel *c)
 {

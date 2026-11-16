@@ -466,6 +466,7 @@ struct crt_quotas {
 struct crt_native_cart_remote;
 struct crt_bulk {
 	struct crt_native_cart_remote *native_remote; /** native decoded handle, else NULL */
+	bool                           native_local;
 	d_sg_list_t     sgl;         /** original sgl */
 	d_iov_t        *iovs;        /** original iovs */
 	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */

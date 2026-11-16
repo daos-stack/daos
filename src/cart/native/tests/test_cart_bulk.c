@@ -270,6 +270,8 @@ main(void)
 	crt_rpc_t request = {.cr_ctx = (void *)&b};
 	memset(payload, 0x42, sizeof(payload));
 	for (unsigned alias = 0; alias < 3; alias++) {
+		if (alias == 1)
+			assert(crt_native_cart_bulk_defer_callbacks(cb) == 0);
 		h.alias                                = alias;
 		struct crt_native_cart_bulk_txn encode = {.binding = ca}, decode = {.binding = cb};
 		crt_bulk_t                      local = &h, remote = NULL;
@@ -314,7 +316,7 @@ main(void)
 		expired = alias == 2;
 		memset(destination, 0, sizeof(destination));
 		assert(crt_native_cart_bulk_progress(cb) == 0);
-		assert(completed.count == (expired ? 1 : 0));
+		assert(completed.count == 0);
 		expired = false;
 		if (alias == 1) {
 			int cancel_rc;
@@ -329,6 +331,12 @@ main(void)
 			assert(crt_native_cart_bulk_progress(cb) == 0);
 		assert(pthread_join(worker, NULL) == 0);
 		assert(crt_native_cart_bulk_progress(cb) == 0);
+		if (alias) {
+			assert(completed.count == 0 && request_refs == 2);
+			assert(crt_native_cart_bulk_dispatch(cb) == 1);
+			assert(crt_native_cart_bulk_dispatch(cb) == 0);
+			assert(crt_native_cart_bulk_progress(cb) == 0);
+		}
 		assert(completed.count == 1 &&
 		       completed.rc == (alias == 2 ? -DER_TIMEDOUT
 					: alias    ? -DER_CANCELED

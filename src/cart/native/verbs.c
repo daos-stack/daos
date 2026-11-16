@@ -179,7 +179,8 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	return 0;
 fail:
 	/* No work has been posted, so cleanup cannot abandon accepted operations. */
-	verbs_close(ep);
+	if (verbs_close(ep) != 0)
+		*output = ep;
 	return rc;
 }
 

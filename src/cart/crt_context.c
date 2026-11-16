@@ -300,7 +300,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, ctx->cc_self_uri, &uri_len);
+	rc = crt_transport_get_addr(&ctx->cc_hg_ctx, ctx->cc_self_uri, &uri_len);
 	if (rc != 0) {
 		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -790,7 +790,9 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc);
 	}
 
-	hg_rc = HG_Context_unpost(ctx->cc_hg_ctx.chc_hgctx);
+	hg_rc = ctx->cc_hg_ctx.chc_provider == CRT_PROV_DOCA_RC
+		    ? crt_native_ctx_unpost(&ctx->cc_hg_ctx)
+		    : HG_Context_unpost(ctx->cc_hg_ctx.chc_hgctx);
 	if (hg_rc != 0) {
 		if (!force)
 			D_GOTO(out, rc = -DER_INVAL);
@@ -832,6 +834,16 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	if (crt_gdata.cg_swim_inited && crt_gdata.cg_swim_ctx_idx == ctx_idx)
 		crt_swim_fini();
+
+	/* Native teardown can remain busy while RX leases, bulk wrappers or NIC
+	 * completions are live. Even force must preserve their context and the
+	 * request tables so that progress and a later destroy can safely retry.
+	 */
+	if (ctx->cc_hg_ctx.chc_provider == CRT_PROV_DOCA_RC) {
+		rc = crt_native_ctx_fini(&ctx->cc_hg_ctx);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
 
 	D_MUTEX_LOCK(&ctx->cc_mutex);
 
@@ -1298,7 +1310,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 #ifdef HG_HAS_DIAG
 	/* periodically republish Mercury-level counters as DAOS metrics */
-	if (should_republish)
+	if (should_republish && crt_ctx->cc_hg_ctx.chc_provider != CRT_PROV_DOCA_RC)
 		crt_hg_republish_diags(&crt_ctx->cc_hg_ctx);
 #endif
 }

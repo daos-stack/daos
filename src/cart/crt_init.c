@@ -624,13 +624,73 @@ crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protoc
 {
 	static_assert(sizeof(struct crt_protocol_info) == sizeof(struct na_protocol_info),
 		      "protocol info structs do not match");
-	return crt_hg_get_protocol_info(info_string, (struct na_protocol_info **)protocol_info_p);
+	if (protocol_info_p == NULL)
+		return -DER_INVAL;
+	*protocol_info_p = NULL;
+	bool native_only = info_string != NULL && strcmp(info_string, "doca+rc") == 0;
+	bool all         = info_string == NULL || info_string[0] == '\0';
+	struct crt_protocol_info  *mercury = NULL, *head = NULL;
+	struct crt_protocol_info **tail = &head;
+	int                        rc   = 0;
+	if (!native_only) {
+		rc = crt_hg_get_protocol_info(info_string, (struct na_protocol_info **)&mercury);
+		if (rc != 0 && !all)
+			return rc;
+		for (struct crt_protocol_info *p = mercury; p; p = p->next) {
+			struct crt_protocol_info *copy = calloc(1, sizeof(*copy));
+			if (copy == NULL) {
+				rc = -DER_NOMEM;
+				break;
+			}
+			copy->class_name    = p->class_name ? strdup(p->class_name) : NULL;
+			copy->protocol_name = p->protocol_name ? strdup(p->protocol_name) : NULL;
+			copy->device_name   = p->device_name ? strdup(p->device_name) : NULL;
+			*tail               = copy;
+			tail                = &copy->next;
+			if ((p->class_name && !copy->class_name) ||
+			    (p->protocol_name && !copy->protocol_name) ||
+			    (p->device_name && !copy->device_name)) {
+				rc = -DER_NOMEM;
+				break;
+			}
+		}
+		if (mercury)
+			crt_hg_free_protocol_info((struct na_protocol_info *)mercury);
+	}
+	if (rc == -DER_NOMEM) {
+		crt_protocol_info_free(head);
+		return rc;
+	}
+	if (native_only || all) {
+		struct crt_protocol_info *native    = NULL;
+		int                       native_rc = crt_native_protocol_info(&native);
+		if (native_rc == 0) {
+			*tail = native;
+			if (head)
+				rc = 0;
+		} else {
+			crt_protocol_info_free(native);
+			if (native_only || native_rc == -DER_NOMEM) {
+				crt_protocol_info_free(head);
+				return native_rc;
+			}
+		}
+	}
+	*protocol_info_p = head;
+	return rc;
 }
 
 void
 crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 {
-	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
+	while (protocol_info) {
+		struct crt_protocol_info *next = protocol_info->next;
+		free(protocol_info->class_name);
+		free(protocol_info->protocol_name);
+		free(protocol_info->device_name);
+		free(protocol_info);
+		protocol_info = next;
+	}
 }
 
 int

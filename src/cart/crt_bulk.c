@@ -73,7 +73,8 @@ int
 crt_native_cart_bulk_permission(crt_bulk_t handle, crt_bulk_perm_t *permission)
 {
 	struct crt_bulk *bulk = handle;
-	if (bulk == NULL || permission == NULL || bulk->native_remote != NULL)
+	if (bulk == NULL || permission == NULL || bulk->native_remote != NULL ||
+	    !bulk->native_local)
 		return -DER_INVAL;
 	*permission = bulk->bulk_perm;
 	return 0;
@@ -177,6 +178,31 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	ret_hdl->bulk_perm = bulk_perm;
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
+	if (ctx->cc_hg_ctx.chc_provider == CRT_PROV_DOCA_RC) {
+		D_ALLOC_ARRAY(ret_hdl->iovs, sgl->sg_nr);
+		if (ret_hdl->iovs == NULL) {
+			if (quota_rc == 0)
+				put_quota_resource(ctx, CRT_QUOTA_BULKS);
+			D_FREE(ret_hdl);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		memcpy(ret_hdl->iovs, sgl->sg_iovs, sgl->sg_nr * sizeof(*ret_hdl->iovs));
+		ret_hdl->sgl          = *sgl;
+		ret_hdl->sgl.sg_iovs  = ret_hdl->iovs;
+		ret_hdl->crt_ctx      = ctx;
+		ret_hdl->native_local = true;
+		ret_hdl->deferred     = quota_rc == -DER_QUOTA_LIMIT;
+		rc                    = crt_native_bulk_context_hold(ctx);
+		if (rc != 0) {
+			if (quota_rc == 0)
+				put_quota_resource(ctx, CRT_QUOTA_BULKS);
+			D_FREE(ret_hdl->iovs);
+			D_FREE(ret_hdl);
+			D_GOTO(out, rc);
+		}
+		CRT_METRIC_INC(ctx, CM_BULK_CREATE);
+		D_GOTO(out, rc = 0);
+	}
 	if (quota_rc == -DER_QUOTA_LIMIT) {
 		int i;
 
@@ -236,6 +262,8 @@ crt_bulk_bind(crt_bulk_t crt_bulk, crt_context_t crt_ctx)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (bulk->native_remote != NULL)
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
+	if (bulk->native_local)
 		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 
 	if (bulk->deferred) {
@@ -318,6 +346,8 @@ crt_bulk_free_common(struct crt_bulk *bulk)
 	/* decoded bulks are not counted towards quota; such bulks have crt_ctx set to NULL */
 	if (!bulk->deferred && ctx != NULL)
 		put_quota_resource(ctx, CRT_QUOTA_BULKS);
+	if (bulk->native_local)
+		crt_native_bulk_context_drop(ctx);
 
 	D_FREE(bulk->iovs);
 	D_FREE(bulk);
@@ -390,6 +420,10 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 		return crt_native_cart_bulk_transfer(binding, bulk_desc, verify_complete_cb,
 						     complete_cb, arg, opid);
 	}
+	if (((struct crt_bulk *)bulk_desc->bd_local_hdl)->native_local ||
+	    ((struct crt_context *)bulk_desc->bd_rpc->cr_ctx)->cc_hg_ctx.chc_provider ==
+		CRT_PROV_DOCA_RC)
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, false);
 	if (rc != 0)
@@ -412,12 +446,11 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_c
 
 	if (crt_bulk_desc_expired(bulk_desc))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
-	if (((struct crt_bulk *)bulk_desc->bd_remote_hdl)->native_remote != NULL) {
-		struct crt_native_cart_bulk *binding =
-		    ((struct crt_bulk *)bulk_desc->bd_remote_hdl)->native_remote->binding;
-		return crt_native_cart_bulk_transfer(binding, bulk_desc, verify_complete_cb,
-						     complete_cb, arg, opid);
-	}
+	if (((struct crt_bulk *)bulk_desc->bd_remote_hdl)->native_remote != NULL ||
+	    ((struct crt_bulk *)bulk_desc->bd_local_hdl)->native_local ||
+	    ((struct crt_context *)bulk_desc->bd_rpc->cr_ctx)->cc_hg_ctx.chc_provider ==
+		CRT_PROV_DOCA_RC)
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 
 	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
 	if (rc != 0)
@@ -441,6 +474,15 @@ crt_bulk_get_len(crt_bulk_t crt_bulk, size_t *bulk_len)
 		D_ERROR("bulk is NULL\n");
 		return -DER_INVAL;
 	}
+	if (bulk->native_local) {
+		*bulk_len = 0;
+		for (unsigned i = 0; i < bulk->sgl.sg_nr; i++) {
+			if (bulk->sgl.sg_iovs[i].iov_buf_len > SIZE_MAX - *bulk_len)
+				return -DER_OVERFLOW;
+			*bulk_len += bulk->sgl.sg_iovs[i].iov_buf_len;
+		}
+		return 0;
+	}
 
 	if (bulk->deferred)
 		return -DER_NOTSUPPORTED;
@@ -462,6 +504,10 @@ crt_bulk_get_sgnum(crt_bulk_t crt_bulk, unsigned int *bulk_sgnum)
 
 	D_ASSERT(bulk_sgnum != NULL);
 	D_ASSERT(bulk != NULL);
+	if (bulk->native_local) {
+		*bulk_sgnum = bulk->sgl.sg_nr;
+		return 0;
+	}
 
 	if (bulk->deferred)
 		return -DER_NOTSUPPORTED;
@@ -489,7 +535,7 @@ crt_bulk_access(crt_bulk_t crt_bulk, d_sg_list_t *sgl)
 
 	if (bulk->native_remote != NULL)
 		D_GOTO(out, rc = -DER_NOTSUPPORTED);
-	if (bulk->deferred)
+	if (bulk->deferred || bulk->native_local)
 		*sgl = bulk->sgl;
 	else
 		rc = crt_hg_bulk_access(bulk->hg_bulk_hdl, sgl);

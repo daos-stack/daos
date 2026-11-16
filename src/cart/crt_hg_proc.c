@@ -155,6 +155,11 @@ crt_hg_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_
 	hg_return_t      hg_ret;
 	uint32_t         tmp = 0;
 	int              rc;
+	if (proc_op != CRT_PROC_DECODE && pcrt_bulk && *pcrt_bulk) {
+		struct crt_bulk *value = *pcrt_bulk;
+		if (value->native_local || value->native_remote)
+			return -DER_NOTSUPPORTED;
+	}
 
 	/*
 	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
@@ -585,6 +590,28 @@ crt_proc_reply_hdr(crt_proc_t proc, struct crt_reply_hdr *hdr)
 }
 
 static double next_hlc_sync_err_report;
+static int
+native_peek_proc(crt_proc_t proc, void *arg)
+{
+	int                     rc     = crt_proc_common_hdr(proc, arg);
+	struct crt_native_proc *cursor = crt_native_cart_cursor(proc);
+	void                   *ignored;
+	if (rc == 0)
+		rc = crt_native_proc_span(cursor, cursor->capacity - cursor->offset, &ignored)
+			 ? -DER_PROTO
+			 : 0;
+	return rc;
+}
+
+int
+crt_native_header_peek(const void *payload, size_t size, struct crt_common_hdr *header)
+{
+	size_t used;
+	if (header == NULL)
+		return -DER_INVAL;
+	return crt_native_cart_run(native_peek_proc, header, CRT_PROC_DECODE, (void *)payload, size,
+				   NULL, NULL, &used);
+}
 
 /*
  * Report an HLC synchronization error with a simple 1h-per-message rate
@@ -799,7 +826,7 @@ crt_native_cart_payload(struct crt_rpc_priv *rpc, bool reply, crt_proc_op_t op, 
 			size_t size, crt_native_cart_bulk_cb_t bulk, void *arg, size_t *used)
 {
 	struct native_payload payload = {.rpc = rpc, .reply = reply};
-	if (rpc == NULL || rpc->crp_opc_info == NULL || rpc->crp_opc_info->coi_crf == NULL)
+	if (rpc == NULL || rpc->crp_opc_info == NULL)
 		return -DER_INVAL;
 	return crt_native_cart_run(native_payload_proc, &payload, op, buffer, size, bulk, arg,
 				   used);

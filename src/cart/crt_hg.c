@@ -65,6 +65,12 @@ struct crt_na_dict crt_na_dict[] = {{
 					.nad_port_bind  = true,
 				    },
 				    {
+					.nad_type       = CRT_PROV_DOCA_RC,
+					.nad_str        = "doca+rc",
+					.nad_contig_eps = true,
+					.nad_port_bind  = true,
+				    },
+				    {
 					.nad_str = NULL,
 				    }};
 
@@ -325,6 +331,9 @@ out:
 int
 crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 {
+	/* Native peers are context-owned stable cache entries. */
+	if (hg_ctx->chc_provider == CRT_PROV_DOCA_RC)
+		return 0;
 	hg_return_t	ret = HG_SUCCESS;
 
 	ret = HG_Addr_free(hg_ctx->chc_hgcla, addr);
@@ -334,6 +343,14 @@ crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 	}
 
 	return 0;
+}
+
+int
+crt_transport_get_addr(struct crt_hg_context *ctx, char *address, size_t *size)
+{
+	return ctx->chc_provider == CRT_PROV_DOCA_RC
+		   ? crt_native_ctx_addr(ctx, address, size)
+		   : crt_hg_get_addr(ctx->chc_hgcla, address, size);
 }
 
 int
@@ -423,7 +440,7 @@ out:
  * Currently we ignore the provider. Per-provider info will
  * be returned during multi-provider support implementation
  */
-static struct crt_prov_gdata *
+struct crt_prov_gdata *
 crt_get_prov_gdata(bool primary, crt_provider_t provider)
 {
 	int	i;
@@ -1012,6 +1029,9 @@ int
 crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx, bool primary,
 		int iface_idx)
 {
+	hg_ctx->chc_provider = provider;
+	if (provider == CRT_PROV_DOCA_RC)
+		return crt_native_ctx_init(hg_ctx, idx, primary, iface_idx);
 	struct crt_context *crt_ctx;
 	hg_return_t         hg_ret;
 	int                 wait_fd;
@@ -1125,6 +1145,8 @@ error:
 int
 crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 {
+	if (hg_ctx->chc_provider == CRT_PROV_DOCA_RC)
+		return crt_native_ctx_fini(hg_ctx);
 	hg_return_t hg_ret;
 	int         rc = DER_SUCCESS;
 
@@ -1353,6 +1375,8 @@ reply_error:
 int
 crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 {
+	if (hg_ctx->chc_provider == CRT_PROV_DOCA_RC)
+		return crt_native_req_create(hg_ctx, rpc_priv);
 	hg_id_t		rpcid;
 	hg_return_t	hg_ret = HG_SUCCESS;
 	bool		hg_created = false;
@@ -1409,6 +1433,10 @@ out:
 void
 crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 {
+	if (rpc_priv->crp_native) {
+		crt_native_req_destroy(rpc_priv);
+		return;
+	}
 	hg_return_t hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
@@ -1567,6 +1595,10 @@ out:
 void
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
+	if (rpc_priv->crp_native) {
+		crt_native_req_send(rpc_priv);
+		return;
+	}
 	hg_return_t	hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
@@ -1609,6 +1641,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 int
 crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv)
 {
+	if (rpc_priv->crp_native)
+		return crt_native_req_cancel(rpc_priv);
 	hg_return_t	hg_ret;
 	int		rc = 0;
 
@@ -1655,6 +1689,8 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 int
 crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 {
+	if (rpc_priv->crp_native)
+		return crt_native_reply_send(rpc_priv);
 	struct crt_context *crt_ctx;
 	hg_return_t         hg_ret;
 	int                 rc = 0;
@@ -1695,6 +1731,10 @@ out:
 void
 crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 {
+	if (rpc_priv->crp_native) {
+		crt_native_reply_error(rpc_priv, error_code);
+		return;
+	}
 	struct crt_context *crt_ctx;
 	void               *hg_out_struct;
 	int                 hg_ret;
@@ -1725,6 +1765,8 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 int
 crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 {
+	if (hg_ctx->chc_provider == CRT_PROV_DOCA_RC)
+		return crt_native_ctx_progress(hg_ctx);
 	hg_context_t *hg_context;
 	unsigned int  hg_timeout;
 	unsigned int  total = CRT_HG_TRIGGER_COUNT;
@@ -1938,6 +1980,8 @@ out:
 int
 crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *deadline)
 {
+	if (hg_ctx->chc_provider == CRT_PROV_DOCA_RC)
+		return crt_native_ctx_progress(hg_ctx);
 	struct timespec now;
 
 	do {
@@ -2295,6 +2339,8 @@ out:
 char *
 crt_rpc_priv_get_origin_addr(struct crt_rpc_priv *rpc_priv)
 {
+	if (rpc_priv->crp_native)
+		return crt_native_origin(rpc_priv);
 	const struct hg_info *hg_info;
 	char                  addr[48];
 	hg_size_t             addr_size = 48;

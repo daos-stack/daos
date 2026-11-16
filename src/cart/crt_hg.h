@@ -73,6 +73,7 @@ typedef enum {
 	CRT_PROV_OFI_LAST = CRT_PROV_OFI_OPX,
 	CRT_PROV_UCX,
 	CRT_PROV_UCX_LAST = CRT_PROV_UCX,
+	CRT_PROV_DOCA_RC,
 	/* Note: This entry should be the last valid one in enum */
 	CRT_PROV_COUNT,
 	CRT_PROV_UNKNOWN = -1,
@@ -152,7 +153,9 @@ struct crt_hg_progress_multi {
 };
 
 /** HG context */
+struct crt_native_context;
 struct crt_hg_context {
+	struct crt_native_context   *chc_native;
 	struct crt_hg_pool           chc_hg_pool;         /* HG handle pool */
 	struct crt_hg_metrics        chc_metrics;         /* HG metrics */
 	struct crt_hg_progress_multi chc_progress_multi;  /* multi progress */
@@ -188,6 +191,7 @@ int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
 int crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *deadline);
 int crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr);
 int crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size);
+int crt_transport_get_addr(struct crt_hg_context *, char *, size_t *);
 /* clang-format on */
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
@@ -215,6 +219,10 @@ int crt_provider_get_max_ctx_num(bool primary, crt_provider_t provider);
 d_list_t *crt_provider_get_ctx_list(bool primary, crt_provider_t provider);
 void crt_provider_get_ctx_list_and_num(bool primary, crt_provider_t provider, d_list_t **list, int *num);
 char* crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx);
+char *
+crt_provider_domain_str_get(bool primary, crt_provider_t provider, int iface_idx);
+struct crt_prov_gdata *
+crt_get_prov_gdata(bool primary, crt_provider_t provider);
 struct crt_na_config*
 crt_provider_get_na_config(bool primary, crt_provider_t provider);
 

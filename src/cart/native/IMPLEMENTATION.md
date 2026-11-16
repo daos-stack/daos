@@ -4,8 +4,9 @@ The target is a **native CaRT RPC provider** selected by `doca+rc`, keeping
 existing Mercury providers. The CPU datapath uses open-source libibverbs as
 agreed; DOCA Verbs/GPUNetIO will be separate implementations. DC is deferred.
 
-The provider is not usable until the CaRT bridge and selection gates below are
-implemented. Unit tests of individual modules are not DAOS-provider validation.
+The provider is selectable in an enabled build. CaRT bridge/selection source is
+implemented; Linux link and real-HCA qualification remain outstanding. Portable
+module tests are not DAOS-provider validation.
 
 | Gap | Status | Required result |
 | --- | --- | --- |
@@ -18,13 +19,15 @@ implemented. Unit tests of individual modules are not DAOS-provider validation.
 | 3c. Receive leases | Implemented, threaded tests pass | Retain RX through asynchronous consumers; worker-safe release queues repost on progress owner; shutdown cannot deregister a retained slab |
 | 3d. Bulk ownership and acknowledgments | Implemented, portable tests pass | Connection-bound generational export/import ledger; publish/abort transactions; independent RELEASE wire queue; explicit transport quiescence before revoking exports after failure |
 | 3e. CaRT bulk API binding | Implemented source and adapter tests | Concrete decoded crt_bulk wrappers, bounded registration cache, worker submission/release queues, native GET/PUT routing, completion-driven references, abort routing and deadline checks; context must call binding progress |
-| 3f. CaRT RPC/runtime lifecycle binding | Pending | Instantiate peer channels/sessions/bindings; drive their progress; acquire/release RX leases in actual CaRT dispatch/destruction; HLC/routing/deadline validation before dispatch; handle forwarded/bound bulk descriptors |
-| 4. CaRT bridge | Pending | Listener and endpoint cache; context/progress, dispatch and completion integration; groups, context tags, SWIM and collective compatibility |
+| 3f. CaRT RPC/runtime lifecycle binding | Implemented source | Peer channels/sessions/bindings, RX ownership through actual RPC destruction, HLC/routing/deadline checks; bound/forwarded bulk explicitly unsupported |
+| 4. CaRT bridge | Implemented source and loopback runtime tests | Nonblocking listener/endpoint cache, hello/READY negotiation, context progress, handler/completion dispatch, group rank and tag routing; SWIM/collective qualification pending |
 | 5a. Native deadlines and cancellation | Implemented, portable tests pass | Bulk deadline/cancel with accepted-DMA drain; preallocated RPC deadline heap; bounded expiration; no posting expired queued/retry frames; exact-once completion waits for SEND CQE |
-| 5b. CaRT cancellation/teardown integration | Pending | Map CaRT deadlines and aborts to native calls; combine connection failures and request tracking with the CaRT completion path; drain peers/contexts callback-safely |
-| 6. Build/provider selection | Pending | Optional build, control-plane discovery, YAML `doca+rc`, explicit unsupported-build errors, no silent fallback |
+| 5b. CaRT cancellation/teardown integration | Implemented source | Deadline/abort mapping, deferred callbacks outside transport lock, CaRT request tracking/completion; busy teardown preserves contexts even with force |
+| 6. Build/provider selection | Implemented source | Optional CART_NATIVE_RC build, protocol discovery, YAML doca+rc, explicit unsupported-build errors, no silent fallback |
 | 7. End-to-end validation | Pending, user will run hardware tests | Linux compile/link, two-node RPC and DAOS functional/failure tests; RPC-rate and CPU comparisons |
 
-Endpoint exchange currently takes an already connected, authenticated stream
-socket owned by the caller. Creating/listening/authenticating/discovering peers
-is part of gap 4; this helper does not claim to implement that functionality.
+`net.h` now owns TCP listener/connect/hello/READY/liveness and dedicated RC endpoint
+pairs. Bootstrap is unauthenticated and requires a trusted fabric; nonempty fabric
+auth keys fail explicitly. Bounded eager messages, IPv4, host buffers and context
+recreation after connection failure are current limits. See TESTING.md for the
+public CaRT API RPC/bulk smoke executable and README.md for the full limitations.
