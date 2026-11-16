@@ -3882,7 +3882,7 @@ func TestServer_MgmtSvc_eraseReplicas_systemName(t *testing.T) {
 	})
 	svc.rpcClient = mi
 
-	if err := svc.eraseReplicas(test.Context(t), []*net.TCPAddr{test.MockHostAddr(1)}); err != nil {
+	if err := svc.eraseReplicas(test.Context(t), []string{test.MockHostAddr(1).String()}); err != nil {
 		t.Fatal(err)
 	}
 
