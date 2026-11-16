@@ -110,7 +110,7 @@ struct dc_tx {
 	struct dc_pool          *tx_pool;
 
 	daos_unit_oid_t          tx_leader_oid;
-	/* Former DTX leader target ID before current resending. */
+	/* The ID for DAOS target where DTX leader resides on. */
 	uint32_t                 tx_leader_tgt;
 	/* Save old MBS for new DTX leader when resend RPC. */
 	struct dtx_memberships  *tx_mbs;
@@ -992,13 +992,15 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	bool			  locked = true;
 
 	if (rc == 0) {
-		rc = oco->oco_ret;
-		if (rc == 0) {
-			int	*sub_rets = oco->oco_sub_rets.ca_arrays;
+		int *sub_rets = oco->oco_sub_rets.ca_arrays;
 
-			/* FIXME: currently, we pack one DTX per CPD RPC. */
+		rc = oco->oco_ret;
+		if (rc == 0)
+			/* Currently, we pack one DTX per CPD RPC. */
 			rc = sub_rets[0];
-		}
+		else if (rc == -DER_INPROGRESS && oco->oco_sub_rets.ca_count > 0 &&
+			 sub_rets != NULL && sub_rets[0] > 0)
+			tx->tx_leader_tgt = sub_rets[0] - 1;
 	}
 
 	D_DEBUG(DB_IO, "TX " DF_DTI " commit (%p) with version %u get result: %d, %d\n",
@@ -1578,7 +1580,7 @@ dc_tx_same_rdg(struct dtx_redundancy_group *grp1,
 }
 
 static size_t
-dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
+dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt)
 {
 	struct dc_tx_rdg	*dtr;
 	struct dc_tx_rdg	*tmp;
@@ -1624,8 +1626,6 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 			size += sizeof(struct dtx_redundancy_group) +
 				sizeof(uint32_t) * dtr->dtr_group.drg_tgt_cnt;
 			(*grp_cnt)++;
-			if (!(dtr->dtr_group.drg_flags & DGF_RDONLY))
-				(*mod_cnt)++;
 		}
 	}
 
@@ -1633,8 +1633,6 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	size += sizeof(struct dtx_redundancy_group) +
 		sizeof(uint32_t) * tmp->dtr_group.drg_tgt_cnt;
 	(*grp_cnt)++;
-	if (!(tmp->dtr_group.drg_flags & DGF_RDONLY))
-		(*mod_cnt)++;
 
 out:
 	/* Insert the leader dtr at the head position. */
@@ -1642,8 +1640,6 @@ out:
 	size += sizeof(struct dtx_redundancy_group) +
 		sizeof(uint32_t) * leader->dtr_group.drg_tgt_cnt;
 	(*grp_cnt)++;
-	if (!(leader->dtr_group.drg_flags & DGF_RDONLY))
-		(*mod_cnt)++;
 
 	return size;
 }
@@ -1887,32 +1883,43 @@ out:
 }
 
 static int
-dc_tx_resend_leader(struct dc_tx *tx, struct dc_tx_req_group *dtrgs)
+dc_tx_resend_leader(struct dc_tx *tx, int act_grp_cnt, struct dc_tx_req_group *dtrgs,
+		    struct dtx_memberships *mbs, uint32_t tgt_cnt)
 {
-	struct dc_pool         *pool = tx->tx_pool;
-	struct pool_target     *target;
-	struct dtx_daos_target *ddt;
-	int                     rc;
-	int                     i;
+	struct pool_target      *target;
+	struct dtx_daos_target  *ddt;
+	struct dc_pool          *pool   = tx->tx_pool;
+	struct daos_cpd_req_idx *dcri   = NULL;
+	struct daos_cpd_sub_req *dcsr   = NULL;
+	uint32_t                 leader = UINT32_MAX;
+	int                      cnt;
+	int                      rc;
+	int                      i;
 
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	if (pool_map_get_version(pool->dp_map) != tx->tx_pm_ver)
 		D_GOTO(out, rc = -DER_STALE);
 
+	/* The leader specified by the server (or used by the former attempt). */
 	rc = pool_map_find_target(pool->dp_map, tx->tx_leader_tgt, &target);
-	if (rc == 1 && target->ta_comp.co_status == PO_COMP_ST_UPIN &&
-	    dtrgs[tx->tx_leader_tgt].dtrg_req_idx != NULL)
+	if (rc == 1 && pool_dtx_leader_candidate_status(target->ta_comp.co_status) &&
+	    dtrgs[tx->tx_leader_tgt].dtrg_req_idx != NULL) {
+		leader = tx->tx_leader_tgt;
 		D_GOTO(out, rc = 1);
+	}
 
 	if (tx->tx_mbs == NULL)
 		D_GOTO(out, rc = 0);
 
-	/* The first UPIN target will be the new leader. */
+	/* The first UPIN/DRAIN target in the original MBS will be the new leader. */
 	for (i = 0, ddt = &tx->tx_mbs->dm_tgts[0]; i < tx->tx_mbs->dm_tgt_cnt; i++, ddt++) {
+		if (unlikely(ddt->ddt_id >= tgt_cnt))
+			continue;
+
 		rc = pool_map_find_target(pool->dp_map, ddt->ddt_id, &target);
-		if (rc == 1 && target->ta_comp.co_status == PO_COMP_ST_UPIN &&
+		if (rc == 1 && pool_dtx_leader_candidate_status(target->ta_comp.co_status) &&
 		    dtrgs[ddt->ddt_id].dtrg_req_idx != NULL) {
-			tx->tx_leader_tgt = ddt->ddt_id;
+			leader = ddt->ddt_id;
 			D_GOTO(out, rc = 1);
 		}
 	}
@@ -1921,7 +1928,27 @@ dc_tx_resend_leader(struct dc_tx *tx, struct dc_tx_req_group *dtrgs)
 
 out:
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
-	return rc;
+
+	if (rc != 1)
+		return rc;
+
+	cnt = dtrgs[leader].dtrg_read_cnt + dtrgs[leader].dtrg_write_cnt;
+	if (unlikely(cnt == 0))
+		return 0;
+
+	/* The last sub_request will be write if have. */
+	dcri = &dtrgs[leader].dtrg_req_idx[cnt - 1];
+	dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false) + dcri->dcri_req_idx];
+
+	/* Always refresh the oid together with the target, the hint may come from server. */
+	tx->tx_leader_tgt          = leader;
+	tx->tx_leader_oid.id_pub   = ((struct dc_object *)(dcsr->dcsr_obj))->cob_md.omd_id;
+	tx->tx_leader_oid.id_shard = dcri->dcri_shard_id;
+
+	if (act_grp_cnt == 1 && !obj_is_ec(dcsr->dcsr_obj))
+		mbs->dm_flags |= DMF_SRDG_REP;
+
+	return 1;
 }
 
 static int
@@ -1945,8 +1972,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	size_t				 size;
 	uint32_t			 leader_dtrg_idx = 0;
 	uint32_t			 act_tgt_cnt = 0;
-	uint32_t			 act_grp_cnt = 0;
-	uint32_t			 mod_grp_cnt = 0;
+	uint32_t                         act_grp_cnt     = 0;
 	uint32_t			 start;
 	uint32_t			 tgt_cnt;
 	uint32_t			 req_cnt;
@@ -2023,7 +2049,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		}
 	}
 
-	size = dc_tx_reduce_rdgs(&dtr_list, &act_grp_cnt, &mod_grp_cnt);
+	size = dc_tx_reduce_rdgs(&dtr_list, &act_grp_cnt);
 
 	/* For the distributed transaction that all the touched targets
 	 * are in the same redundancy group, be as optimization, we will
@@ -2056,10 +2082,13 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	rc = 0;
 
 	if (tx->tx_set_resend && tx->tx_leader_tgt != UINT32_MAX) {
-		if (unlikely(tx->tx_leader_tgt >= tgt_cnt))
+		if (unlikely(tx->tx_leader_tgt >= tgt_cnt)) {
+			/* Invalid hint: drop it, otherwise every retry will fail the same way. */
+			tx->tx_leader_tgt = UINT32_MAX;
 			D_GOTO(out, rc = -DER_STALE);
+		}
 
-		rc = dc_tx_resend_leader(tx, dtrgs);
+		rc = dc_tx_resend_leader(tx, act_grp_cnt, dtrgs, mbs, tgt_cnt);
 		if (rc < 0)
 			goto out;
 	}
@@ -2068,7 +2097,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		rc              = 0;
 		leader_oid      = tx->tx_leader_oid;
 		leader_dtrg_idx = tx->tx_leader_tgt;
-	} else if (mod_grp_cnt == 1) {
+	} else if (act_grp_cnt == 1) {
 		/* Modification within single RDG, elect leader as standalone modification does. */
 		uint8_t	*bit_map;
 
@@ -2102,7 +2131,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_dtrg_idx     = obj_get_shard(obj, i)->po_target;
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-		if (!obj_is_ec(obj) && act_grp_cnt == 1)
+		if (!obj_is_ec(obj))
 			mbs->dm_flags |= DMF_SRDG_REP;
 
 		/* If there is only one redundancy group to be modified,
