@@ -79,6 +79,16 @@
 - Never use `__real_*()` variants.
 - Never pass fake `FILE *` values to real stdio.
 
+## DLCK Engine Batch
+
+- Exercise batch initialization, execution, joining and finalization separately as well as through
+  `dlck_engine_exec_all()`. The start message spans initialization and execution; joining reports
+  its own result.
+- After execution or joining, propagate the batch's `join_fail` to the engine before finalization.
+  Finalization must not free arguments belonging to ULTs that have not joined.
+- Test allocation and partial-start failures, join failures, and cleanup with distinct resources
+  for each target. Allocation cleanup may call the free callback with a null argument.
+
 ## DLCK Checker Tests
 
 - Keep each checker suite at the smallest useful boundary. `dlck_checker_common_ut.c` tests
