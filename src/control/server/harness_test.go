@@ -457,7 +457,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					t.Fatalf("unexpected rank for instance %d (-want, +got):\n%s\n",
 						ei.Index(), diff)
 				}
-				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
+				CmpErr(t, tc.expIoErrs[ei.Index()], ei.lastErr())
 			}
 			members, err := membership.Members(nil)
 			if err != nil {

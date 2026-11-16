@@ -149,7 +149,9 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 		ei.log.Debugf("instance %d: no rank (%s)", engineIdx, err)
 	}
 
+	ei.Lock()
 	ei._lastErr = exitErr
+	ei.Unlock()
 
 	details := []string{fmt.Sprintf("instance %d", engineIdx)}
 	if exitPid != 0 {
