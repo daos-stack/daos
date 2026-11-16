@@ -18,7 +18,16 @@ a different test suite for each of the following layers:
 - The print test suite looks at how information is printed and if it seems
   correct.
 
-The ddb_test_driver.c file contains the entry point for ddb_tests. It does not
-take any arguments for filtering or modifying tests; however, while debugging,
-the "test_suites" and "cmocka_set_test_filter" variable and function can be
-used, with a test recompile, to filter which tests are run.
+The ddb_test_driver.c file contains the entry point for ddb_tests. It accepts
+the following options:
+
+- `-s`, `--suites <letters>` runs only the test groups listed by their letter:
+  `a` parsing, `b` vos, `c` commands, `d` print and `e` path. All the groups
+  run by default.
+- `-f`, `--filter <test>` runs only the tests matching the cmocka filter. It
+  needs a build with `CMOCKA_FILTER_SUPPORTED=1` (cmocka 1.1.5 or later);
+  otherwise ddb_tests prints "Test filtering disabled at compile time." and
+  runs every test.
+- `-c`, `--create_vos` only creates the VOS file used by the tests, filled with
+  a few containers, objects and keys (`/mnt/daos/<pool uuid>/vos-0`), prints
+  its path and exits without running any test.
