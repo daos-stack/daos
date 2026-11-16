@@ -2375,12 +2375,29 @@ dtx_merge_check_result(int *tgt, int src)
 	}
 }
 
+static bool
+dtx_leader_candidate(struct ds_pool *pool, uint32_t id, struct pool_target **p_tgt)
+{
+	struct pool_target *tgt   = NULL;
+	bool                match = false;
+	int                 rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_target(pool->sp_map, id, &tgt);
+	if (rc == 1 && pool_dtx_leader_candidate_status(tgt->ta_comp.co_status)) {
+		*p_tgt = tgt;
+		match  = true;
+	}
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return match;
+}
+
 int
 dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_t *oid,
-	       uint32_t version, struct pool_target **p_tgt)
+	       struct pool_target **p_tgt)
 {
 	struct pl_map          *map    = NULL;
-	struct pool_target     *tmp    = NULL;
 	struct pl_obj_layout   *layout = NULL;
 	struct dtx_coll_target *dct;
 	struct daos_obj_md      md = {0};
@@ -2389,24 +2406,25 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 
 	D_ASSERT(mbs != NULL);
 
-	/* The first UPIN (and join before DTX) target is the (new) leader of the DTX. */
+	/*
+	 * The first UPIN/DRAIN target will be the new leader of the DTX.
+	 *
+	 * For UPIN target, even if it was in reintegrating (UP at that time) when such DTX
+	 * happened, it is still valid as the new DTX leader for such DTX related operation.
+	 * If the DTX was generated before current target being reintegrated, since target's
+	 * status has become UPIN, then it means that DTX resync for its reintegrating has
+	 * succeeded, and such old DTX should has been resynced at that time.
+	 */
+
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
-		rc = ds_pool_target_status_check(pool, mbs->dm_tgts[i].ddt_id,
-						 (uint8_t)PO_COMP_ST_UPIN, p_tgt);
-		if (rc < 0)
-			D_GOTO(out, rc);
-
-		if (rc == 1) {
-			if ((*p_tgt)->ta_comp.co_in_ver <= version)
-				D_GOTO(out, rc = 0);
-
-			if (tmp == NULL || tmp->ta_comp.co_in_ver > (*p_tgt)->ta_comp.co_in_ver)
-				tmp = *p_tgt;
-		}
+		if (dtx_leader_candidate(pool, mbs->dm_tgts[i].ddt_id, p_tgt))
+			D_GOTO(out, rc = 0);
 	}
 
 	if (!(mbs->dm_flags & DMF_COLL_TARGET))
 		D_GOTO(out, rc = -DER_NONEXIST);
+
+	D_ASSERT(oid != NULL);
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
 	if (map == NULL) {
@@ -2433,31 +2451,13 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 		if (layout->ol_shards[i].po_target == -1 || layout->ol_shards[i].po_shard == -1)
 			continue;
 
-		rc = pool_map_find_target(map->pl_poolmap, layout->ol_shards[i].po_target, p_tgt);
-		D_ASSERT(rc == 1);
-
-		if ((*p_tgt)->ta_comp.co_status != PO_COMP_ST_UPIN)
-			continue;
-
-		if ((*p_tgt)->ta_comp.co_in_ver <= version)
+		if (dtx_leader_candidate(pool, layout->ol_shards[i].po_target, p_tgt))
 			D_GOTO(out, rc = 0);
-
-		if (tmp == NULL || tmp->ta_comp.co_in_ver > (*p_tgt)->ta_comp.co_in_ver)
-			tmp = *p_tgt;
 	}
 
 	rc = -DER_NONEXIST;
 
 out:
-	/*
-	 * If all alive participants were in rebuild/reint when DTX happened,
-	 * then the first one that became UPIN will be the DTX (new) leader.
-	 */
-	if (rc == -DER_NONEXIST && tmp != NULL) {
-		*p_tgt = tmp;
-		rc     = 0;
-	}
-
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
 

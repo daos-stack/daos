@@ -115,6 +115,12 @@ struct pool_component {
 	uint32_t	co_nr;
 };
 
+static inline bool
+pool_dtx_leader_candidate_status(uint32_t status)
+{
+	return status == PO_COMP_ST_UPIN || status == PO_COMP_ST_DRAIN;
+}
+
 /** a leaf of pool map */
 struct pool_target {
 	/** embedded component for myself */

@@ -344,6 +344,9 @@ int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	       struct dtx_cos_key *dcks, int count, bool has_cos);
 
+int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_t *oid,
+		   struct pool_target **p_tgt);
+
 int
 dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch, uint32_t version);
 
