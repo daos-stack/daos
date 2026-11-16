@@ -1055,7 +1055,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         Raises:
             AssertionError: If any property does not match the expected value.
         """
-        result = self.get_prop(properties=expected_props.keys())
+        result = self.get_prop(properties=list(expected_props.keys()))
         self.validate_properties(result, expected_props)
 
     def list_attrs(self, *args, **kwargs):

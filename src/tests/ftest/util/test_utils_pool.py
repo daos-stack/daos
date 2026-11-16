@@ -680,7 +680,7 @@ class TestPool(TestDaosApiBase):
         Raises:
             AssertionError: If any property does not match the expected value.
         """
-        result = self.get_prop(name=expected_props.keys())
+        result = self.get_prop(name=list(expected_props.keys()))
         self.validate_properties(result, expected_props)
 
     @fail_on(CommandFailure)
