@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <stdatomic.h>
 
 #define QUEUE 256
 struct crt_native_mr {
@@ -170,9 +172,109 @@ drain(struct crt_native_channel *c)
 	}
 	assert(!"channel failed to drain");
 }
+
+struct deferred {
+	struct crt_native_channel *channel;
+	struct crt_native_rpc     *rpc;
+	struct crt_native_token    token;
+	struct crt_native_rx_lease lease;
+	const void                *payload;
+	size_t                     size;
+	atomic_bool                released;
+};
+static void
+defer(void *arg, struct crt_native_rpc *rpc, struct crt_native_token token, uint32_t opcode,
+      const void *payload, size_t size)
+{
+	struct deferred           *d         = arg;
+	struct crt_native_rx_lease temporary = {0};
+	assert(opcode == 17 && size == 5);
+	d->rpc     = rpc;
+	d->token   = token;
+	d->payload = payload;
+	d->size    = size;
+	assert(crt_native_channel_retain(d->channel, payload, size, &temporary) == 0);
+	assert(crt_native_channel_retain(d->channel, payload, size, &d->lease) == 0);
+	assert(crt_native_channel_retain(d->channel, payload, size, &d->lease) == EINVAL);
+	assert(crt_native_channel_release(&temporary) == 0); /* before callback return */
+}
+static void *
+release_worker(void *arg)
+{
+	struct deferred *d = arg;
+	assert(memcmp(d->payload, "hello", 5) == 0);
+	assert(crt_native_channel_release(&d->lease) == 0);
+	assert(crt_native_channel_release(&d->lease) == EINVAL);
+	atomic_store(&d->released, true);
+	return NULL;
+}
+static int
+encode_hello(void *arg, void *payload, size_t capacity, size_t *used)
+{
+	(void)arg;
+	assert(capacity >= 5);
+	memcpy(payload, "hello", 5);
+	*used = 5;
+	return 0;
+}
+static void
+asynchronous_receives(void)
+{
+	struct crt_native_ep       a = {0}, b = {0};
+	struct crt_native_channel *ca, *cb;
+	struct crt_native_limits   limits  = {.frame_size = 128, .receives = 8};
+	struct deferred            d       = {0};
+	struct result              r       = {0};
+	unsigned                   handled = 0, completed;
+	uint64_t                   id;
+	a.peer = &b;
+	b.peer = &a;
+	assert(crt_native_channel_create(&ops, &a, &limits, echo, &handled, &ca) == 0);
+	assert(crt_native_channel_create(&ops, &b, &limits, defer, &d, &cb) == 0);
+	d.channel = cb;
+	atomic_init(&d.released, false);
+	assert(crt_native_channel_start(ca) == 0 && crt_native_channel_start(cb) == 0);
+	for (unsigned round = 0; round < 128; round++) {
+		assert(crt_native_channel_call_encoded(ca, 17, encode_hello, NULL, done, &r, &id) ==
+		       0);
+		assert(crt_native_channel_progress(ca, &completed) == 0);
+		assert(crt_native_channel_progress(cb, &completed) == 0);
+		assert(d.lease.channel == cb && memcmp(d.payload, "hello", 5) == 0);
+		/* One RX is withheld while the deferred worker owns its view. */
+		assert(b.rx_tail - b.rx_head == 7);
+		assert(crt_native_rpc_reply(d.rpc, d.token, 0, d.payload, d.size) == 0);
+		assert(crt_native_channel_progress(cb, &completed) == 0);
+		assert(crt_native_channel_progress(ca, &completed) == 0);
+		assert(r.done == round + 1 && r.failed == 0);
+		pthread_t worker;
+		atomic_store(&d.released, false);
+		assert(pthread_create(&worker, NULL, release_worker, &d) == 0);
+		for (unsigned i = 0; i < 32 && !atomic_load(&d.released); i++)
+			assert(crt_native_channel_progress(cb, &completed) == 0);
+		assert(pthread_join(worker, NULL) == 0);
+		b.recv_block = 1; /* released RX repost can also need retry */
+		assert(crt_native_channel_progress(cb, &completed) == 0);
+		assert(crt_native_channel_progress(cb, &completed) == 0);
+		assert(b.rx_tail - b.rx_head == 8);
+	}
+	/* Leases also pin the registered slab after QP shutdown/CQ drain. */
+	assert(crt_native_channel_call(ca, 17, "hello", 5, done, &r, &id) == 0);
+	assert(crt_native_channel_progress(ca, &completed) == 0);
+	assert(crt_native_channel_progress(cb, &completed) == 0);
+	assert(crt_native_channel_shutdown(cb, ECANCELED) == 0);
+	for (unsigned i = 0; i < 8; i++)
+		assert(crt_native_channel_progress(cb, &completed) == ECANCELED);
+	assert(crt_native_channel_destroy(cb) == EBUSY);
+	assert(memcmp(d.payload, "hello", 5) == 0);
+	assert(crt_native_channel_release(&d.lease) == 0);
+	assert(crt_native_channel_destroy(cb) == 0);
+	drain(ca);
+}
+
 int
 main(void)
 {
+	asynchronous_receives();
 	struct crt_native_ep       a = {0}, b = {0};
 	struct crt_native_channel *ca, *cb;
 	struct crt_native_limits   limits = {.frame_size = 128, .receives = 8};

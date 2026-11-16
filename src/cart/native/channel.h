@@ -8,6 +8,20 @@
 #include "rpc.h"
 
 struct crt_native_channel;
+/* Caller-owned, initially zero; do not copy an active lease. Retain only on
+ * the channel's progress thread during a receive callback. Release may run
+ * on a worker thread, once; reposting remains the progress owner's job.
+ */
+struct crt_native_rx_lease {
+	struct crt_native_channel *channel;
+	unsigned                   index;
+	uint64_t                   generation;
+};
+int
+crt_native_channel_retain(struct crt_native_channel *, const void *view, size_t,
+			  struct crt_native_rx_lease *);
+int
+crt_native_channel_release(struct crt_native_rx_lease *);
 
 /* The endpoint is exclusively owned by this channel until destroy, but must
  * be closed by the caller afterwards. Create registers pools without posting;
@@ -27,6 +41,9 @@ crt_native_channel_start(struct crt_native_channel *);
 int
 crt_native_channel_call(struct crt_native_channel *, uint32_t, const void *, size_t,
 			crt_native_done_t, void *, uint64_t *);
+int
+crt_native_channel_call_encoded(struct crt_native_channel *, uint32_t, crt_native_encoder_t, void *,
+				crt_native_done_t, void *, uint64_t *);
 /* Bounded, nonblocking. Callbacks must not reenter progress or destroy.
  * Nonzero return initiates shutdown; continue progress to reap accepted work.
  */

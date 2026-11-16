@@ -6,8 +6,10 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
+#include <limits.h>
 
-enum io_state { IDLE, POSTED, HELD };
+enum io_state { IDLE, POSTED, HELD, PINNED };
 struct channel_io {
 	bool                    receive;
 	bool                    delivered;
@@ -15,6 +17,9 @@ struct channel_io {
 	unsigned                index;
 	size_t                  size;
 	struct crt_native_token token;
+	atomic_uint             refs;
+	uint64_t                generation;
+	unsigned                released_next;
 };
 struct crt_native_channel {
 	const struct crt_native_ops *ops;
@@ -32,6 +37,9 @@ struct crt_native_channel {
 	struct crt_native_tx         waiting;
 	bool                         has_waiting, started, running;
 	int                          error;
+	struct channel_io           *delivering;
+	atomic_uint                  leases, released_head;
+	unsigned                     released_pending;
 };
 
 static int
@@ -79,17 +87,21 @@ crt_native_channel_create(const struct crt_native_ops *ops, struct crt_native_ep
 	c->count           = limits->receives;
 	c->frame_size      = limits->frame_size;
 	c->rx_pending_head = c->rx_pending_tail = c->count;
-	c->rx                                   = calloc(c->count, sizeof(*c->rx));
-	c->tx                                   = calloc(c->count, sizeof(*c->tx));
-	c->rx_next                              = calloc(c->count, sizeof(*c->rx_next));
-	c->tx_next                              = calloc(c->count, sizeof(*c->tx_next));
-	c->rx_buffer                            = calloc(c->count, c->frame_size);
+	atomic_init(&c->leases, 0);
+	atomic_init(&c->released_head, c->count);
+	c->released_pending = c->count;
+	c->rx               = calloc(c->count, sizeof(*c->rx));
+	c->tx               = calloc(c->count, sizeof(*c->tx));
+	c->rx_next          = calloc(c->count, sizeof(*c->rx_next));
+	c->tx_next          = calloc(c->count, sizeof(*c->tx_next));
+	c->rx_buffer        = calloc(c->count, c->frame_size);
 	if (!c->rx || !c->tx || !c->rx_next || !c->tx_next || !c->rx_buffer) {
 		rc = ENOMEM;
 		goto fail;
 	}
 	for (unsigned i = 0; i < c->count; i++) {
-		c->rx[i]       = (struct channel_io){.receive = true, .index = i};
+		c->rx[i] = (struct channel_io){.receive = true, .index = i};
+		atomic_init(&c->rx[i].refs, 0);
 		c->tx[i].index = i;
 		c->tx_next[i]  = i + 1;
 	}
@@ -171,6 +183,63 @@ crt_native_channel_call(struct crt_native_channel *c, uint32_t opcode, const voi
 	return crt_native_rpc_call(c->rpc, opcode, data, size, done, arg, id);
 }
 
+int
+crt_native_channel_call_encoded(struct crt_native_channel *c, uint32_t opcode,
+				crt_native_encoder_t encode, void *encode_arg,
+				crt_native_done_t done, void *arg, uint64_t *id)
+{
+	if (c == NULL)
+		return EINVAL;
+	if (c->error)
+		return c->error;
+	if (!c->started)
+		return ENOTCONN;
+	return crt_native_rpc_call_encoded(c->rpc, opcode, encode, encode_arg, done, arg, id);
+}
+
+int
+crt_native_channel_retain(struct crt_native_channel *c, const void *view, size_t size,
+			  struct crt_native_rx_lease *lease)
+{
+	if (c == NULL || view == NULL || lease == NULL || lease->channel != NULL ||
+	    c->delivering == NULL)
+		return EINVAL;
+	struct channel_io *io      = c->delivering;
+	uintptr_t          base    = (uintptr_t)(c->rx_buffer + io->index * c->frame_size);
+	uintptr_t          address = (uintptr_t)view;
+	if (address < base || address - base > io->size || size > io->size - (address - base))
+		return EINVAL;
+	if (atomic_load(&io->refs) == UINT_MAX || atomic_load(&c->leases) == UINT_MAX)
+		return EOVERFLOW;
+	atomic_fetch_add(&io->refs, 1);
+	atomic_fetch_add(&c->leases, 1);
+	*lease = (struct crt_native_rx_lease){c, io->index, io->generation};
+	return 0;
+}
+
+int
+crt_native_channel_release(struct crt_native_rx_lease *lease)
+{
+	if (lease == NULL || lease->channel == NULL)
+		return EINVAL;
+	struct crt_native_channel *c = lease->channel;
+	if (lease->index >= c->count)
+		return EINVAL;
+	struct channel_io *io = &c->rx[lease->index];
+	if (io->generation != lease->generation || atomic_load(&io->refs) == 0)
+		return EINVAL;
+	if (atomic_fetch_sub(&io->refs, 1) == 1) {
+		unsigned head = atomic_load(&c->released_head);
+		do {
+			io->released_next = head;
+		} while (!atomic_compare_exchange_weak(&c->released_head, &head, io->index));
+	}
+	*lease = (struct crt_native_rx_lease){0};
+	/* Last operation touching c: destroy may run after this decrement. */
+	atomic_fetch_sub(&c->leases, 1);
+	return 0;
+}
+
 static void
 hold_receive(struct crt_native_channel *c, struct channel_io *io)
 {
@@ -189,11 +258,22 @@ handle_receive(struct crt_native_channel *c, struct channel_io *io)
 	int rc;
 	io->state = HELD;
 	if (!io->delivered) {
+		if (io->generation == UINT64_MAX)
+			return EOVERFLOW;
+		io->generation++;
+		atomic_store(&io->refs, 1); /* progress owner's borrow */
+		c->delivering = io;
 		rc = crt_native_rpc_receive(c->rpc, c->rx_buffer + io->index * c->frame_size,
 					    io->size);
+		c->delivering = NULL;
+		bool pinned   = atomic_fetch_sub(&io->refs, 1) > 1;
+		if (pinned)
+			io->state = PINNED;
 		if (rc != 0)
 			return rc;
 		io->delivered = true;
+		if (pinned)
+			return 0;
 	}
 	/* Mark processed before reposting; EAGAIN must not replay the handler. */
 	rc = post_receive(c, io);
@@ -276,6 +356,21 @@ crt_native_channel_progress(struct crt_native_channel *c, unsigned *completed)
 		}
 	}
 	*completed = count;
+	/* Last lease release queues only an index, never touches the QP. Drain a
+	 * bounded number on the progress owner, including during error teardown.
+	 */
+	for (unsigned budget = 0; budget < 32; budget++) {
+		if (c->released_pending == c->count)
+			c->released_pending = atomic_exchange(&c->released_head, c->count);
+		if (c->released_pending == c->count)
+			break;
+		struct channel_io *io = &c->rx[c->released_pending];
+		c->released_pending   = io->released_next;
+		if (c->error == 0)
+			hold_receive(c, io);
+		else
+			io->state = IDLE;
+	}
 	/* Retry held inbound frames in bounded round-robin order. */
 	for (unsigned budget = 0; budget < 32 && c->error == 0 && c->rx_pending_head != c->count;
 	     budget++) {
@@ -314,7 +409,7 @@ crt_native_channel_destroy(struct crt_native_channel *c)
 	int rc;
 	if (c == NULL)
 		return EINVAL;
-	if (c->running || c->outstanding != 0 || c->has_waiting)
+	if (c->running || c->outstanding != 0 || c->has_waiting || atomic_load(&c->leases))
 		return EBUSY;
 	if (!crt_native_rpc_idle(c->rpc))
 		return EBUSY;

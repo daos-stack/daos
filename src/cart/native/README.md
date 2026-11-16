@@ -2,7 +2,8 @@
 
 This is an initial transport bring-up implementation, **not a selectable CaRT
 provider**. The normal DAOS SCons build and Mercury transport are unchanged.
-It does not yet run DAOS RPCs or replace Mercury serialization. Do not set
+It does not yet run DAOS RPCs. Native serialization is an explicit private path;
+Mercury serialization remains the default. Do not set
 `CRT_PHY_ADDR_STR=verbs` expecting this code to be selected.
 
 ## Implemented
@@ -73,9 +74,11 @@ handlers or DAOS operations, and they do not validate a real verbs provider.
 `bootstrap.h` exchanges endpoint parameters over a caller-owned socket;
 `rpc.h` matches requests/replies and owns preallocated frames; `channel.h`
 registers those frames, posts receives and drives the transport. `proc.h` supplies
-an allocation-free native payload codec. The CaRT bridge must supply authenticated
-connections, map existing CaRT proc callbacks/headers onto this codec, and integrate
-handler dispatch. The codec is not yet a replacement for `crt_hg_proc.c`.
+an allocation-free native payload codec. `cart_proc.h` binds existing CaRT proc
+callbacks to the codec; the normal CaRT SCons target includes this CPU-only
+binding without introducing a verbs dependency. The CaRT bridge must still
+supply authenticated connections, connection-specific bulk bindings, and actual
+context/handler dispatch. No context selects this path automatically.
 
 `bulk.h` provides connection-bound SGL registration, endian-safe remote memory
 descriptors, export leases and bounded chunked READ/WRITE execution. A dedicated
@@ -116,12 +119,62 @@ are opaque bytes, never an excuse to transmit C structs with native layout.
 | Bulk payload | No codec copy; only descriptors are serialized, data uses RDMA |
 
 This is not universal end-to-end zero copy. Borrowed views expire when the handler
-or completion callback returns; asynchronous CaRT dispatch still needs an RX
-lease (or a deliberate copy). `FREE` only resets borrowed views and does not free
+or completion callback returns unless its receive buffer is retained (see below).
+`FREE` only resets borrowed views and does not free
 their backing memory. It must not release bulk export leases; those remain the
 RPC lifecycle owner's responsibility. Large fields should use the bulk path;
 there is no eager fragmentation/rendezvous fallback yet. No performance claim
 follows from the hardware-free codec tests.
+
+## Existing CaRT callback binding
+
+`crt_native_cart_run()` runs an existing `crt_proc_cb_t` with a stack cursor.
+Public `crt_proc_*` entry points recognize that cursor by exact equality in a
+thread-local scope stack, otherwise forwarding to their Mercury implementations.
+No Mercury private structs are inspected, and there is no pointer tagging.
+Nested native and Mercury processing is supported; cursors cannot outlive the
+call or move to another thread. The binding converts errno into CaRT errors.
+
+Strings and iovs decode as borrowed views. Borrowed iov capacity equals its
+transmitted length, so callers cannot write into a sender-advertised capacity
+beyond the actual RX data. Rank arrays and SGL metadata require allocation;
+payload bytes remain borrowed. FREE releases that metadata, clears views and
+also works during generated callback error unwinding on the same decode proc.
+Use FREE only on objects decoded by this binding.
+
+`crt_native_cart_payload()` combines the common/collective headers with a known
+registered body schema. Native headers encode individual fields rather than C
+struct padding; Mercury's existing wire layout is preserved. The caller supplies
+encode header values and preallocated request/output objects. The later context
+bridge must validate HLC, routing, identity and deadlines before dispatch.
+
+Non-NULL bulk handles require the connection-specific bulk callback supplied to
+`crt_native_cart_run()`/`payload()`. That hook owns local-handle lookup, decoded
+wrappers, and export leases. Absent a hook, only NULL bulk handles are supported;
+non-NULL handles fail explicitly with `-DER_NOSYS`. A Mercury bulk handle is never
+mistaken for a native export. The actual CaRT bulk/context lifecycle bridge is
+still pending, including peer acknowledgments and connection quiescence.
+
+Portable adapter tests compile against real CaRT API/types with Mercury fallback
+test doubles. Test-only empty Boost and byteswap includes permit these tests on
+macOS; they do not expand the generated Boost schemas or replace production
+dependencies. Full CaRT/Mercury compilation remains a Linux integration check.
+
+## Receive ownership across asynchronous dispatch
+
+During a receive callback, call `crt_native_channel_retain(channel, view, size,
+&lease)` on the progress owner before handing a borrowed view to a worker. Leases
+are caller-owned, initially zero, and must not be copied. Each successful retain
+requires exactly one `crt_native_channel_release(&lease)`. Release may run on a
+worker: it queues a buffer index, and the progress owner later reposts the RX.
+QP access and repost retries remain on the progress thread. Shutdown/destroy
+preserve registered slabs until all NIC work and all leases have drained.
+
+Only views backed by the currently delivered RX can be retained. Early replies
+copied to the RPC response slab are not RX-backed; consumers needing asynchronous
+ownership of those responses must make an owned copy. Retaining an RX is separate
+from owning a server request/reply token; release both lifetimes correctly. The
+actual CaRT dispatcher still needs to attach leases to its RPC destruction path.
 
 ## Remaining integration work
 
