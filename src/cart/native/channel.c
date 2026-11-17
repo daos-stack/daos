@@ -19,7 +19,7 @@ struct channel_io {
 	bool                       delivered;
 	enum io_state              state;
 	unsigned                   index;
-	size_t                     size;
+	size_t                     size, offset;
 	struct crt_native_token    token;
 	atomic_uint                refs;
 	uint64_t                   generation;
@@ -39,9 +39,9 @@ struct crt_native_channel {
 	unsigned                     rx_pending_head, rx_pending_tail;
 	unsigned                    *rx_next;
 	unsigned                     tx_free_head;
+	unsigned                     tx_pending_head, tx_pending_tail;
 	unsigned                    *tx_next;
-	struct crt_native_tx         waiting;
-	bool                         has_waiting, started, running;
+	bool                         started, running;
 	int                          error;
 	struct channel_io           *delivering;
 	atomic_uint                  leases, released_head;
@@ -55,10 +55,15 @@ stop(struct crt_native_channel *c, int error)
 	if (c->error == 0) {
 		c->error = error;
 		crt_native_rpc_fail(c->rpc, error);
-		if (c->has_waiting) {
-			crt_native_rpc_tx_complete(c->rpc, c->waiting.token, error);
-			c->has_waiting = false;
+		while (c->tx_pending_head != c->count) {
+			unsigned index     = c->tx_pending_head;
+			c->tx_pending_head = c->tx_next[index];
+			crt_native_rpc_tx_complete(c->rpc, c->tx[index].token, error);
+			c->tx[index].state = IDLE;
+			c->tx_next[index]  = c->tx_free_head;
+			c->tx_free_head    = index;
 		}
+		c->tx_pending_tail = c->count;
 	}
 	/* Retry a failed QP error transition on subsequent shutdown calls. */
 	rc = c->ops->close_begin(c->ep);
@@ -129,6 +134,7 @@ crt_native_channel_create(const struct crt_native_ops *ops, struct crt_native_ep
 	c->count           = limits->receives;
 	c->frame_size      = limits->frame_size;
 	c->rx_pending_head = c->rx_pending_tail = c->count;
+	c->tx_pending_head = c->tx_pending_tail = c->count;
 	atomic_init(&c->leases, 0);
 	atomic_init(&c->released_head, c->count);
 	c->released_pending = c->count;
@@ -183,8 +189,28 @@ fail:
 }
 
 static int
+post_batch(struct crt_native_channel *c, const struct crt_native_post *posts, unsigned count,
+	   unsigned *accepted)
+{
+	if (c->ops->post_batch)
+		return c->ops->post_batch(c->ep, posts, count, accepted);
+	*accepted = 0;
+	while (*accepted < count) {
+		const struct crt_native_post *p = &posts[*accepted];
+		int rc = c->ops->post(c->ep, p->opcode, p->mr, p->offset, p->length, p->remote,
+				      p->remote_offset, p->cookie);
+		if (rc)
+			return rc;
+		(*accepted)++;
+	}
+	return 0;
+}
+
+static int
 post_receive(struct crt_native_channel *c, struct channel_io *io)
 {
+	if (c->running && c->ops->post_batch)
+		return EAGAIN;
 	int rc = c->ops->post(c->ep, CRT_NATIVE_RECV, c->rx_mr, io->index * c->frame_size,
 			      c->frame_size, NULL, 0, io);
 	if (rc == 0) {
@@ -201,14 +227,31 @@ crt_native_channel_start(struct crt_native_channel *c)
 		return EINVAL;
 	if (c->error)
 		return c->error;
-	for (unsigned i = 0; i < c->count; i++) {
-		int rc;
-		if (c->rx[i].state != IDLE)
+	unsigned cursor = 0;
+	while (cursor < c->count) {
+		struct crt_native_post posts[CRT_NATIVE_BATCH];
+		unsigned               count = 0, accepted;
+		while (cursor < c->count && count < CRT_NATIVE_BATCH) {
+			struct channel_io *io = &c->rx[cursor++];
+			if (io->state != IDLE)
+				continue;
+			posts[count++] =
+			    (struct crt_native_post){.opcode = CRT_NATIVE_RECV,
+						     .mr     = c->rx_mr,
+						     .offset = io->index * c->frame_size,
+						     .length = c->frame_size,
+						     .cookie = io};
+		}
+		if (!count)
 			continue;
-		rc = post_receive(c, &c->rx[i]);
+		int rc = post_batch(c, posts, count, &accepted);
+		for (unsigned i = 0; i < accepted; i++) {
+			((struct channel_io *)posts[i].cookie)->state = POSTED;
+			c->outstanding++;
+		}
 		if (rc == EAGAIN)
 			return rc;
-		if (rc != 0)
+		if (rc)
 			return stop(c, rc);
 	}
 	c->started = true;
@@ -378,45 +421,121 @@ handle_receive(struct crt_native_channel *c, struct channel_io *io)
 	return rc;
 }
 
+static void
+free_tx(struct crt_native_channel *c, struct channel_io *io)
+{
+	io->state             = IDLE;
+	c->tx_next[io->index] = c->tx_free_head;
+	c->tx_free_head       = io->index;
+}
+
 static int
 send_queued(struct crt_native_channel *c)
 {
-	for (unsigned budget = 0; budget < 32 && c->tx_free_head != c->count; budget++) {
+	for (unsigned budget = 0; budget < CRT_NATIVE_BATCH && c->tx_free_head != c->count;
+	     budget++) {
+		struct crt_native_tx tx;
+		int                  rc = crt_native_rpc_next_tx(c->rpc, &tx);
+		if (rc == EAGAIN)
+			break;
+		if (rc)
+			return rc;
 		unsigned           slot = c->tx_free_head;
 		struct channel_io *io   = &c->tx[slot];
-		int                rc;
-
-		if (!c->has_waiting) {
-			rc = crt_native_rpc_next_tx(c->rpc, &c->waiting);
-			if (rc == EAGAIN)
-				return 0;
-			if (rc != 0)
-				return rc;
-			c->has_waiting = true;
-		}
-		rc = crt_native_rpc_tx_status(c->rpc, c->waiting.token);
-		if (rc != 0) {
-			int completion_rc =
-			    crt_native_rpc_tx_complete(c->rpc, c->waiting.token, rc);
-			c->has_waiting = false;
-			if (completion_rc != 0)
-				return completion_rc;
+		c->tx_free_head         = c->tx_next[slot];
+		io->token               = tx.token;
+		io->size                = tx.length;
+		io->offset              = (const uint8_t *)tx.data - c->tx_buffer;
+		io->state               = HELD;
+		c->tx_next[slot]        = c->count;
+		if (c->tx_pending_tail != c->count)
+			c->tx_next[c->tx_pending_tail] = slot;
+		else
+			c->tx_pending_head = slot;
+		c->tx_pending_tail = slot;
+	}
+	struct crt_native_post posts[CRT_NATIVE_BATCH];
+	unsigned               count = 0, accepted;
+	while (c->tx_pending_head != c->count && count < CRT_NATIVE_BATCH) {
+		struct channel_io *io = &c->tx[c->tx_pending_head];
+		c->tx_pending_head    = c->tx_next[io->index];
+		if (c->tx_pending_head == c->count)
+			c->tx_pending_tail = c->count;
+		int rc = crt_native_rpc_tx_status(c->rpc, io->token);
+		if (rc) {
+			int result = crt_native_rpc_tx_complete(c->rpc, io->token, rc);
+			free_tx(c, io);
+			if (result) {
+				/* Restore already staged frames before shutdown drains them. */
+				for (unsigned i = 0; i < count; i++) {
+					struct channel_io *staged = posts[i].cookie;
+					crt_native_rpc_tx_complete(c->rpc, staged->token, result);
+					free_tx(c, staged);
+				}
+				return result;
+			}
 			continue;
 		}
-		rc = c->ops->post(c->ep, CRT_NATIVE_SEND, c->tx_mr,
-				  (const uint8_t *)c->waiting.data - c->tx_buffer,
-				  c->waiting.length, NULL, 0, io);
-		if (rc == EAGAIN)
-			return 0;
-		if (rc != 0)
-			return rc;
-		io->token       = c->waiting.token;
-		io->state       = POSTED;
-		c->tx_free_head = c->tx_next[slot];
-		c->outstanding++;
-		c->has_waiting = false;
+		posts[count++] = (struct crt_native_post){.opcode = CRT_NATIVE_SEND,
+							  .mr     = c->tx_mr,
+							  .offset = io->offset,
+							  .length = io->size,
+							  .cookie = io};
 	}
-	return 0;
+	if (!count)
+		return 0;
+	int rc = post_batch(c, posts, count, &accepted);
+	for (unsigned i = 0; i < accepted; i++) {
+		((struct channel_io *)posts[i].cookie)->state = POSTED;
+		c->outstanding++;
+	}
+	/* Restore the rejected suffix ahead of newer queued frames. */
+	for (unsigned i = count; i > accepted; i--) {
+		struct channel_io *io = posts[i - 1].cookie;
+		c->tx_next[io->index] = c->tx_pending_head;
+		c->tx_pending_head    = io->index;
+		if (c->tx_pending_tail == c->count)
+			c->tx_pending_tail = io->index;
+	}
+	return rc == EAGAIN ? 0 : rc;
+}
+
+static int
+repost_receives(struct crt_native_channel *c)
+{
+	if (!c->ops->post_batch)
+		return 0;
+	struct crt_native_post posts[CRT_NATIVE_BATCH];
+	unsigned               count = 0, accepted;
+	for (unsigned budget = 0; budget < CRT_NATIVE_BATCH && c->rx_pending_head != c->count;
+	     budget++) {
+		struct channel_io *io = &c->rx[c->rx_pending_head];
+		c->rx_pending_head    = c->rx_next[io->index];
+		if (c->rx_pending_head == c->count)
+			c->rx_pending_tail = c->count;
+		if (!io->delivered) {
+			hold_receive(c, io);
+			continue;
+		}
+		posts[count++] = (struct crt_native_post){.opcode = CRT_NATIVE_RECV,
+							  .mr     = c->rx_mr,
+							  .offset = io->index * c->frame_size,
+							  .length = c->frame_size,
+							  .cookie = io};
+	}
+	if (!count)
+		return 0;
+	int rc = post_batch(c, posts, count, &accepted);
+	for (unsigned i = 0; i < count; i++) {
+		struct channel_io *io = posts[i].cookie;
+		if (i < accepted) {
+			io->state     = POSTED;
+			io->delivered = false;
+			c->outstanding++;
+		} else
+			hold_receive(c, io);
+	}
+	return rc == EAGAIN ? 0 : rc;
 }
 
 int
@@ -503,6 +622,11 @@ crt_native_channel_progress(struct crt_native_channel *c, unsigned *completed)
 		else if (rc != 0 && rc != EAGAIN)
 			stop(c, rc);
 	}
+	if (c->error == 0) {
+		rc = repost_receives(c);
+		if (rc)
+			stop(c, rc);
+	}
 	if (c->error == 0 && c->started) {
 		rc = send_queued(c);
 		if (rc != 0)
@@ -527,7 +651,8 @@ crt_native_channel_destroy(struct crt_native_channel *c)
 	int rc;
 	if (c == NULL)
 		return EINVAL;
-	if (c->running || c->outstanding != 0 || c->has_waiting || atomic_load(&c->leases))
+	if (c->running || c->outstanding != 0 || c->tx_pending_head != c->count ||
+	    atomic_load(&c->leases))
 		return EBUSY;
 	if (!crt_native_rpc_idle(c->rpc))
 		return EBUSY;

@@ -39,6 +39,13 @@ struct crt_native_group {
 	int                    error;
 };
 
+struct post_scratch {
+	struct ibv_send_wr sends[CRT_NATIVE_BATCH];
+	struct ibv_recv_wr receives[CRT_NATIVE_BATCH];
+	struct ibv_sge     sges[CRT_NATIVE_BATCH];
+	unsigned           slots[CRT_NATIVE_BATCH];
+};
+
 struct crt_native_ep {
 	struct ibv_context       *context;
 	struct ibv_pd            *pd;
@@ -47,6 +54,7 @@ struct crt_native_ep {
 	struct crt_native_config  config;
 	struct crt_native_address local;
 	struct operation         *operations;
+	struct post_scratch      *batch;
 	unsigned                  outstanding;
 	unsigned                  read_limit, reads, inline_limit;
 	struct crt_native_stats   stats;
@@ -114,6 +122,7 @@ verbs_close(struct crt_native_ep *ep)
 			ep->stats.write_posts, ep->stats.inline_sends, ep->stats.signaled_sends,
 			ep->stats.cqes, ep->stats.logical_completions);
 	free(ep->pending);
+	free(ep->batch);
 	free(ep->operations);
 	free(ep);
 	return 0;
@@ -143,8 +152,9 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	}
 	ep->config     = *cfg;
 	stage          = "allocate operation records";
+	ep->batch      = calloc(1, sizeof(*ep->batch));
 	ep->operations = calloc(cfg->depth, sizeof(*ep->operations));
-	if (ep->operations == NULL) {
+	if (ep->operations == NULL || ep->batch == NULL) {
 		rc = ENOMEM;
 		goto fail;
 	}
@@ -415,88 +425,147 @@ verbs_deregister(struct crt_native_mr *mr)
 }
 
 static int
-verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_native_mr *mr,
-	   size_t offset, size_t length, const struct crt_native_remote_memory *remote,
-	   size_t remote_offset, void *cookie)
+validate_post(struct crt_native_ep *ep, const struct crt_native_post *p)
 {
-	struct ibv_sge     sge;
-	struct ibv_send_wr send = {0}, *bad_send;
-	struct ibv_recv_wr recv = {0}, *bad_recv;
-	unsigned           slot;
-	int                rc;
+	struct crt_native_mr *mr = p->mr;
+	if (!mr || mr->owner != ep || p->opcode < CRT_NATIVE_SEND || p->opcode > CRT_NATIVE_WRITE ||
+	    !p->length || p->length > UINT32_MAX || p->offset > mr->mr->length ||
+	    p->length > mr->mr->length - p->offset)
+		return EINVAL;
+	if (!ep->connected && p->opcode != CRT_NATIVE_RECV)
+		return ENOTCONN;
+	if (p->opcode == CRT_NATIVE_READ || p->opcode == CRT_NATIVE_WRITE) {
+		const struct crt_native_remote_memory *r = p->remote;
+		if (!r || p->remote_offset > r->length ||
+		    p->length > r->length - p->remote_offset ||
+		    p->remote_offset > UINT64_MAX - r->address ||
+		    p->length > UINT64_MAX - (r->address + p->remote_offset))
+			return EINVAL;
+	}
+	return 0;
+}
 
-	if (ep == NULL || mr == NULL || mr->owner != ep || opcode < CRT_NATIVE_SEND ||
-	    opcode > CRT_NATIVE_WRITE || length == 0 || length > UINT32_MAX ||
-	    offset > mr->mr->length || length > mr->mr->length - offset)
+static int
+verbs_post_batch(struct crt_native_ep *ep, const struct crt_native_post *posts, unsigned count,
+		 unsigned *accepted)
+{
+	if (!accepted)
+		return EINVAL;
+	*accepted = 0;
+	if (!ep || !posts || !count || count > CRT_NATIVE_BATCH)
 		return EINVAL;
 	if (ep->closing)
 		return ESHUTDOWN;
-	if (!ep->connected && opcode != CRT_NATIVE_RECV)
-		return ENOTCONN;
-	if (opcode == CRT_NATIVE_READ || opcode == CRT_NATIVE_WRITE) {
-		if (remote == NULL || remote_offset > remote->length ||
-		    length > remote->length - remote_offset ||
-		    remote_offset > UINT64_MAX - remote->address ||
-		    length > UINT64_MAX - (remote->address + remote_offset))
+	for (unsigned i = 0; i < count; i++) {
+		int rc = validate_post(ep, &posts[i]);
+		if (rc)
+			return rc;
+		if (posts[i].opcode != posts[0].opcode)
 			return EINVAL;
 	}
-	if (opcode == CRT_NATIVE_READ && ep->reads == ep->read_limit)
-		return EAGAIN;
-	slot = ep->free_head;
-	if (slot == ep->config.depth) {
+	struct post_scratch *b    = ep->batch;
+	unsigned             slot = ep->free_head, prepared = 0;
+	for (; prepared < count && slot < ep->config.depth; prepared++) {
+		const struct crt_native_post *p = &posts[prepared];
+		if (p->opcode == CRT_NATIVE_READ && ep->reads + prepared >= ep->read_limit)
+			break;
+		b->slots[prepared] = slot;
+		slot               = ep->operations[slot].next_free;
+		b->sges[prepared] = (struct ibv_sge){.addr = (uintptr_t)p->mr->mr->addr + p->offset,
+						     .length = p->length,
+						     .lkey   = p->mr->mr->lkey};
+		uint64_t id       = (uint64_t)ep->group_slot << 32 | b->slots[prepared];
+		if (p->opcode == CRT_NATIVE_RECV)
+			b->receives[prepared] = (struct ibv_recv_wr){
+			    .wr_id = id, .sg_list = &b->sges[prepared], .num_sge = 1};
+		else {
+			struct ibv_send_wr *wr = &b->sends[prepared];
+			*wr                    = (struct ibv_send_wr){
+					       .wr_id      = id,
+					       .sg_list    = &b->sges[prepared],
+					       .num_sge    = 1,
+					       .send_flags = IBV_SEND_SIGNALED,
+					       .opcode     = p->opcode == CRT_NATIVE_SEND ? IBV_WR_SEND
+							     : p->opcode == CRT_NATIVE_READ ? IBV_WR_RDMA_READ
+											    : IBV_WR_RDMA_WRITE};
+			if (p->opcode == CRT_NATIVE_SEND && p->length <= ep->inline_limit)
+				wr->send_flags |= IBV_SEND_INLINE;
+			if (p->opcode != CRT_NATIVE_SEND) {
+				wr->wr.rdma.remote_addr = p->remote->address + p->remote_offset;
+				wr->wr.rdma.rkey        = p->remote->key;
+			}
+		}
+	}
+	if (!prepared) {
 		if (ep->config.wake)
 			ep->config.wake(ep->config.wake_arg);
 		return EAGAIN;
 	}
-	sge = (struct ibv_sge){.addr   = (uintptr_t)mr->mr->addr + offset,
-			       .length = (uint32_t)length,
-			       .lkey   = mr->mr->lkey};
-	if (opcode == CRT_NATIVE_RECV) {
-		recv.wr_id   = (uint64_t)ep->group_slot << 32 | slot;
-		recv.sg_list = &sge;
-		recv.num_sge = 1;
-		rc           = ibv_post_recv(ep->qp, &recv, &bad_recv);
+	int      rc;
+	unsigned posted = prepared;
+	if (posts[0].opcode == CRT_NATIVE_RECV) {
+		for (unsigned i = 0; i + 1 < prepared; i++)
+			b->receives[i].next = &b->receives[i + 1];
+		struct ibv_recv_wr *bad = &b->receives[0];
+		ep->stats.recv_batches++;
+		rc = ibv_post_recv(ep->qp, b->receives, &bad);
+		if (rc)
+			for (posted = 0; posted < prepared && bad != &b->receives[posted]; posted++)
+				;
 	} else {
-		send.wr_id      = (uint64_t)ep->group_slot << 32 | slot;
-		send.sg_list    = &sge;
-		send.num_sge    = 1;
-		send.send_flags = IBV_SEND_SIGNALED;
-		if (opcode == CRT_NATIVE_SEND && length <= ep->inline_limit)
-			send.send_flags |= IBV_SEND_INLINE;
-		send.opcode = opcode == CRT_NATIVE_SEND   ? IBV_WR_SEND
-			      : opcode == CRT_NATIVE_READ ? IBV_WR_RDMA_READ
-							  : IBV_WR_RDMA_WRITE;
-		if (opcode != CRT_NATIVE_SEND) {
-			send.wr.rdma.remote_addr = remote->address + remote_offset;
-			send.wr.rdma.rkey        = remote->key;
-		}
-		rc = ibv_post_send(ep->qp, &send, &bad_send);
+		for (unsigned i = 0; i + 1 < prepared; i++)
+			b->sends[i].next = &b->sends[i + 1];
+		struct ibv_send_wr *bad = &b->sends[0];
+		ep->stats.send_batches++;
+		rc = ibv_post_send(ep->qp, b->sends, &bad);
+		if (rc)
+			for (posted = 0; posted < prepared && bad != &b->sends[posted]; posted++)
+				;
 	}
-	if (rc == 0) {
-		ep->free_head        = ep->operations[slot].next_free;
-		ep->operations[slot] = (struct operation){
-		    .mr = mr, .cookie = cookie, .opcode = opcode, .length = length, .active = true};
-		if (opcode == CRT_NATIVE_SEND) {
-			ep->stats.send_posts++;
-			ep->stats.send_batches++;
-			ep->stats.signaled_sends++;
-			if (send.send_flags & IBV_SEND_INLINE)
-				ep->stats.inline_sends++;
-		} else if (opcode == CRT_NATIVE_RECV) {
-			ep->stats.recv_posts++;
-			ep->stats.recv_batches++;
-		} else if (opcode == CRT_NATIVE_READ)
-			ep->stats.read_posts++;
-		else
-			ep->stats.write_posts++;
+	for (unsigned i = 0; i < posted; i++) {
+		const struct crt_native_post *p     = &posts[i];
+		unsigned                      index = b->slots[i];
+		ep->free_head                       = ep->operations[index].next_free;
+		ep->operations[index]               = (struct operation){.mr     = p->mr,
+									 .cookie = p->cookie,
+									 .opcode = p->opcode,
+									 .length = p->length,
+									 .active = true};
+		p->mr->references++;
 		ep->outstanding++;
-		if (opcode == CRT_NATIVE_READ)
+		if (p->opcode == CRT_NATIVE_SEND) {
+			ep->stats.send_posts++;
+			ep->stats.signaled_sends++;
+			if (b->sends[i].send_flags & IBV_SEND_INLINE)
+				ep->stats.inline_sends++;
+		} else if (p->opcode == CRT_NATIVE_RECV)
+			ep->stats.recv_posts++;
+		else if (p->opcode == CRT_NATIVE_READ) {
+			ep->stats.read_posts++;
 			ep->reads++;
-		mr->references++;
+		} else
+			ep->stats.write_posts++;
 	}
-	if (rc == EAGAIN && ep->config.wake)
+	*accepted = posted;
+	if ((rc || posted < count) && ep->config.wake)
 		ep->config.wake(ep->config.wake_arg);
-	return rc;
+	return rc ? rc : posted < count ? EAGAIN : 0;
+}
+
+static int
+verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_native_mr *mr,
+	   size_t offset, size_t length, const struct crt_native_remote_memory *remote,
+	   size_t remote_offset, void *cookie)
+{
+	struct crt_native_post p = {.opcode        = opcode,
+				    .mr            = mr,
+				    .offset        = offset,
+				    .length        = length,
+				    .remote        = remote,
+				    .remote_offset = remote_offset,
+				    .cookie        = cookie};
+	unsigned               accepted;
+	return verbs_post_batch(ep, &p, 1, &accepted);
 }
 
 static int
@@ -764,6 +833,7 @@ const struct crt_native_ops crt_native_verbs_ops = {
     .register_memory   = verbs_register,
     .deregister_memory = verbs_deregister,
     .post              = verbs_post,
+    .post_batch        = verbs_post_batch,
     .progress          = verbs_progress,
     .close_begin       = verbs_close_begin,
     .quiesce           = verbs_quiesce,

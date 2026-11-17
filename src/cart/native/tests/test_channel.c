@@ -128,11 +128,30 @@ close_begin(struct crt_native_ep *ep)
 	}
 	return 0;
 }
+static unsigned batch_calls, batch_limit = CRT_NATIVE_BATCH;
+static int
+post_many(struct crt_native_ep *ep, const struct crt_native_post *posts, unsigned count,
+	  unsigned *accepted)
+{
+	batch_calls++;
+	*accepted = 0;
+	while (*accepted < count && *accepted < batch_limit) {
+		const struct crt_native_post *p = &posts[*accepted];
+		int rc = post(ep, p->opcode, p->mr, p->offset, p->length, p->remote,
+			      p->remote_offset, p->cookie);
+		if (rc)
+			return rc;
+		(*accepted)++;
+	}
+	return *accepted == count ? 0 : EAGAIN;
+}
+
 static const struct crt_native_ops ops = {
     .capacity          = capacity,
     .register_memory   = reg,
     .deregister_memory = dereg,
     .post              = post,
+    .post_batch        = post_many,
     .progress          = progress,
     .close_begin       = close_begin,
 };
@@ -348,6 +367,7 @@ main(void)
 	assert(crt_native_channel_start(ca) == 0);
 	assert(crt_native_channel_start(cb) == 0);
 	assert(crt_native_channel_destroy(ca) == EBUSY);
+	batch_limit = 2; /* Exercise partial batches under full-duplex load. */
 	/* Simultaneous full request windows, including transient SEND/RECV
 	 * posting backpressure. Replenishing receives must not invoke a handler
 	 * twice when only its repost failed.

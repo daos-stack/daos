@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+static unsigned           partial_after;
 static struct ibv_device  device;
 static struct ibv_device *devices[] = {&device, NULL};
 static struct ibv_context context;
@@ -194,9 +195,18 @@ ibv_post_send(struct ibv_qp *q, struct ibv_send_wr *wr, struct ibv_send_wr **bad
 	(void)bad;
 	if (post_error != 0)
 		return post_error;
-	last_send_flags = wr->send_flags;
-	assert(wr->send_flags & IBV_SEND_SIGNALED);
-	accepted[num_accepted++] = wr->wr_id;
+	unsigned sent = 0;
+	for (; wr; wr = wr->next) {
+		if (partial_after && sent == partial_after) {
+			*bad          = wr;
+			partial_after = 0;
+			return EAGAIN;
+		}
+		sent++;
+		last_send_flags = wr->send_flags;
+		assert(wr->send_flags & IBV_SEND_SIGNALED);
+		accepted[num_accepted++] = wr->wr_id;
+	}
 	return 0;
 }
 int
@@ -206,7 +216,8 @@ ibv_post_recv(struct ibv_qp *q, struct ibv_recv_wr *wr, struct ibv_recv_wr **bad
 	(void)bad;
 	if (post_error)
 		return post_error;
-	accepted[num_accepted++] = wr->wr_id;
+	for (; wr; wr = wr->next)
+		accepted[num_accepted++] = wr->wr_id;
 	return 0;
 }
 int
@@ -578,6 +589,40 @@ test_cq_burst(void)
 	assert(ops->group_destroy(group) == 0);
 }
 
+static void
+test_linked_posting(void)
+{
+	const struct crt_native_ops *ops = &crt_native_verbs_ops;
+	struct crt_native_config  cfg = {.device = "mock0", .port = 1, .gid_index = -1, .depth = 8};
+	struct crt_native_ep     *ep;
+	struct crt_native_address a;
+	struct crt_native_mr     *mr;
+	struct crt_native_remote_memory remote;
+	struct crt_native_completion    out[8];
+	struct crt_native_post          posts[3];
+	struct crt_native_stats         stats;
+	unsigned                        accepted_count, count;
+	char                            buffer[64];
+	head = tail = num_accepted = 0;
+	assert(ops->open(&cfg, &ep) == 0 && ops->address(ep, &a) == 0 && ops->connect(ep, &a) == 0);
+	assert(ops->register_memory(ep, buffer, sizeof(buffer), 0, &mr, &remote) == 0);
+	for (unsigned i = 0; i < 3; i++)
+		posts[i] = (struct crt_native_post){
+		    .opcode = CRT_NATIVE_SEND, .mr = mr, .length = 8, .cookie = &buffer[i]};
+	posts[1].length = 0;
+	assert(ops->post_batch(ep, posts, 3, &accepted_count) == EINVAL && accepted_count == 0);
+	posts[1].length = 8;
+	partial_after   = 1;
+	assert(ops->post_batch(ep, posts, 3, &accepted_count) == EAGAIN && accepted_count == 1);
+	assert(ops->deregister_memory(mr) == EBUSY);
+	assert(ops->post_batch(ep, posts + 1, 2, &accepted_count) == 0 && accepted_count == 2);
+	ops->get_stats(ep, &stats);
+	assert(stats.send_batches == 2 && stats.send_posts == 3);
+	assert(ops->close_begin(ep) == 0);
+	assert(ops->progress(ep, out, 8, &count) == 0 && count == 3);
+	assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
+}
+
 int
 main(void)
 {
@@ -589,6 +634,7 @@ main(void)
 	test_read_credits();
 	test_inline_send();
 	test_cq_burst();
+	test_linked_posting();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }

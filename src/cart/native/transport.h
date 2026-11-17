@@ -90,6 +90,16 @@ struct crt_native_config {
 	void *wake_arg;
 };
 
+#define CRT_NATIVE_BATCH 32
+struct crt_native_post {
+	enum crt_native_opcode                 opcode;
+	struct crt_native_mr                  *mr;
+	size_t                                 offset, length;
+	const struct crt_native_remote_memory *remote;
+	size_t                                 remote_offset;
+	void                                  *cookie;
+};
+
 struct crt_native_ops {
 	const char *name;
 	/* Optional shared polling domain. Each endpoint retains a private PD.
@@ -115,6 +125,13 @@ struct crt_native_ops {
 	int (*deregister_memory)(struct crt_native_mr *);
 	int (*post)(struct crt_native_ep *, enum crt_native_opcode, struct crt_native_mr *, size_t,
 		    size_t, const struct crt_native_remote_memory *, size_t, void *);
+	/* Homogeneous linked batch, at most CRT_NATIVE_BATCH entries. A partial
+	 * prefix may be accepted even on error; only that prefix owns buffers.
+	 * The caller retains every unaccepted request and must not repost the
+	 * accepted prefix. No callback is generated for a rejected entry.
+	 */
+	int (*post_batch)(struct crt_native_ep *, const struct crt_native_post *, unsigned,
+			  unsigned *accepted);
 	int (*progress)(struct crt_native_ep *, struct crt_native_completion *, unsigned,
 			unsigned *);
 	int (*close_begin)(struct crt_native_ep *);

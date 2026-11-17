@@ -107,9 +107,10 @@ struct ibv_sge {
 	uint32_t length, lkey;
 };
 struct ibv_send_wr {
-	uint64_t        wr_id;
-	struct ibv_sge *sg_list;
-	int             num_sge, send_flags, opcode;
+	struct ibv_send_wr *next;
+	uint64_t            wr_id;
+	struct ibv_sge     *sg_list;
+	int                 num_sge, send_flags, opcode;
 	union {
 		struct {
 			uint64_t remote_addr;
@@ -118,9 +119,10 @@ struct ibv_send_wr {
 	} wr;
 };
 struct ibv_recv_wr {
-	uint64_t        wr_id;
-	struct ibv_sge *sg_list;
-	int             num_sge;
+	struct ibv_recv_wr *next;
+	uint64_t            wr_id;
+	struct ibv_sge     *sg_list;
+	int                 num_sge;
 };
 struct ibv_wc {
 	uint64_t wr_id;
