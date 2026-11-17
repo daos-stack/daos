@@ -25,6 +25,10 @@ struct operation {
 	size_t                 length;
 	unsigned               next_free;
 	bool                   active;
+	bool                   ready;
+	unsigned               chain_head, chain_next;
+	int                    completion_error;
+	size_t                 completion_bytes;
 };
 
 struct crt_native_group {
@@ -60,6 +64,8 @@ struct crt_native_ep {
 	struct crt_native_stats   stats;
 	struct ibv_wc            *pending;
 	unsigned                  pending_head, pending_count, group_slot;
+	unsigned                 *ready;
+	unsigned                  ready_head, ready_count;
 	unsigned                  free_head;
 	unsigned                  registrations;
 	bool                      connected;
@@ -122,6 +128,7 @@ verbs_close(struct crt_native_ep *ep)
 			ep->stats.write_posts, ep->stats.inline_sends, ep->stats.signaled_sends,
 			ep->stats.cqes, ep->stats.logical_completions);
 	free(ep->pending);
+	free(ep->ready);
 	free(ep->batch);
 	free(ep->operations);
 	free(ep);
@@ -152,9 +159,10 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	}
 	ep->config     = *cfg;
 	stage          = "allocate operation records";
+	ep->ready      = calloc(cfg->depth, sizeof(*ep->ready));
 	ep->batch      = calloc(1, sizeof(*ep->batch));
 	ep->operations = calloc(cfg->depth, sizeof(*ep->operations));
-	if (ep->operations == NULL || ep->batch == NULL) {
+	if (ep->operations == NULL || ep->batch == NULL || ep->ready == NULL) {
 		rc = ENOMEM;
 		goto fail;
 	}
@@ -425,6 +433,9 @@ verbs_deregister(struct crt_native_mr *mr)
 }
 
 static int
+verbs_close_begin(struct crt_native_ep *);
+
+static int
 validate_post(struct crt_native_ep *ep, const struct crt_native_post *p)
 {
 	struct crt_native_mr *mr = p->mr;
@@ -501,6 +512,11 @@ verbs_post_batch(struct crt_native_ep *ep, const struct crt_native_post *posts, 
 			ep->config.wake(ep->config.wake_arg);
 		return EAGAIN;
 	}
+	unsigned interval = ep->config.signal_interval ? ep->config.signal_interval : 8;
+	if (posts[0].opcode == CRT_NATIVE_SEND)
+		for (unsigned i = 0; i < prepared; i++)
+			if ((i + 1) % interval && i + 1 < prepared)
+				b->sends[i].send_flags &= ~IBV_SEND_SIGNALED;
 	int      rc;
 	unsigned posted = prepared;
 	if (posts[0].opcode == CRT_NATIVE_RECV) {
@@ -526,16 +542,19 @@ verbs_post_batch(struct crt_native_ep *ep, const struct crt_native_post *posts, 
 		const struct crt_native_post *p     = &posts[i];
 		unsigned                      index = b->slots[i];
 		ep->free_head                       = ep->operations[index].next_free;
-		ep->operations[index]               = (struct operation){.mr     = p->mr,
-									 .cookie = p->cookie,
-									 .opcode = p->opcode,
-									 .length = p->length,
-									 .active = true};
+		ep->operations[index]               = (struct operation){.mr         = p->mr,
+									 .cookie     = p->cookie,
+									 .opcode     = p->opcode,
+									 .length     = p->length,
+									 .active     = true,
+									 .chain_head = ep->config.depth,
+									 .chain_next = ep->config.depth};
 		p->mr->references++;
 		ep->outstanding++;
 		if (p->opcode == CRT_NATIVE_SEND) {
 			ep->stats.send_posts++;
-			ep->stats.signaled_sends++;
+			if (b->sends[i].send_flags & IBV_SEND_SIGNALED)
+				ep->stats.signaled_sends++;
 			if (b->sends[i].send_flags & IBV_SEND_INLINE)
 				ep->stats.inline_sends++;
 		} else if (p->opcode == CRT_NATIVE_RECV)
@@ -545,6 +564,23 @@ verbs_post_batch(struct crt_native_ep *ep, const struct crt_native_post *posts, 
 			ep->reads++;
 		} else
 			ep->stats.write_posts++;
+	}
+	if (posts[0].opcode == CRT_NATIVE_SEND) {
+		unsigned first = 0;
+		for (unsigned i = 0; i < posted; i++)
+			if (b->sends[i].send_flags & IBV_SEND_SIGNALED) {
+				ep->operations[b->slots[i]].chain_head = b->slots[first];
+				for (unsigned j = first; j < i; j++)
+					ep->operations[b->slots[j]].chain_next = b->slots[j + 1];
+				first = i + 1;
+			}
+		if (posted && !(b->sends[posted - 1].send_flags & IBV_SEND_SIGNALED)) {
+			/* A rejected marker cannot strand accepted unsignaled buffers.
+			 * Error the QP and consume its flush completions before release.
+			 */
+			verbs_close_begin(ep);
+			rc = EIO;
+		}
 	}
 	*accepted = posted;
 	if ((rc || posted < count) && ep->config.wake)
@@ -603,82 +639,104 @@ verbs_quiesce(struct crt_native_ep *ep)
 }
 
 static int
+queue_completion(struct crt_native_ep *ep, struct ibv_wc wc)
+{
+	if (wc.wr_id >= ep->config.depth)
+		return EPROTO;
+	struct operation *marker = &ep->operations[wc.wr_id];
+	if (!marker->active || marker->ready)
+		return ep->closing && wc.status == IBV_WC_WR_FLUSH_ERR ? 0 : EPROTO;
+	if (wc.status != IBV_WC_SUCCESS)
+		verbs_close_begin(ep);
+	unsigned slot =
+	    marker->chain_head < ep->config.depth ? marker->chain_head : (unsigned)wc.wr_id;
+	for (unsigned budget = 0; slot < ep->config.depth && budget < ep->config.depth; budget++) {
+		struct operation *op   = &ep->operations[slot];
+		unsigned          next = op->chain_next;
+		if (op->active && !op->ready) {
+			if (ep->ready_count == ep->config.depth)
+				return EPROTO;
+			op->ready            = true;
+			op->completion_error = wc.status == IBV_WC_SUCCESS        ? 0
+					       : wc.status == IBV_WC_WR_FLUSH_ERR ? ECANCELED
+										  : EIO;
+			op->completion_bytes = wc.status != IBV_WC_SUCCESS     ? 0
+					       : op->opcode == CRT_NATIVE_RECV ? wc.byte_len
+									       : op->length;
+			ep->ready[(ep->ready_head + ep->ready_count++) % ep->config.depth] = slot;
+		}
+		if (slot == wc.wr_id)
+			break;
+		slot = next;
+	}
+	return 0;
+}
+
+static int
 verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, unsigned capacity,
 	       unsigned *count)
 {
-	struct ibv_wc     batch[32];
-	struct operation *op;
-	int               rc, error;
-
-	if (count == NULL)
+	struct ibv_wc batch[32];
+	if (!count)
 		return EINVAL;
 	*count = 0;
-	if (ep == NULL || output == NULL || capacity == 0)
+	if (!ep || !output || !capacity)
 		return EINVAL;
+	int error = 0;
 	while (*count < capacity) {
-		unsigned budget = capacity - *count;
-
-		if (budget > sizeof(batch) / sizeof(batch[0]))
-			budget = sizeof(batch) / sizeof(batch[0]);
-		if (ep->config.group) {
-			rc = ep->pending_count < budget ? ep->pending_count : budget;
-			for (int i = 0; i < rc; i++) {
-				batch[i]         = ep->pending[ep->pending_head];
-				ep->pending_head = (ep->pending_head + 1) % ep->config.depth;
-			}
-			ep->pending_count -= rc;
-		} else {
-			ep->stats.cq_polls++;
-			rc = ibv_poll_cq(ep->cq, (int)budget, batch);
-			if (rc > 0)
-				ep->stats.cqes += rc;
-		}
-		if (rc < 0) {
-			verbs_close_begin(ep);
-			return EIO;
-		}
-		if (rc == 0)
-			break;
-		error = 0;
-		/* A poll removes the whole batch from the CQ. Even if one entry is
-		 * corrupt, account for every other entry before returning an error.
-		 */
-		for (int i = 0; i < rc; i++) {
-			struct ibv_wc wc = batch[i];
-
-			if (wc.wr_id >= ep->config.depth || !ep->operations[wc.wr_id].active) {
-				error = EPROTO;
-				continue;
-			}
-			op             = &ep->operations[wc.wr_id];
-			output[*count] = (struct crt_native_completion){
-			    .cookie = op->cookie,
-			    .opcode = op->opcode,
-			    .error  = wc.status == IBV_WC_SUCCESS        ? 0
-				      : wc.status == IBV_WC_WR_FLUSH_ERR ? ECANCELED
-									 : EIO,
-			    .bytes  = wc.status != IBV_WC_SUCCESS     ? 0
-				      : op->opcode == CRT_NATIVE_RECV ? wc.byte_len
-								      : op->length,
-			};
+		while (ep->ready_count && *count < capacity) {
+			unsigned slot  = ep->ready[ep->ready_head];
+			ep->ready_head = (ep->ready_head + 1) % ep->config.depth;
+			ep->ready_count--;
+			struct operation *op = &ep->operations[slot];
+			output[(*count)++] =
+			    (struct crt_native_completion){.cookie = op->cookie,
+							   .opcode = op->opcode,
+							   .error  = op->completion_error,
+							   .bytes  = op->completion_bytes};
 			if (op->opcode == CRT_NATIVE_READ)
 				ep->reads--;
 			op->mr->references--;
 			op->active    = false;
 			op->next_free = ep->free_head;
-			ep->free_head = (unsigned)wc.wr_id;
+			ep->free_head = slot;
 			ep->outstanding--;
 			ep->stats.logical_completions++;
-			(*count)++;
 		}
-		if (error != 0) {
+		if (*count == capacity)
+			break;
+		int received;
+		if (ep->config.group) {
+			received = ep->pending_count < 32 ? ep->pending_count : 32;
+			for (int i = 0; i < received; i++) {
+				batch[i]         = ep->pending[ep->pending_head];
+				ep->pending_head = (ep->pending_head + 1) % ep->config.depth;
+			}
+			ep->pending_count -= received;
+		} else {
+			ep->stats.cq_polls++;
+			received = ibv_poll_cq(ep->cq, 32, batch);
+			if (received > 0)
+				ep->stats.cqes += received;
+		}
+		if (received < 0) {
 			verbs_close_begin(ep);
-			return error;
+			error = EIO;
+			break;
+		}
+		if (!received)
+			break;
+		for (int i = 0; i < received; i++) {
+			int rc = queue_completion(ep, batch[i]);
+			if (rc) {
+				error = rc;
+				verbs_close_begin(ep);
+			}
 		}
 	}
-	if (ep->pending_count && ep->config.wake)
+	if ((ep->pending_count || ep->ready_count) && ep->config.wake)
 		ep->config.wake(ep->config.wake_arg);
-	return ep->config.group ? ep->config.group->error : 0;
+	return error ? error : ep->config.group ? ep->config.group->error : 0;
 }
 
 static unsigned
@@ -793,6 +851,9 @@ verbs_group_progress(struct crt_native_group *g)
 			unsigned              slot  = batch[i].wr_id >> 32;
 			unsigned              index = (uint32_t)batch[i].wr_id;
 			struct crt_native_ep *ep = slot < g->capacity ? g->endpoints[slot] : NULL;
+			if (ep && index < ep->config.depth && !ep->operations[index].active &&
+			    ep->closing && batch[i].status == IBV_WC_WR_FLUSH_ERR)
+				continue;
 			if (!ep || index >= ep->config.depth || !ep->operations[index].active ||
 			    ep->pending_count == ep->config.depth) {
 				g->error = EPROTO;

@@ -93,6 +93,7 @@ Native tuning variables, independently on each process:
 | `CRT_NATIVE_DEVICE` | domain setting, or sole HCA | Local verbs device |
 | `CRT_NATIVE_PORT` | 1 | HCA port |
 | `CRT_NATIVE_GID_INDEX` | -1 | Local GID index; required for RoCE |
+| `CRT_NATIVE_SIGNAL_INTERVAL` | 8 | SEND completion interval within each linked batch; 1 signals every SEND |
 | `CRT_NATIVE_CQ_BATCHES` | 4 | Maximum 32-CQE batches drained per progress call, 1–16 |
 | `CRT_NATIVE_INLINE_SIZE` | 256 | Requested hardware-inline SEND bytes; 0 disables; unsupported sizes fall back |
 | `CRT_NATIVE_STATS` | 0 | Print endpoint protocol counters at teardown when set to 1 |

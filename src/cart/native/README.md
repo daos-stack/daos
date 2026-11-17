@@ -62,7 +62,7 @@ do not constitute a successful Linux link, real-HCA test or DAOS qualification.
   connection's QPs, private protection domains and registered buffers retire
   earlier. The context's shared CQ remains until its last endpoint is closed.
 - Native one-way completion waits for an internal server release acknowledgment.
-- DC, GPU submission, selective signaling, full recovery, SWIM/collective
+- DC, GPU submission, full recovery, SWIM/collective
   qualification and comparative benchmarks remain future work.
 
 ```sh

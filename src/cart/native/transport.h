@@ -80,6 +80,7 @@ struct crt_native_config {
 	uint8_t                  port;
 	int                      gid_index;
 	unsigned                 depth;
+	unsigned                 signal_interval; /* zero selects eight SENDs */
 	unsigned                 cq_poll_batches; /* zero selects four batches of 32 */
 	unsigned                 inline_size;
 	bool                     stats;

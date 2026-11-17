@@ -204,7 +204,7 @@ ibv_post_send(struct ibv_qp *q, struct ibv_send_wr *wr, struct ibv_send_wr **bad
 		}
 		sent++;
 		last_send_flags = wr->send_flags;
-		assert(wr->send_flags & IBV_SEND_SIGNALED);
+
 		accepted[num_accepted++] = wr->wr_id;
 	}
 	return 0;
@@ -593,10 +593,11 @@ static void
 test_linked_posting(void)
 {
 	const struct crt_native_ops *ops = &crt_native_verbs_ops;
-	struct crt_native_config  cfg = {.device = "mock0", .port = 1, .gid_index = -1, .depth = 8};
-	struct crt_native_ep     *ep;
-	struct crt_native_address a;
-	struct crt_native_mr     *mr;
+	struct crt_native_config     cfg = {
+		.device = "mock0", .port = 1, .gid_index = -1, .depth = 8, .signal_interval = 1};
+	struct crt_native_ep           *ep;
+	struct crt_native_address       a;
+	struct crt_native_mr           *mr;
 	struct crt_native_remote_memory remote;
 	struct crt_native_completion    out[8];
 	struct crt_native_post          posts[3];
@@ -623,6 +624,70 @@ test_linked_posting(void)
 	assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
 }
 
+static void
+test_selective_signaling(void)
+{
+	for (unsigned grouped = 0; grouped < 2; grouped++)
+		for (unsigned partial = 0; partial < 2; partial++) {
+			const struct crt_native_ops *ops = &crt_native_verbs_ops;
+			struct crt_native_config     cfg = {
+				.device = "mock0", .port = 1, .gid_index = -1, .depth = 32};
+			struct crt_native_group        *group = NULL;
+			struct crt_native_ep           *ep;
+			struct crt_native_address       address;
+			struct crt_native_mr           *mr;
+			struct crt_native_remote_memory remote;
+			struct crt_native_post          posts[20];
+			struct crt_native_completion    out;
+			struct crt_native_stats         stats;
+			unsigned                        accepted_count, count;
+			char                            buffer[64];
+			head = tail = num_accepted = 0;
+			if (grouped) {
+				assert(ops->group_create(&cfg, 1, &group) == 0);
+				cfg.group = group;
+			}
+			assert(ops->open(&cfg, &ep) == 0 && ops->address(ep, &address) == 0);
+			assert(ops->connect(ep, &address) == 0);
+			assert(ops->register_memory(ep, buffer, sizeof(buffer), 0, &mr, &remote) ==
+			       0);
+			for (unsigned i = 0; i < 20; i++)
+				posts[i] = (struct crt_native_post){.opcode = CRT_NATIVE_SEND,
+								    .mr     = mr,
+								    .length = 8,
+								    .cookie = &buffer[i]};
+			partial_after = partial ? 1 : 0;
+			assert(ops->post_batch(ep, posts, 20, &accepted_count) ==
+			       (partial ? EIO : 0));
+			assert(accepted_count == (partial ? 1 : 20));
+			if (partial) {
+				assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 8, NULL, 0, buffer) ==
+				       ESHUTDOWN);
+			} else {
+				for (unsigned i = 7; i < 20; i += 8)
+					completions[tail++] = (struct ibv_wc){
+					    .wr_id = accepted[i], .status = IBV_WC_SUCCESS};
+				completions[tail++] = (struct ibv_wc){.wr_id  = accepted[19],
+								      .status = IBV_WC_SUCCESS};
+				num_accepted        = 0;
+			}
+			if (grouped)
+				assert(ops->group_progress(group) == 0);
+			for (unsigned i = 0; i < accepted_count; i++) {
+				assert(ops->deregister_memory(mr) == EBUSY);
+				assert(ops->progress(ep, &out, 1, &count) == 0 && count == 1);
+				assert(out.cookie == &buffer[i] &&
+				       out.error == (partial ? ECANCELED : 0));
+			}
+			ops->get_stats(ep, &stats);
+			assert(stats.signaled_sends == (partial ? 0 : 3));
+			assert(stats.logical_completions == accepted_count);
+			assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
+			if (grouped)
+				assert(ops->group_destroy(group) == 0);
+		}
+}
+
 int
 main(void)
 {
@@ -635,6 +700,7 @@ main(void)
 	test_inline_send();
 	test_cq_burst();
 	test_linked_posting();
+	test_selective_signaling();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }
