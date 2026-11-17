@@ -749,6 +749,18 @@ dispatch_completion(struct crt_native_rpc_state *s)
 	}
 	if (rc == -DER_CANCELED && crt_req_timedout(rpc))
 		rc = -DER_TIMEDOUT;
+	/* Untracking requires a terminal state and uses it to return endpoint
+	 * credits. Complete-and-unlock sets the state too late for this step.
+	 * Keep the RPC lock held across the transition and untracking.
+	 */
+	if (rc == -DER_CANCELED)
+		rpc->crp_state = RPC_STATE_CANCELED;
+	else if (rc == -DER_TIMEDOUT)
+		rpc->crp_state = RPC_STATE_TIMEOUT;
+	else if (rc == -DER_UNREACH)
+		rpc->crp_state = RPC_STATE_FWD_UNREACH;
+	else
+		rpc->crp_state = RPC_STATE_COMPLETED;
 	crt_context_req_untrack(rpc);
 	crt_rpc_complete_and_unlock(rpc, rc);
 	RPC_DECREF(rpc); /* native send queue's additional reference */
