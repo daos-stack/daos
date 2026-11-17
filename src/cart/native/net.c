@@ -366,8 +366,12 @@ release_peer_resources(struct crt_native_peer *p)
 		if (n->config.stats)
 			fprintf(stderr,
 				"doca+rc RPC stats: early_retained=%" PRIu64
-				" early_copies=%" PRIu64 "\n",
-				stats.early_retained, stats.early_copies);
+				" early_copies=%" PRIu64 " request_frames=%" PRIu64
+				" reply_frames=%" PRIu64 " release_frames=%" PRIu64
+				" release_ids=%" PRIu64 " piggyback_ids=%" PRIu64 "\n",
+				stats.early_retained, stats.early_copies, stats.request_frames,
+				stats.reply_frames, stats.release_frames, stats.release_ids,
+				stats.piggyback_ids);
 		p->channel = NULL;
 	}
 	if (n->callbacks.destroy && (rc = n->callbacks.destroy(n->arg, p)) != 0)

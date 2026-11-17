@@ -20,8 +20,9 @@ with `-DER_NOTSUPPORTED`, rather than silently selecting Mercury.
 
 Run `./build/release/gcc/src/cart/native_header_test` for the versioned native CaRT
 header codec regression test (adjust the path for your build/compiler options). Both peers
-must run this branch's native wire version 2; version 1 peers are rejected during
-bootstrap because their CaRT payload layout predates upstream's versioned headers.
+must run this branch's native wire version 3 and bootstrap hello version 2.
+Older peers are rejected: wire version 3 adds bounded RELEASE footers, while
+bootstrap hello version 2 negotiates RDMA READ capabilities.
 
 Optional endpoint-only test, before testing CaRT:
 
@@ -130,3 +131,31 @@ an IOPS target; actual throughput requires the real-HCA fio run.
 
 Bootstrap hello version 2 advertises initiator and responder RDMA READ credits.
 Both peers must use this version; older bootstrap versions are rejected.
+
+## Protocol performance controls
+
+Linked SEND/RECV batches contain at most 32 work requests. SEND markers use the
+configured interval and always include the batch tail. A rejected tail marker
+forces QP error/flush so accepted unsignaled buffers cannot be stranded. READ and
+WRITE work requests remain individually signaled; their completion is never
+inferred from a later SEND. A scalar posting path remains for other backends.
+
+RELEASE IDs are batched or attached to available request/reply space, with no
+extra wait for a carrier. Idle connections send standalone batches. Only IDs
+already released by the bulk session are eligible: receiving an RPC reply does
+not itself authorize releasing bulk keys or prove completion on the bulk QP.
+
+Set `CRT_NATIVE_STATS=1` on client and server to report counters at endpoint
+teardown. Endpoint statistics include work requests, post batches, signaled and
+inline SENDs, hardware CQEs and delivered logical completions. Shared CQ counters
+are reported once per group. RPC statistics count selected request/reply/control
+frames, standalone and piggybacked release IDs, and retained/copied early replies.
+Selected frames can include canceled, unposted carriers and retransmitted ACKs;
+use the posting counters for hardware-accepted work. For instance, compare SENDs
+per posting batch and signaled SENDs per accepted SEND before comparing IOPS.
+
+Useful experiments change one variable at a time: signal interval 1 versus 8,
+inline size 0 versus 256, CQ batches 1 versus 4, and READ depth 1 versus 16. Apply
+these variables through engine `env_vars` and the client shell. Upgrade and
+restart all native peers together after the wire-format change; do not reformat
+storage. No real-HCA throughput gain is implied by the portable regression suite.

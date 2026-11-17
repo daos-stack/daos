@@ -23,6 +23,8 @@ struct entry {
 	uint8_t          *frame, *response;
 	const void       *response_view;
 	void             *rx_cookie;
+	uint64_t          release_ids[32];
+	unsigned          release_count;
 };
 struct crt_native_rpc {
 	unsigned             depth, free_head, request_head, request_tail, reply_head, reply_tail;
@@ -32,6 +34,7 @@ struct crt_native_rpc {
 	struct entry        *requests, *replies;
 	struct entry        *controls;
 	unsigned             control_free, control_head, control_tail, active_controls;
+	unsigned             pending_releases;
 	crt_native_release_t release;
 	void                *release_arg;
 	uint8_t             *buffers;
@@ -44,6 +47,21 @@ struct crt_native_rpc {
 	struct crt_native_receive_hooks rx_hooks;
 	struct crt_native_rpc_stats     stats;
 };
+
+static void
+put_release(uint8_t *p, uint64_t id)
+{
+	for (unsigned i = 0; i < 8; i++)
+		p[i] = id >> (56 - 8 * i);
+}
+static uint64_t
+get_release(const uint8_t *p)
+{
+	uint64_t id = 0;
+	for (unsigned i = 0; i < 8; i++)
+		id = id << 8 | p[i];
+	return id;
+}
 
 static void
 enqueue(struct entry *entries, unsigned *head, unsigned *tail, unsigned slot, unsigned end)
@@ -260,22 +278,31 @@ crt_native_rpc_queue_release(struct crt_native_rpc *rpc, uint64_t id)
 		return EBUSY;
 	if (rpc->failed)
 		return rpc->failed;
+	if (rpc->pending_releases == rpc->depth)
+		return EAGAIN;
+	if (rpc->control_tail != rpc->depth) {
+		struct entry *tail = &rpc->controls[rpc->control_tail];
+		if (tail->release_count < 32 &&
+		    CRT_NATIVE_HEADER_SIZE + tail->release_count * 8 <= rpc->frame_size) {
+			tail->release_ids[tail->release_count++] = id;
+			rpc->pending_releases++;
+			return 0;
+		}
+	}
 	unsigned slot = rpc->control_free;
 	if (slot == rpc->depth)
 		return EAGAIN;
 	struct entry *e = &rpc->controls[slot];
 	if (e->generation == UINT32_MAX)
 		return EOVERFLOW;
-	struct crt_native_header h  = {.type = CRT_NATIVE_RELEASE, .request_id = id};
-	int                      rc = crt_native_encode(&h, e->frame, rpc->frame_size);
-	if (rc != 0)
-		return rc;
 	e->generation++;
 	e->id             = (uint64_t)e->generation << 32 | (slot + 1);
 	e->state          = QUEUED;
-	e->size           = CRT_NATIVE_HEADER_SIZE;
+	e->release_ids[0] = id;
+	e->release_count  = 1;
 	rpc->control_free = e->next;
 	rpc->active_controls++;
+	rpc->pending_releases++;
 	enqueue(rpc->controls, &rpc->control_head, &rpc->control_tail, slot, rpc->depth);
 	return 0;
 }
@@ -306,7 +333,8 @@ encode_frame(struct crt_native_rpc *rpc, struct entry *e, bool reply, crt_native
 	rc = crt_native_encode(&h, e->frame, rpc->frame_size);
 	if (rc != 0)
 		return rc;
-	e->size = CRT_NATIVE_HEADER_SIZE + size;
+	e->release_count = 0;
+	e->size          = CRT_NATIVE_HEADER_SIZE + size;
 	return 0;
 }
 
@@ -420,6 +448,62 @@ crt_native_rpc_reply(struct crt_native_rpc *rpc, struct crt_native_token token, 
 	return crt_native_rpc_reply_encoded(rpc, token, status, copy_payload, &p);
 }
 
+static void
+attach_releases(struct crt_native_rpc *rpc, struct entry *e, bool reply)
+{
+	size_t payload = e->size - CRT_NATIVE_HEADER_SIZE;
+	while (rpc->control_head != rpc->depth && e->release_count < 32 &&
+	       e->size + 8 <= rpc->frame_size) {
+		unsigned      slot    = rpc->control_head;
+		struct entry *control = &rpc->controls[slot];
+		uint64_t      id      = control->release_ids[0];
+		memmove(control->release_ids, control->release_ids + 1,
+			(control->release_count - 1) * 8);
+		control->release_count--;
+		put_release(e->frame + e->size, id);
+		e->release_ids[e->release_count++] = id;
+		e->size += 8;
+		if (!control->release_count) {
+			dequeue(rpc->controls, &rpc->control_head, &rpc->control_tail, rpc->depth);
+			control->state    = FREE;
+			control->next     = rpc->control_free;
+			rpc->control_free = slot;
+			rpc->active_controls--;
+		}
+	}
+	struct crt_native_header h = {.type         = reply ? CRT_NATIVE_REPLY : CRT_NATIVE_REQUEST,
+				      .request_id   = e->id,
+				      .opcode       = e->opcode,
+				      .payload_size = payload,
+				      .status       = e->status,
+				      .release_count = e->release_count};
+	crt_native_encode(&h, e->frame, rpc->frame_size);
+	rpc->stats.piggyback_ids += e->release_count;
+}
+
+static int
+complete_releases(struct crt_native_rpc *rpc, struct entry *e, int error)
+{
+	unsigned count = e->release_count;
+	uint64_t ids[32];
+	if (count > rpc->pending_releases)
+		return EPROTO;
+	memcpy(ids, e->release_ids, count * 8);
+	e->release_count = 0;
+	rpc->pending_releases -= count;
+	/* A carrier canceled while waiting for SQ space never reached the peer.
+	 * Restore its ACKs; reservations prevent unrelated ACKs taking that space.
+	 * Repeated acknowledgments after an ambiguous error are idempotent.
+	 */
+	if (error && !rpc->failed)
+		for (unsigned i = 0; i < count; i++) {
+			int rc = crt_native_rpc_queue_release(rpc, ids[i]);
+			if (rc)
+				return rc;
+		}
+	return 0;
+}
+
 int
 crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 {
@@ -434,9 +518,26 @@ crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 	if (rpc->failed)
 		return rpc->failed;
 	/* Releases make progress independently, including when every RPC slot is busy. */
-	slot = dequeue(rpc->controls, &rpc->control_head, &rpc->control_tail, rpc->depth);
+	struct entry *candidate = rpc->reply_head != rpc->depth ? &rpc->replies[rpc->reply_head]
+				  : rpc->request_head != rpc->depth
+				      ? &rpc->requests[rpc->request_head]
+				      : NULL;
+	bool          carrier   = candidate && candidate->size + 8 <= rpc->frame_size &&
+		       (!candidate->deadline || candidate->deadline > rpc->now_ns);
+	slot = carrier ? rpc->depth
+		       : dequeue(rpc->controls, &rpc->control_head, &rpc->control_tail, rpc->depth);
 	if (slot != rpc->depth) {
-		e        = &rpc->controls[slot];
+		e                          = &rpc->controls[slot];
+		struct crt_native_header h = {.type          = CRT_NATIVE_RELEASE,
+					      .request_id    = e->release_ids[0],
+					      .release_count = e->release_count - 1};
+		crt_native_encode(&h, e->frame, rpc->frame_size);
+		for (unsigned i = 1; i < e->release_count; i++)
+			put_release(e->frame + CRT_NATIVE_HEADER_SIZE + (i - 1) * 8,
+				    e->release_ids[i]);
+		e->size = CRT_NATIVE_HEADER_SIZE + (e->release_count - 1) * 8;
+		rpc->stats.release_frames++;
+		rpc->stats.release_ids += e->release_count;
 		e->state = IN_FLIGHT;
 		rpc->driver_owned++;
 		*tx = (struct crt_native_tx){
@@ -459,7 +560,13 @@ crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 	}
 	if (slot == rpc->depth)
 		return EAGAIN;
-	e        = reply ? &rpc->replies[slot] : &rpc->requests[slot];
+	e = reply ? &rpc->replies[slot] : &rpc->requests[slot];
+	if (rpc->control_head != rpc->depth)
+		attach_releases(rpc, e, reply);
+	if (reply)
+		rpc->stats.reply_frames++;
+	else
+		rpc->stats.request_frames++;
 	e->state = IN_FLIGHT;
 	rpc->driver_owned++;
 	*tx = (struct crt_native_tx){
@@ -504,11 +611,15 @@ crt_native_rpc_tx_complete(struct crt_native_rpc *rpc, struct crt_native_token t
 		rpc->control_free = slot;
 		rpc->active_controls--;
 		rpc->driver_owned--;
-		return error;
+		int rc = complete_releases(rpc, e, error);
+		return rc ? rc : error;
 	}
 	e = token.reply ? &rpc->replies[slot] : &rpc->requests[slot];
 	if (e->state != IN_FLIGHT || e->id != token.id)
 		return ENOENT;
+	int releases_rc = complete_releases(rpc, e, error);
+	if (releases_rc && !error)
+		error = releases_rc;
 	rpc->driver_owned--;
 	if (token.reply) {
 		e->state = FREE;
@@ -520,7 +631,7 @@ crt_native_rpc_tx_complete(struct crt_native_rpc *rpc, struct crt_native_token t
 	e->state = WAIT_REPLY;
 	if (e->error != 0 || e->received)
 		finish(rpc, slot);
-	return 0;
+	return releases_rc;
 }
 
 int
@@ -540,13 +651,19 @@ crt_native_rpc_receive(struct crt_native_rpc *rpc, const void *frame, size_t siz
 	rc = crt_native_decode(frame, size, &h);
 	if (rc != 0)
 		return EPROTO;
-	if (h.type == CRT_NATIVE_RELEASE) {
-		if (rpc->release == NULL)
+	if (h.type == CRT_NATIVE_RELEASE || h.release_count) {
+		if (!rpc->release)
 			return EPROTO;
+		const uint8_t *ids =
+		    (const uint8_t *)frame + CRT_NATIVE_HEADER_SIZE + h.payload_size;
 		rpc->callback = true;
-		rc            = rpc->release(rpc->release_arg, h.request_id);
+		rc =
+		    h.type == CRT_NATIVE_RELEASE ? rpc->release(rpc->release_arg, h.request_id) : 0;
+		for (unsigned i = 0; i < h.release_count && !rc; i++)
+			rc = rpc->release(rpc->release_arg, get_release(ids + 8 * i));
 		rpc->callback = false;
-		return rc;
+		if (rc || h.type == CRT_NATIVE_RELEASE)
+			return rc;
 	}
 	if (slot_of(rpc, h.request_id, &slot) != 0)
 		return EPROTO;
@@ -690,9 +807,11 @@ crt_native_rpc_fail(struct crt_native_rpc *rpc, int error)
 	for (unsigned i = 0; i < rpc->depth; i++) {
 		struct entry *control = &rpc->controls[i];
 		if (control->state == QUEUED) {
-			control->state    = FREE;
-			control->next     = rpc->control_free;
-			rpc->control_free = i;
+			rpc->pending_releases -= control->release_count;
+			control->release_count = 0;
+			control->state         = FREE;
+			control->next          = rpc->control_free;
+			rpc->control_free      = i;
 			rpc->active_controls--;
 		}
 		struct entry *e = &rpc->requests[i];
@@ -714,8 +833,8 @@ crt_native_rpc_destroy(struct crt_native_rpc *rpc)
 {
 	if (rpc == NULL)
 		return EINVAL;
-	if (rpc->active_calls || rpc->active_servers || rpc->active_controls || rpc->driver_owned ||
-	    rpc->callback || rpc->encoding)
+	if (rpc->active_calls || rpc->active_servers || rpc->active_controls ||
+	    rpc->pending_releases || rpc->driver_owned || rpc->callback || rpc->encoding)
 		return EBUSY;
 	free(rpc->buffers);
 	free(rpc->deadlines);
@@ -730,8 +849,8 @@ bool
 crt_native_rpc_idle(const struct crt_native_rpc *rpc)
 {
 	return rpc != NULL && rpc->active_calls == 0 && rpc->active_servers == 0 &&
-	       rpc->driver_owned == 0 && rpc->active_controls == 0 && !rpc->callback &&
-	       !rpc->encoding;
+	       rpc->driver_owned == 0 && rpc->active_controls == 0 && rpc->pending_releases == 0 &&
+	       !rpc->callback && !rpc->encoding;
 }
 
 int

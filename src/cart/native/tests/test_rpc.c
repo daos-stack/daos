@@ -258,11 +258,99 @@ deadlines(void)
 	assert(crt_native_rpc_destroy(rpc) == 0);
 }
 
+struct ack_counts {
+	unsigned count;
+	uint64_t sum;
+};
+static int
+count_ack(void *arg, uint64_t id)
+{
+	struct ack_counts *counts = arg;
+	counts->count++;
+	counts->sum += id;
+	return 0;
+}
+static void
+batched_and_piggybacked_releases(void)
+{
+	struct crt_native_rpc      *a, *b;
+	struct crt_native_tx        tx, reply;
+	unsigned                    handled = 0;
+	struct result               result  = {0};
+	struct ack_counts           ack_a = {0}, ack_b = {0};
+	struct crt_native_header    header;
+	struct crt_native_rpc_stats stats;
+	uint64_t                    id;
+	assert(crt_native_rpc_create(16, 256, echo, &handled, &a) == 0);
+	assert(crt_native_rpc_create(16, 256, echo, &handled, &b) == 0);
+	assert(crt_native_rpc_set_release_handler(a, count_ack, &ack_a) == 0);
+	assert(crt_native_rpc_set_release_handler(b, count_ack, &ack_b) == 0);
+	for (unsigned i = 1; i <= 16; i++)
+		assert(crt_native_rpc_queue_release(a, i) == 0);
+	assert(crt_native_rpc_queue_release(a, 17) == EAGAIN);
+	assert(crt_native_rpc_next_tx(a, &tx) == 0 && tx.token.control);
+	assert(crt_native_decode(tx.data, tx.length, &header) == 0 && header.release_count == 15);
+	assert(crt_native_rpc_receive(b, tx.data, tx.length) == 0 && ack_b.count == 16 &&
+	       ack_b.sum == 136);
+	assert(crt_native_rpc_tx_complete(a, tx.token, 0) == 0);
+	assert(crt_native_rpc_next_tx(a, &tx) == EAGAIN);
+	for (unsigned i = 1; i <= 8; i++)
+		assert(crt_native_rpc_queue_release(a, i) == 0);
+	assert(crt_native_rpc_call(a, 17, "hello", 5, done, &result, &id) == 0);
+	assert(crt_native_rpc_next_tx(a, &tx) == 0 && !tx.token.control);
+	assert(crt_native_decode(tx.data, tx.length, &header) == 0 && header.release_count == 8);
+	assert(crt_native_rpc_receive(b, tx.data, tx.length) == 0 && ack_b.count == 24 &&
+	       ack_b.sum == 172);
+	assert(crt_native_rpc_tx_complete(a, tx.token, 0) == 0);
+	assert(crt_native_rpc_queue_release(b, 100) == 0);
+	assert(crt_native_rpc_next_tx(b, &reply) == 0 && reply.token.reply);
+	assert(crt_native_decode(reply.data, reply.length, &header) == 0 &&
+	       header.release_count == 1);
+	assert(crt_native_rpc_receive(a, reply.data, reply.length) == 0 && ack_a.count == 1);
+	assert(result.count == 1 && strcmp(result.data, "hello") == 0);
+	assert(crt_native_rpc_tx_complete(b, reply.token, 0) == 0);
+	/* Cancel an unposted carrier while all ACK reservations are occupied. */
+	for (unsigned i = 1; i <= 16; i++)
+		assert(crt_native_rpc_queue_release(a, i) == 0);
+	assert(crt_native_rpc_call(a, 17, NULL, 0, done, &result, &id) == 0);
+	assert(crt_native_rpc_next_tx(a, &tx) == 0 && !tx.token.control);
+	assert(crt_native_rpc_queue_release(a, 99) == EAGAIN);
+	assert(crt_native_rpc_cancel(a, id, ECANCELED) == 0);
+	assert(crt_native_rpc_tx_complete(a, tx.token, ECANCELED) == 0);
+	assert(crt_native_rpc_queue_release(a, 99) == EAGAIN);
+	assert(crt_native_rpc_next_tx(a, &tx) == 0 && tx.token.control);
+	assert(crt_native_rpc_receive(b, tx.data, tx.length) == 0 && ack_b.count == 40 &&
+	       ack_b.sum == 308);
+	assert(crt_native_rpc_tx_complete(a, tx.token, 0) == 0);
+	crt_native_rpc_get_stats(a, &stats);
+	assert(stats.release_frames == 2 && stats.piggyback_ids == 24);
+	assert(crt_native_rpc_destroy(a) == 0 && crt_native_rpc_destroy(b) == 0);
+	/* No footer space: flush the ACK independently before the full RPC. */
+	assert(crt_native_rpc_create(2, 64, echo, &handled, &a) == 0);
+	assert(crt_native_rpc_create(2, 64, echo, &handled, &b) == 0);
+	assert(crt_native_rpc_set_release_handler(b, count_ack, &ack_b) == 0);
+	char payload[31];
+	memset(payload, 'x', sizeof(payload));
+	assert(crt_native_rpc_call(a, 17, payload, sizeof(payload), done, &result, &id) == 0);
+	assert(crt_native_rpc_queue_release(a, 200) == 0);
+	assert(crt_native_rpc_next_tx(a, &tx) == 0 && tx.token.control);
+	assert(crt_native_rpc_receive(b, tx.data, tx.length) == 0);
+	assert(crt_native_rpc_tx_complete(a, tx.token, 0) == 0);
+	assert(crt_native_rpc_next_tx(a, &tx) == 0 && !tx.token.control);
+	assert(crt_native_rpc_receive(b, tx.data, tx.length) == 0);
+	assert(crt_native_rpc_tx_complete(a, tx.token, 0) == 0);
+	assert(crt_native_rpc_next_tx(b, &reply) == 0);
+	assert(crt_native_rpc_receive(a, reply.data, reply.length) == 0);
+	assert(crt_native_rpc_tx_complete(b, reply.token, 0) == 0);
+	assert(crt_native_rpc_destroy(a) == 0 && crt_native_rpc_destroy(b) == 0);
+}
+
 int
 main(void)
 {
 	deadlines();
 	release_queue();
+	batched_and_piggybacked_releases();
 	pipeline();
 	cancellation();
 	reply_before_request_and_bad_frame();

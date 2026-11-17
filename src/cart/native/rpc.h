@@ -23,7 +23,8 @@ struct crt_native_tx {
  * buffers and request records are allocated at create time. Payload pointers
  * passed to handlers/completions are borrowed for the duration of the callback.
  * Requests and replies whose SEND has completed decode directly from RX. An
- * early reply is copied into the preallocated response slab until SEND completes.
+ * early reply is retained through SEND completion by RX ownership hooks;
+ * standalone users without hooks use a preallocated response-copy fallback.
  * Callbacks may call call()/reply(), but must not cancel, recursively drive
  * receive()/tx_complete() or destroy the session.
  *
@@ -49,7 +50,10 @@ typedef void (*crt_native_handler_t)(void    *arg, struct crt_native_rpc *, stru
 typedef int (*crt_native_encoder_t)(void *arg, void *payload, size_t capacity, size_t *used);
 typedef int (*crt_native_release_t)(void *arg, uint64_t lease_id);
 /* Bind before receiving any RELEASE frames. Callback returns positive errno.
- * RELEASE has its own bounded queue and TX slab, independent of request/reply
+ * RELEASE IDs use a bounded queue and independent TX slab, with batching and
+ * optional request/reply footer piggybacking. Reservations include in-flight
+ * carriers, and canceled unposted carriers restore their acknowledgments.
+ * Standalone RELEASE frames progress independently of request/reply
  * slots, so releasing keys does not require a free RPC slot. Queue EAGAIN means
  * retain the pending acknowledgment and retry; success transfers its ownership.
  */

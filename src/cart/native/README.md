@@ -25,7 +25,8 @@ See [IMPLEMENTATION.md](IMPLEMENTATION.md) for implementation status.
   list. TCP readiness and the timer/retry sweep run at a one-millisecond cadence;
   `accept` and liveness reads run only after socket readiness is reported.
 - `rpc.h` / `channel.h`: registered eager frames, generational matching, independent
-  request/reply/control reserves, backpressure, deadline heap and RX leases.
+  request/reply/control reserves, backpressure, deadline heap and RX leases. Early
+  replies retain RX through SEND completion; RELEASE IDs batch or piggyback on RPCs.
 - `proc.h` / `cart_proc.h`: bounded, versioned big-endian encoding using existing
   CaRT callbacks; native scoped cursors and Mercury cursors stay distinct.
 - `bulk.h` / `bulk_session.h` / `cart_bulk.h`: registered SGLs, connection-bound

@@ -123,10 +123,12 @@ verbs_close(struct crt_native_ep *ep)
 		fprintf(stderr,
 			"doca+rc stats: send=%" PRIu64 " recv=%" PRIu64 " read=%" PRIu64
 			" write=%" PRIu64 " inline=%" PRIu64 " signaled=%" PRIu64 " cqes=%" PRIu64
-			" logical=%" PRIu64 "\n",
+			" logical=%" PRIu64 " send_batches=%" PRIu64 " recv_batches=%" PRIu64
+			" read_limit=%u\n",
 			ep->stats.send_posts, ep->stats.recv_posts, ep->stats.read_posts,
 			ep->stats.write_posts, ep->stats.inline_sends, ep->stats.signaled_sends,
-			ep->stats.cqes, ep->stats.logical_completions);
+			ep->stats.cqes, ep->stats.logical_completions, ep->stats.send_batches,
+			ep->stats.recv_batches, ep->read_limit);
 	free(ep->pending);
 	free(ep->ready);
 	free(ep->batch);

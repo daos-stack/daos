@@ -8,9 +8,30 @@
 #include <stdio.h>
 #include <string.h>
 
+static void
+release_footers(void)
+{
+	uint8_t                  frame[64] = {0};
+	struct crt_native_header h         = {.type          = CRT_NATIVE_REQUEST,
+					      .request_id    = 1,
+					      .payload_size  = 4,
+					      .release_count = 2},
+				 out;
+	assert(crt_native_encode(&h, frame, sizeof(frame)) == 0);
+	frame[CRT_NATIVE_HEADER_SIZE + 4 + 7]  = 7;
+	frame[CRT_NATIVE_HEADER_SIZE + 4 + 15] = 9;
+	assert(crt_native_decode(frame, 52, &out) == 0 && out.release_count == 2);
+	assert(crt_native_decode(frame, 51, &out) == EPROTO);
+	frame[CRT_NATIVE_HEADER_SIZE + 4 + 15] = 0;
+	assert(crt_native_decode(frame, 52, &out) == EPROTO);
+	frame[6] = 1;
+	assert(crt_native_decode(frame, 52, &out) == EPROTO);
+}
+
 int
 main(void)
 {
+	release_footers();
 	uint8_t                  frame[CRT_NATIVE_HEADER_SIZE + 3] = {0};
 	struct crt_native_header h =
 				     {
