@@ -25,6 +25,7 @@ static unsigned           poll_calls;
 static int                create_qp_error;
 static int                destroy_qp_error;
 static int                modify_qp_error;
+static int                open_device_error, alloc_pd_error, create_cq_error, register_error;
 static unsigned           destroyed_qps, destroyed_cqs, destroyed_pds, closed_devices;
 
 struct ibv_device **
@@ -48,6 +49,10 @@ struct ibv_context *
 ibv_open_device(struct ibv_device *d)
 {
 	(void)d;
+	if (open_device_error) {
+		errno = open_device_error;
+		return NULL;
+	}
 	return &context;
 }
 int
@@ -78,6 +83,10 @@ struct ibv_pd *
 ibv_alloc_pd(struct ibv_context *c)
 {
 	(void)c;
+	if (alloc_pd_error) {
+		errno = alloc_pd_error;
+		return NULL;
+	}
 	return &pd;
 }
 int
@@ -90,6 +99,10 @@ ibv_dealloc_pd(struct ibv_pd *p)
 struct ibv_cq *
 ibv_create_cq(struct ibv_context *c, int n, void *a, void *b, int v)
 {
+	if (create_cq_error) {
+		errno = create_cq_error;
+		return NULL;
+	}
 	(void)c;
 	(void)n;
 	(void)a;
@@ -141,6 +154,10 @@ ibv_modify_qp(struct ibv_qp *q, struct ibv_qp_attr *a, int mask)
 struct ibv_mr *
 ibv_reg_mr(struct ibv_pd *p, void *a, size_t n, int access)
 {
+	if (register_error) {
+		errno = register_error;
+		return NULL;
+	}
 	struct ibv_mr *mr = malloc(sizeof(*mr));
 	(void)p;
 	(void)access;
@@ -342,12 +359,40 @@ test_slot_recycling(void)
 	assert(ops->close(ep) == 0);
 }
 
+static void
+test_allocation_failures(void)
+{
+	const struct crt_native_ops *ops = &crt_native_verbs_ops;
+	struct crt_native_config cfg = {.device = "mock0", .port = 1, .gid_index = -1, .depth = 4};
+	struct crt_native_ep    *ep  = NULL;
+	open_device_error            = EACCES;
+	assert(ops->open(&cfg, &ep) == EACCES && ep == NULL);
+	open_device_error = 0;
+	alloc_pd_error    = ENOMEM;
+	assert(ops->open(&cfg, &ep) == ENOMEM && ep == NULL);
+	alloc_pd_error  = 0;
+	create_cq_error = ENOMEM;
+	assert(ops->open(&cfg, &ep) == ENOMEM && ep == NULL);
+	create_cq_error = 0;
+	assert(ops->open(&cfg, &ep) == 0);
+	struct crt_native_mr           *mr;
+	struct crt_native_remote_memory remote;
+	char                            buffer[64];
+	register_error = ENOMEM;
+	assert(ops->register_memory(ep, buffer, sizeof(buffer), CRT_NATIVE_REMOTE_READ, &mr,
+				    &remote) == ENOMEM &&
+	       mr == NULL);
+	register_error = 0;
+	assert(ops->close(ep) == 0);
+}
+
 int
 main(void)
 {
 	test_lifetime();
 	test_success_and_open_failure();
 	test_slot_recycling();
+	test_allocation_failures();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }

@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <infiniband/verbs.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,6 +39,16 @@ struct crt_native_ep {
 	bool                      connected;
 	bool                      closing;
 };
+
+static void
+report_error(const struct crt_native_config *cfg, const char *operation, int error)
+{
+	fprintf(stderr,
+		"doca+rc: %s failed: device=%s port=%u gid_index=%d depth=%u "
+		"errno=%d (%s)\n",
+		operation, cfg->device, cfg->port, cfg->gid_index, cfg->depth, error,
+		strerror(error));
+}
 
 static int
 verbs_close(struct crt_native_ep *ep)
@@ -86,6 +97,7 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	struct ibv_qp_attr      attr = {0};
 	struct crt_native_ep   *ep;
 	int                     count, rc = ENODEV;
+	const char             *stage = "allocate endpoint";
 
 	if (output == NULL)
 		return EINVAL;
@@ -94,9 +106,12 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	    cfg->depth > 32768 || cfg->gid_index < -1 || cfg->gid_index > 255)
 		return EINVAL;
 	ep = calloc(1, sizeof(*ep));
-	if (ep == NULL)
+	if (ep == NULL) {
+		report_error(cfg, stage, ENOMEM);
 		return ENOMEM;
+	}
 	ep->config     = *cfg;
+	stage          = "allocate operation records";
 	ep->operations = calloc(cfg->depth, sizeof(*ep->operations));
 	if (ep->operations == NULL) {
 		rc = ENOMEM;
@@ -104,13 +119,18 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	}
 	for (unsigned i = 0; i < cfg->depth; i++)
 		ep->operations[i].next_free = i + 1;
+	stage   = "ibv_get_device_list";
+	errno   = 0;
 	devices = ibv_get_device_list(&count);
 	if (devices == NULL) {
 		rc = errno != 0 ? errno : ENODEV;
 		goto fail;
 	}
+	stage = "find device";
 	for (int i = 0; i < count; i++) {
 		if (strcmp(cfg->device, ibv_get_device_name(devices[i])) == 0) {
+			stage       = "ibv_open_device";
+			errno       = 0;
 			ep->context = ibv_open_device(devices[i]);
 			if (ep->context == NULL)
 				rc = errno != 0 ? errno : EIO;
@@ -120,33 +140,41 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	ibv_free_device_list(devices);
 	if (ep->context == NULL)
 		goto fail;
-	rc = ibv_query_port(ep->context, cfg->port, &port);
+	stage = "ibv_query_port";
+	rc    = ibv_query_port(ep->context, cfg->port, &port);
 	if (rc != 0)
 		goto fail;
 	if (port.state != IBV_PORT_ACTIVE) {
-		rc = ENETDOWN;
+		stage = "require active port";
+		rc    = ENETDOWN;
 		goto fail;
 	}
 	ep->local.lid    = port.lid;
 	ep->local.mtu    = port.active_mtu;
 	ep->local.global = cfg->gid_index >= 0;
 	if (port.link_layer == IBV_LINK_LAYER_ETHERNET && !ep->local.global) {
-		rc = EINVAL;
+		stage = "require explicit RoCE GID index";
+		rc    = EINVAL;
 		goto fail;
 	}
 	if (ep->local.global) {
 		union ibv_gid gid;
 
-		rc = ibv_query_gid(ep->context, cfg->port, cfg->gid_index, &gid);
+		stage = "ibv_query_gid";
+		rc    = ibv_query_gid(ep->context, cfg->port, cfg->gid_index, &gid);
 		if (rc != 0)
 			goto fail;
 		memcpy(ep->local.gid, gid.raw, sizeof(ep->local.gid));
 	}
+	stage  = "ibv_alloc_pd";
+	errno  = 0;
 	ep->pd = ibv_alloc_pd(ep->context);
 	if (ep->pd == NULL) {
 		rc = errno != 0 ? errno : ENOMEM;
 		goto fail;
 	}
+	stage  = "ibv_create_cq";
+	errno  = 0;
 	ep->cq = ibv_create_cq(ep->context, (int)cfg->depth, NULL, NULL, 0);
 	if (ep->cq == NULL) {
 		rc = errno != 0 ? errno : ENOMEM;
@@ -159,6 +187,8 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	init.cap.max_recv_wr  = cfg->depth;
 	init.cap.max_send_sge = 1;
 	init.cap.max_recv_sge = 1;
+	stage                 = "ibv_create_qp";
+	errno                 = 0;
 	ep->qp                = ibv_create_qp(ep->pd, &init);
 	if (ep->qp == NULL) {
 		rc = errno != 0 ? errno : ENOMEM;
@@ -171,6 +201,7 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	attr.port_num        = cfg->port;
 	attr.pkey_index      = 0;
 	attr.qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+	stage                = "ibv_modify_qp(INIT)";
 	rc                   = ibv_modify_qp(ep->qp, &attr,
 					     IBV_QP_STATE | IBV_QP_PORT | IBV_QP_PKEY_INDEX | IBV_QP_ACCESS_FLAGS);
 	if (rc != 0)
@@ -178,6 +209,9 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	*output = ep;
 	return 0;
 fail:
+	if (rc < 0)
+		rc = errno ? errno : EIO;
+	report_error(cfg, stage, rc);
 	/* No work has been posted, so cleanup cannot abandon accepted operations. */
 	if (verbs_close(ep) != 0)
 		*output = ep;
@@ -259,10 +293,14 @@ verbs_register(struct crt_native_ep *ep, void *buffer, size_t length, unsigned r
 	mr = calloc(1, sizeof(*mr));
 	if (mr == NULL)
 		return ENOMEM;
+	errno = 0;
 	mr->mr = ibv_reg_mr(ep->pd, buffer, length, access);
 	if (mr->mr == NULL) {
 		int rc = errno != 0 ? errno : ENOMEM;
 
+		report_error(&ep->config, "ibv_reg_mr", rc);
+		fprintf(stderr, "doca+rc: registration bytes=%zu access=%u\n", length,
+			remote_access);
 		free(mr);
 		return rc;
 	}

@@ -398,8 +398,10 @@ int
 crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int iface)
 {
 	struct crt_native_context *c = calloc(1, sizeof(*c));
-	if (c == NULL)
+	if (c == NULL) {
+		D_ERROR("doca+rc: context %d allocation failed\n", index);
 		return -DER_NOMEM;
+	}
 	c->cart = container_of(hg, struct crt_context, cc_hg_ctx);
 	atomic_init(&c->bulks, 0);
 	pthread_mutexattr_t attr;
@@ -422,9 +424,11 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 		return -DER_MISC;
 	}
 	hg->chc_native = c;
-	char ip[INET_ADDRSTRLEN];
-	int  rc = interface_ip(crt_provider_iface_str_get(primary, CRT_PROV_DOCA_RC, iface), ip);
-	const char *device = getenv("CRT_NATIVE_DEVICE");
+	char        ip[INET_ADDRSTRLEN];
+	const char *iface_name = crt_provider_iface_str_get(primary, CRT_PROV_DOCA_RC, iface);
+	const char *stage      = "configuration";
+	int         rc         = interface_ip(iface_name, ip);
+	const char *device     = getenv("CRT_NATIVE_DEVICE");
 	if (device == NULL)
 		device = crt_provider_domain_str_get(primary, CRT_PROV_DOCA_RC, iface);
 	if (device == NULL) {
@@ -467,18 +471,26 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 						      .progress = drive_peer,
 						      .failed   = failed,
 						      .destroy  = destroy_peer};
+		stage                              = "RDMA endpoint probe";
 		rc = from_errno(crt_native_verbs_ops.open(&config, &c->probe));
 		if (!rc) {
-			rc = from_errno(crt_native_verbs_ops.close(c->probe));
+			stage = "close RDMA endpoint probe";
+			rc    = from_errno(crt_native_verbs_ops.close(c->probe));
 			if (!rc)
 				c->probe = NULL;
 		}
-		if (!rc)
-			rc = from_errno(crt_native_net_create(&crt_native_verbs_ops, &config,
-							      &limits, ip, listen_port, peers,
-							      10000, &cb, c, &c->net));
+		if (!rc) {
+			stage = "create TCP bootstrap listener";
+			rc    = from_errno(crt_native_net_create(&crt_native_verbs_ops, &config,
+								 &limits, ip, listen_port, peers,
+								 10000, &cb, c, &c->net));
+		}
 	}
 	if (rc) {
+		D_ERROR("doca+rc: context %d initialization failed at %s: iface=%s device=%s " DF_RC
+			"\n",
+			index, stage, iface_name ? iface_name : "(unset)",
+			c->device ? c->device : "(unset)", DP_RC(rc));
 		crt_native_ctx_fini(hg);
 		return rc;
 	}
