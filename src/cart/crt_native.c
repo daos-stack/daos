@@ -823,8 +823,8 @@ crt_native_ctx_unpost(struct crt_hg_context *hg)
 	return 0;
 }
 
-int
-crt_native_ctx_fini(struct crt_hg_context *hg)
+static int
+ctx_fini_once(struct crt_hg_context *hg)
 {
 	struct crt_native_context *c = hg->chc_native;
 	if (c == NULL)
@@ -863,6 +863,42 @@ crt_native_ctx_fini(struct crt_hg_context *hg)
 	free(c);
 	hg->chc_native = NULL;
 	return 0;
+}
+
+int
+crt_native_ctx_fini(struct crt_hg_context *hg)
+{
+	struct crt_native_context *c = hg->chc_native;
+	if (c == NULL)
+		return 0;
+	/* A destroy called from a progress callback must not wait on itself. */
+	if (pthread_mutex_trylock(&c->progress_mutex))
+		return -DER_BUSY;
+	pthread_mutex_unlock(&c->progress_mutex);
+	struct timespec start, now;
+	if (clock_gettime(CLOCK_MONOTONIC, &start))
+		return -DER_MISC;
+	crt_native_ctx_unpost(hg);
+	for (;;) {
+		int rc = ctx_fini_once(hg);
+		if (rc != -DER_BUSY && rc != -DER_AGAIN)
+			return rc;
+		/* QP flushes can exceed one CQ batch or arrive asynchronously.
+		 * Dispatch deferred RPC/bulk callbacks outside the transport lock
+		 * before retrying destruction. No live storage is forcibly freed.
+		 */
+		int progress_rc = crt_native_ctx_progress(hg);
+		if (progress_rc != 0 && progress_rc != -DER_TIMEDOUT)
+			return progress_rc;
+		if (clock_gettime(CLOCK_MONOTONIC, &now))
+			return -DER_MISC;
+		int64_t elapsed = (int64_t)(now.tv_sec - start.tv_sec) * INT64_C(1000000000) +
+				  now.tv_nsec - start.tv_nsec;
+		if (elapsed >= INT64_C(1000000000))
+			return rc;
+		const struct timespec pause = {.tv_nsec = 1000000};
+		nanosleep(&pause, NULL);
+	}
 }
 
 void

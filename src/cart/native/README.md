@@ -32,7 +32,10 @@ views held through CaRT RPC destruction; early replies require a copy until loca
 SEND completion. Array metadata is allocated. Bulk payloads use RDMA without a
 codec copy. Cancellation retains accepted buffers until completion; published
 keys remain pinned until peer acknowledgment or proven endpoint quiescence.
-Busy/failed cleanup preserves ownership for retry, including forced context destroy.
+Context destruction progresses transport flushes and deferred callbacks for up to
+one second before returning busy. Callbacks run outside the transport lock.
+Busy/failed cleanup preserves ownership for retry, including forced context destroy;
+the deadline never permits freeing memory still owned by the NIC or application.
 
 ## Limits and validation
 
