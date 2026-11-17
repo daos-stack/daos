@@ -38,6 +38,7 @@ disable_repos () {
             mv "$repo".repo{.tmp,}
         done
         popd
+        dnf config-manager --set-disabled daos-stack-deps-el-8-stable-local-artifactory
     fi
 }
 
