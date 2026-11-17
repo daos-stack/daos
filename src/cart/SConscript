@@ -112,6 +112,9 @@ def scons():
         Depends(smoke, cart_lib)
         Alias('native_cart_smoke', smoke)
         smoke_env.Install('$PREFIX/bin', smoke)
+        header_test = smoke_env.Program('native_header_test', ['native/tests/cart_header_test.c'])
+        Depends(header_test, cart_lib)
+        Alias('native_header_test', header_test)
 
     Default(cart_lib)
     Export('cart_targets')

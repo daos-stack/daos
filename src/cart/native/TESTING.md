@@ -10,13 +10,18 @@ locked-memory limits are required. The tests do not change system configuration.
 From the DAOS repository root, add the option to your usual SCons command:
 
 ```sh
-scons -j8 --build-deps=yes CART_NATIVE_RC=yes install native_cart_smoke
+scons -j8 --build-deps=yes CART_NATIVE_RC=yes install native_cart_smoke native_header_test
 ```
 
 The smoke binary installs to `$PREFIX/bin/native_cart_smoke` (`./install/bin` with
 the default prefix). Rebuild all CaRT consumers when toggling this option because
 it changes private request storage. A build without it rejects native contexts
 with `-DER_NOTSUPPORTED`, rather than silently selecting Mercury.
+
+Run `./build/release/gcc/src/cart/native_header_test` for the versioned native CaRT
+header codec regression test (adjust the path for your build/compiler options). Both peers
+must run this branch's native wire version 2; version 1 peers are rejected during
+bootstrap because their CaRT payload layout predates upstream's versioned headers.
 
 Optional endpoint-only test, before testing CaRT:
 

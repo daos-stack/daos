@@ -255,25 +255,26 @@ encode(void *arg, void *buffer, size_t capacity, size_t *used)
 	return 0;
 }
 
-static void
+static int
 prepare_header(struct crt_rpc_priv *rpc)
 {
-	struct crt_common_hdr *h = &rpc->crp_req_hdr;
-	h->cch_flags             = rpc->crp_flags;
-	h->cch_dst_rank =
-	    crt_grp_priv_get_primary_rank(rpc->crp_grp_priv, rpc->crp_pub.cr_ep.ep_rank);
-	h->cch_dst_tag          = rpc->crp_pub.cr_ep.ep_tag;
-	h->cch_src_deadline_sec = (rpc->crp_flags & CRT_RPC_FLAG_DEADLINES_USED)
-				      ? rpc->crp_deadline_sec
-				      : rpc->crp_timeout_sec;
+	struct crt_req_hdr *h = &rpc->crp_req_hdr;
+	h->crh_flags          = rpc->crp_flags;
+	int rc                = crt_req_dst_set(
+            h, crt_grp_priv_get_primary_rank(rpc->crp_grp_priv, rpc->crp_pub.cr_ep.ep_rank),
+            rpc->crp_pub.cr_ep.ep_tag);
+	if (rc)
+		return rc;
+	h->crh_deadline_unix_sec = rpc->crp_deadline_sec;
 	if (crt_is_service()) {
-		h->cch_src_rank =
+		h->crh_src_rank =
 		    crt_grp_priv_get_primary_rank(rpc->crp_grp_priv, rpc->crp_grp_priv->gp_self);
-		h->cch_hlc = d_hlc_get();
+		h->crh_common.chc_hlc = d_hlc_get();
 	} else {
-		h->cch_src_rank = CRT_NO_RANK;
-		h->cch_hlc      = d_hlct_get();
+		h->crh_src_rank       = CRT_NO_RANK;
+		h->crh_common.chc_hlc = d_hlct_get();
 	}
+	return 0;
 }
 
 static int
@@ -546,12 +547,17 @@ crt_native_req_create(struct crt_hg_context *hg, struct crt_rpc_priv *rpc)
 void
 crt_native_req_send(struct crt_rpc_priv *rpc)
 {
-	struct crt_native_rpc_state *s = rpc->crp_native;
-	prepare_header(rpc);
-	rpc->crp_state = RPC_STATE_REQ_SENT;
+	struct crt_native_rpc_state *s         = rpc->crp_native;
+	int                          header_rc = prepare_header(rpc);
+	rpc->crp_state                         = RPC_STATE_REQ_SENT;
 	RPC_ADDREF(rpc); /* queue owns this reference until native completion */
 	lock(s->context);
-	s->submitted          = true;
+	s->submitted = true;
+	if (header_rc) {
+		completed(s, header_rc, 0, NULL, 0);
+		unlock(s->context);
+		return;
+	}
 	struct bridge_peer *p = crt_native_peer_data(s->peer);
 	s->pending_next       = NULL;
 	s->pending_previous   = p->waiting_tail;
@@ -592,8 +598,8 @@ crt_native_reply_send(struct crt_rpc_priv *rpc)
 	if (!rc && s->reply_queued)
 		rc = EALREADY;
 	if (!rc) {
-		rpc->crp_reply_hdr.cch_hlc = d_hlc_get();
-		s->error                   = 0;
+		rpc->crp_reply_hdr.crh_common.chc_hlc = d_hlc_get();
+		s->error                              = 0;
 		rc = crt_native_rpc_reply_encoded(s->engine, s->token, 0, encode, s);
 		if (!rc)
 			s->reply_queued = true;
@@ -605,7 +611,7 @@ crt_native_reply_send(struct crt_rpc_priv *rpc)
 void
 crt_native_reply_error(struct crt_rpc_priv *rpc, int error)
 {
-	rpc->crp_reply_hdr.cch_rc = error;
+	rpc->crp_reply_hdr.crh_status = error;
 	crt_native_reply_send(rpc);
 	rpc->crp_reply_pending = 0;
 }
@@ -623,21 +629,21 @@ decode(struct crt_native_rpc_state *s, bool reply)
 static void
 dispatch_incoming(struct crt_native_context *c, struct incoming *in)
 {
-	struct crt_rpc_priv  *rpc;
-	struct crt_common_hdr header;
-	int                   rc   = crt_native_header_peek(in->payload, in->size, &header);
-	d_rank_t              self = crt_gdata.cg_grp->gg_primary_grp->gp_self;
-	if (!rc &&
-	    (header.cch_opc != in->opcode || header.cch_dst_tag != (uint32_t)c->cart->cc_idx ||
-	     (self != CRT_NO_RANK && header.cch_dst_rank != self)))
+	struct crt_rpc_priv *rpc;
+	struct crt_req_hdr   header;
+	int                  rc   = crt_native_header_peek(in->payload, in->size, &header);
+	d_rank_t             self = crt_gdata.cg_grp->gg_primary_grp->gp_self;
+	if (!rc && (header.crh_opc != in->opcode ||
+		    crt_req_dst_tag(&header) != (uint32_t)c->cart->cc_idx ||
+		    (self != CRT_NO_RANK && crt_req_dst_rank(&header) != self)))
 		rc = -DER_BAD_TARGET;
 	if (!rc) {
-		struct crt_rpc_priv tmp_in = {.crp_req_hdr = header, .crp_flags = header.cch_flags},
+		struct crt_rpc_priv tmp_in = {.crp_req_hdr = header, .crp_flags = header.crh_flags},
 				    tmp_out = {0};
 		tmp_in.crp_pub.cr_ctx       = c->cart;
 		rc                          = crt_hg_process_header(&tmp_in, &tmp_out);
 		uint64_t offset;
-		if (!rc && d_hlc_get_msg(header.cch_hlc, NULL, &offset) &&
+		if (!rc && d_hlc_get_msg(header.crh_common.chc_hlc, NULL, &offset) &&
 		    !crt_opc_is_swim(in->opcode))
 			rc = -DER_HLC_SYNC;
 	}
@@ -673,16 +679,16 @@ dispatch_incoming(struct crt_native_context *c, struct incoming *in)
 	rpc->crp_input_got = 1;
 	rc                 = decode(s, false);
 	if (rc == 0) {
-		rpc->crp_flags               = rpc->crp_req_hdr.cch_flags;
-		rpc->crp_reply_hdr.cch_opc   = rpc->crp_pub.cr_opc;
-		rpc->crp_reply_hdr.cch_rpcid = rpc->crp_req_hdr.cch_rpcid;
-		struct crt_rpc_priv tmp      = {.crp_req_hdr   = rpc->crp_req_hdr,
-						.crp_flags     = rpc->crp_flags,
-						.crp_coreq_hdr = rpc->crp_coreq_hdr};
-		tmp.crp_pub.cr_ctx           = c->cart;
-		rc                           = crt_hg_process_header(&tmp, rpc);
-		rpc->crp_pub.cr_ep.ep_rank   = rpc->crp_req_hdr.cch_dst_rank;
-		rpc->crp_pub.cr_ep.ep_tag    = rpc->crp_req_hdr.cch_dst_tag;
+		rpc->crp_flags = rpc->crp_req_hdr.crh_flags;
+
+		rpc->crp_reply_hdr.crh_common.chc_rpcid = rpc->crp_req_hdr.crh_common.chc_rpcid;
+		struct crt_rpc_priv tmp                 = {.crp_req_hdr   = rpc->crp_req_hdr,
+							   .crp_flags     = rpc->crp_flags,
+							   .crp_coreq_hdr = rpc->crp_coreq_hdr};
+		tmp.crp_pub.cr_ctx                      = c->cart;
+		rc                                      = crt_hg_process_header(&tmp, rpc);
+		rpc->crp_pub.cr_ep.ep_rank              = crt_req_dst_rank(&rpc->crp_req_hdr);
+		rpc->crp_pub.cr_ep.ep_tag               = crt_req_dst_tag(&rpc->crp_req_hdr);
 	} else
 		crt_native_peer_fail(in->peer, EPROTO);
 	unlock(c);
@@ -724,7 +730,8 @@ dispatch_completion(struct crt_native_rpc_state *s)
 		lock(c);
 		rpc->crp_output_got = 1;
 		rc                  = decode(s, true);
-		if (!rc && rpc->crp_reply_hdr.cch_rpcid != rpc->crp_req_hdr.cch_rpcid)
+		if (!rc && rpc->crp_reply_hdr.crh_common.chc_rpcid !=
+			       rpc->crp_req_hdr.crh_common.chc_rpcid)
 			rc = -DER_PROTO;
 		if (rc != 0)
 			crt_native_peer_fail(s->peer, EPROTO);
@@ -732,11 +739,12 @@ dispatch_completion(struct crt_native_rpc_state *s)
 		if (!rc) {
 			if (crt_is_service()) {
 				uint64_t offset;
-				if (d_hlc_get_msg(rpc->crp_reply_hdr.cch_hlc, NULL, &offset) &&
+				if (d_hlc_get_msg(rpc->crp_reply_hdr.crh_common.chc_hlc, NULL,
+						  &offset) &&
 				    !crt_opc_is_swim(rpc->crp_pub.cr_opc))
 					rc = -DER_HLC_SYNC;
 			} else
-				d_hlct_sync(rpc->crp_reply_hdr.cch_hlc);
+				d_hlct_sync(rpc->crp_reply_hdr.crh_common.chc_hlc);
 		}
 	}
 	if (rc == -DER_CANCELED && crt_req_timedout(rpc))

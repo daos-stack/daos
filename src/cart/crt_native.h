@@ -11,9 +11,9 @@ struct crt_hg_context;
 struct crt_rpc_priv;
 struct crt_native_context;
 struct crt_protocol_info;
-struct crt_common_hdr;
+struct crt_req_hdr;
 int
-crt_native_header_peek(const void *, size_t, struct crt_common_hdr *);
+crt_native_header_peek(const void *, size_t, struct crt_req_hdr *);
 struct crt_native_event {
 	struct crt_native_event *next;
 	bool                     client;

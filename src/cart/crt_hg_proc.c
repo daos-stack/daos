@@ -496,6 +496,77 @@ out:
 
 #define CRT_HDR_MAX_WIRE_BYTES 512U
 
+static size_t
+crt_proc_bytes_left(crt_proc_t proc)
+{
+	struct crt_native_proc *cursor = crt_native_cart_cursor(proc);
+	return cursor ? cursor->capacity - cursor->offset : hg_proc_get_size_left(proc);
+}
+
+/* Packed CaRT headers must not pass unaligned member pointers to scalar procs.
+ * Serialize aligned locals and assign only after each field has been decoded.
+ */
+static int
+native_proc_header_common(crt_proc_t proc, crt_proc_op_t op, struct crt_hdr_common *hdr)
+{
+	bool     encode = ENCODING(op);
+	uint8_t  major  = encode ? hdr->chc_envelope.che_major : 0;
+	uint8_t  minor  = encode ? hdr->chc_envelope.che_minor : 0;
+	uint16_t bytes  = encode ? hdr->chc_envelope.che_header_bytes : 0;
+	uint64_t hlc = encode ? hdr->chc_hlc : 0, id = encode ? hdr->chc_rpcid : 0;
+	int      rc = crt_proc_uint8_t(proc, op, &major);
+	if (!rc)
+		rc = crt_proc_uint8_t(proc, op, &minor);
+	if (!rc)
+		rc = crt_proc_uint16_t(proc, op, &bytes);
+	if (!rc)
+		rc = crt_proc_uint64_t(proc, op, &hlc);
+	if (!rc)
+		rc = crt_proc_uint64_t(proc, op, &id);
+	if (!rc && DECODING(op)) {
+		hdr->chc_envelope = (struct crt_hdr_envelope){major, minor, bytes};
+		hdr->chc_hlc      = hlc;
+		hdr->chc_rpcid    = id;
+	}
+	return rc;
+}
+
+static int
+native_proc_request_header(crt_proc_t proc, crt_proc_op_t op, struct crt_req_hdr *hdr)
+{
+	uint32_t fields[5] = {0};
+	if (ENCODING(op)) {
+		fields[0] = hdr->crh_opc;
+		fields[1] = hdr->crh_flags;
+		fields[2] = hdr->crh_src_rank;
+		fields[3] = hdr->crh_dst.packed;
+		fields[4] = hdr->crh_deadline_unix_sec;
+	}
+	int rc = native_proc_header_common(proc, op, &hdr->crh_common);
+	for (unsigned i = 0; !rc && i < 5; i++)
+		rc = crt_proc_uint32_t(proc, op, &fields[i]);
+	if (!rc && DECODING(op)) {
+		hdr->crh_opc               = fields[0];
+		hdr->crh_flags             = fields[1];
+		hdr->crh_src_rank          = fields[2];
+		hdr->crh_dst.packed        = fields[3];
+		hdr->crh_deadline_unix_sec = fields[4];
+	}
+	return rc;
+}
+
+static int
+native_proc_reply_header(crt_proc_t proc, crt_proc_op_t op, struct crt_reply_hdr *hdr)
+{
+	int32_t status = ENCODING(op) ? hdr->crh_status : 0;
+	int     rc     = native_proc_header_common(proc, op, &hdr->crh_common);
+	if (!rc)
+		rc = crt_proc_int32_t(proc, op, &status);
+	if (!rc && DECODING(op))
+		hdr->crh_status = status;
+	return rc;
+}
+
 /* Supports newer minor version by skipping unknown header parts */
 static int
 crt_proc_hdr_validate_skip(crt_proc_t proc, crt_proc_op_t proc_op,
@@ -517,7 +588,7 @@ crt_proc_hdr_validate_skip(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	/* We get here if the incoming minor version is newer */
-	if (hg_proc_get_size_left(proc) < extra_bytes)
+	if (crt_proc_bytes_left(proc) < extra_bytes)
 		return -DER_PROTO;
 
 	return crt_proc_memcpy(proc, proc_op, skip, extra_bytes);
@@ -545,10 +616,11 @@ crt_proc_req_hdr(crt_proc_t proc, struct crt_req_hdr *hdr)
 		hdr->crh_common.chc_envelope.che_header_bytes = sizeof(*hdr);
 	}
 
-	if (DECODING(proc_op) && hg_proc_get_size_left(proc) < sizeof(*hdr))
+	if (DECODING(proc_op) && crt_proc_bytes_left(proc) < sizeof(*hdr))
 		return -DER_PROTO;
 
-	rc = crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
+	rc = crt_native_cart_cursor(proc) ? native_proc_request_header(proc, proc_op, hdr)
+					  : crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
 	if (rc != 0 || ENCODING(proc_op))
 		return rc;
 
@@ -578,10 +650,11 @@ crt_proc_reply_hdr(crt_proc_t proc, struct crt_reply_hdr *hdr)
 		hdr->crh_common.chc_envelope.che_header_bytes = sizeof(*hdr);
 	}
 
-	if (DECODING(proc_op) && hg_proc_get_size_left(proc) < sizeof(*hdr))
+	if (DECODING(proc_op) && crt_proc_bytes_left(proc) < sizeof(*hdr))
 		return -DER_PROTO;
 
-	rc = crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
+	rc = crt_native_cart_cursor(proc) ? native_proc_reply_header(proc, proc_op, hdr)
+					  : crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
 	if (rc != 0 || ENCODING(proc_op))
 		return rc;
 
@@ -593,7 +666,7 @@ static double next_hlc_sync_err_report;
 static int
 native_peek_proc(crt_proc_t proc, void *arg)
 {
-	int                     rc     = crt_proc_common_hdr(proc, arg);
+	int                     rc     = crt_proc_req_hdr(proc, arg);
 	struct crt_native_proc *cursor = crt_native_cart_cursor(proc);
 	void                   *ignored;
 	if (rc == 0)
@@ -604,7 +677,7 @@ native_peek_proc(crt_proc_t proc, void *arg)
 }
 
 int
-crt_native_header_peek(const void *payload, size_t size, struct crt_common_hdr *header)
+crt_native_header_peek(const void *payload, size_t size, struct crt_req_hdr *header)
 {
 	size_t used;
 	if (header == NULL)
@@ -796,25 +869,25 @@ native_payload_proc(crt_proc_t proc, void *arg)
 {
 	struct native_payload *payload = arg;
 	struct crt_rpc_priv   *rpc     = payload->rpc;
-	struct crt_common_hdr *hdr     = payload->reply ? &rpc->crp_reply_hdr : &rpc->crp_req_hdr;
 	crt_proc_op_t          op;
 	int                    rc = crt_proc_get_op(proc, &op);
 	if (rc != 0)
 		return rc;
 	if (op != CRT_PROC_FREE) {
-		rc = crt_proc_common_hdr(proc, hdr);
+		rc = payload->reply ? crt_proc_reply_hdr(proc, &rpc->crp_reply_hdr)
+				    : crt_proc_req_hdr(proc, &rpc->crp_req_hdr);
 		if (rc != 0)
 			return rc;
 		/* Never decode a peer-selected opcode using a different body schema. */
-		if (hdr->cch_opc != rpc->crp_pub.cr_opc)
+		if (!payload->reply && rpc->crp_req_hdr.crh_opc != rpc->crp_pub.cr_opc)
 			return -DER_PROTO;
 	}
-	if (!payload->reply && (hdr->cch_flags & CRT_RPC_FLAG_COLL)) {
+	if (!payload->reply && (rpc->crp_req_hdr.crh_flags & CRT_RPC_FLAG_COLL)) {
 		rc = crt_proc_corpc_hdr(proc, &rpc->crp_coreq_hdr);
 		if (rc != 0)
 			return rc;
 	}
-	if (payload->reply && hdr->cch_rc != 0)
+	if (payload->reply && rpc->crp_reply_hdr.crh_status != 0)
 		return 0; /* error replies carry no body */
 	if (payload->reply)
 		return rpc->crp_pub.cr_output == NULL ? 0 : crt_proc_output(rpc, proc);

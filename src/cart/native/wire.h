@@ -12,7 +12,7 @@
  * concern; this envelope is usable by both CPU and future GPU datapaths.
  */
 #define CRT_NATIVE_HEADER_SIZE  32
-#define CRT_NATIVE_WIRE_VERSION 1
+#define CRT_NATIVE_WIRE_VERSION 2
 enum crt_native_message_type {
 	CRT_NATIVE_REQUEST = 1,
 	CRT_NATIVE_REPLY   = 2,

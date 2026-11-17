@@ -31,6 +31,9 @@ main(void)
 	frame[4]++;
 	assert(crt_native_decode(frame, sizeof(frame), &decoded) == EPROTO);
 	frame[4]--;
+	frame[4] = 1; /* pre-versioned CaRT payloads are incompatible */
+	assert(crt_native_decode(frame, sizeof(frame), &decoded) == EPROTO);
+	frame[4]  = CRT_NATIVE_WIRE_VERSION;
 	frame[28] = 1;
 	assert(crt_native_decode(frame, sizeof(frame), &decoded) == EPROTO);
 	frame[28] = 0;
