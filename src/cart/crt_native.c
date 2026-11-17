@@ -464,7 +464,7 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 		c->device = strdup(device);
 	if (rc == 0 && c->device == NULL)
 		rc = -DER_INVAL;
-	long port, gid, receives, frames, peers;
+	long port, gid, receives, frames, peers, read_depth;
 	if (!rc)
 		rc = setting("CRT_NATIVE_PORT", 1, 1, 255, &port);
 	if (!rc)
@@ -475,6 +475,8 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 		rc = setting("CRT_NATIVE_FRAME_SIZE", 65536, 128, 1048576, &frames);
 	if (!rc)
 		rc = setting("CRT_NATIVE_MAX_PEERS", 128, 1, 4096, &peers);
+	if (!rc)
+		rc = setting("CRT_NATIVE_RDMA_READ_DEPTH", 16, 1, 255, &read_depth);
 	struct crt_na_config *na = crt_provider_get_na_config(primary, CRT_PROV_DOCA_RC);
 	if (!rc && na->noc_auth_key && na->noc_auth_key[0]) {
 		D_ERROR("doca+rc does not implement fabric auth keys\n");
@@ -485,8 +487,11 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 	if (!rc && listen_port > 65535)
 		rc = -DER_INVAL;
 	if (!rc) {
-		struct crt_native_config config = {
-		    .device = c->device, .port = port, .gid_index = gid, .depth = receives * 4};
+		struct crt_native_config config    = {.device          = c->device,
+						      .port            = port,
+						      .gid_index       = gid,
+						      .depth           = receives * 4,
+						      .rdma_read_depth = read_depth};
 		struct crt_native_limits limits    = {.frame_size = frames, .receives = receives};
 		struct crt_native_net_callbacks cb = {.ready    = ready,
 						      .request  = received,

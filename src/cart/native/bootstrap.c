@@ -49,13 +49,15 @@ crt_native_hello_encode(const struct crt_native_address *a, const struct crt_nat
 		return EINVAL;
 	memset(out, 0, CRT_NATIVE_HELLO_SIZE);
 	memcpy(out, "CRTB", 4);
-	out[4] = 1;
+	out[4] = 2;
 	out[5] = a->global;
 	out[6] = a->mtu;
 	put32(out + 8, a->qpn);
 	put32(out + 12, a->psn);
 	out[16] = a->lid >> 8;
 	out[17] = a->lid;
+	out[18] = a->read_out ? a->read_out : 1;
+	out[19] = a->read_in ? a->read_in : 1;
 	memcpy(out + 20, a->gid, 16);
 	put32(out + 36, l->frame_size);
 	put32(out + 40, l->receives);
@@ -71,15 +73,17 @@ crt_native_hello_decode(const uint8_t in[CRT_NATIVE_HELLO_SIZE], struct crt_nati
 
 	if (in == NULL || a == NULL || l == NULL)
 		return EINVAL;
-	if (memcmp(in, "CRTB", 4) != 0 || in[4] != 1 || in[5] > 1 || in[7] != 0 || in[18] != 0 ||
-	    in[19] != 0 || get32(in + 44) != 0)
+	if (memcmp(in, "CRTB", 4) != 0 || in[4] != 2 || in[5] > 1 || in[7] != 0 || in[18] == 0 ||
+	    in[19] == 0 || get32(in + 44) != 0)
 		return EPROTO;
 	address = (struct crt_native_address){
-	    .qpn    = get32(in + 8),
-	    .psn    = get32(in + 12),
-	    .mtu    = in[6],
-	    .global = in[5] != 0,
-	    .lid    = (uint16_t)((uint16_t)in[16] << 8 | in[17]),
+	    .read_out = in[18],
+	    .read_in  = in[19],
+	    .qpn      = get32(in + 8),
+	    .psn      = get32(in + 12),
+	    .mtu      = in[6],
+	    .global   = in[5] != 0,
+	    .lid      = (uint16_t)((uint16_t)in[16] << 8 | in[17]),
 	};
 	memcpy(address.gid, in + 20, 16);
 	limits = (struct crt_native_limits){get32(in + 36), get32(in + 40)};

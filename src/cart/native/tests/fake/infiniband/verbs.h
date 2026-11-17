@@ -64,6 +64,11 @@ enum {
 	IBV_WC_SUCCESS            = 0,
 	IBV_WC_WR_FLUSH_ERR       = 5
 };
+struct ibv_device_attr {
+	int max_qp_rd_atom, max_qp_init_rd_atom;
+};
+int
+ibv_query_device(struct ibv_context *, struct ibv_device_attr *);
 struct ibv_port_attr {
 	int          state, link_layer;
 	uint16_t     lid;

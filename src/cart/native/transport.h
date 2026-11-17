@@ -59,6 +59,7 @@ struct crt_native_address {
 	uint16_t lid;
 	uint8_t  gid[16];
 	uint8_t  mtu;
+	uint8_t  read_out, read_in;
 	bool     global;
 };
 
@@ -73,6 +74,7 @@ struct crt_native_config {
 	uint8_t                  port;
 	int                      gid_index;
 	unsigned                 depth;
+	unsigned                 rdma_read_depth; /* zero selects 16, capped by hardware */
 	/* Optional owner-serialized CQ group, with a worker-safe wake notification. */
 	struct crt_native_group *group;
 	void (*wake)(void *);

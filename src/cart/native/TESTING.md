@@ -93,6 +93,7 @@ Native tuning variables, independently on each process:
 | `CRT_NATIVE_DEVICE` | domain setting, or sole HCA | Local verbs device |
 | `CRT_NATIVE_PORT` | 1 | HCA port |
 | `CRT_NATIVE_GID_INDEX` | -1 | Local GID index; required for RoCE |
+| `CRT_NATIVE_RDMA_READ_DEPTH` | 16 | Requested READ concurrency, capped by local hardware and peer responder credits |
 | `CRT_NATIVE_RECEIVES` | 64 | Receives per peer, 2–8192 |
 | `CRT_NATIVE_FRAME_SIZE` | 65536 | Maximum frame bytes, 128–1048576 |
 | `CRT_NATIVE_MAX_PEERS` | 128 | Peer slots per context, 1–4096 |
@@ -122,3 +123,6 @@ server, and use the same fio job file, CPU/NUMA placement, object class, dataset
 and warm-up settings as the Mercury/UCX baseline. Record IOPS, latency percentiles
 and client/server CPU use. Portable tests establish correctness properties, not
 an IOPS target; actual throughput requires the real-HCA fio run.
+
+Bootstrap hello version 2 advertises initiator and responder RDMA READ credits.
+Both peers must use this version; older bootstrap versions are rejected.

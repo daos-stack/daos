@@ -44,6 +44,7 @@ struct crt_native_ep {
 	struct crt_native_address local;
 	struct operation         *operations;
 	unsigned                  outstanding;
+	unsigned                  read_limit, reads;
 	struct ibv_wc            *pending;
 	unsigned                  pending_head, pending_count, group_slot;
 	unsigned                  free_head;
@@ -182,8 +183,24 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 		if (ep->context == NULL)
 			goto fail;
 	}
-	stage = "ibv_query_port";
-	rc    = ibv_query_port(ep->context, cfg->port, &port);
+	struct ibv_device_attr caps;
+	stage = "ibv_query_device";
+	rc    = ibv_query_device(ep->context, &caps);
+	if (rc)
+		goto fail;
+	unsigned requested = cfg->rdma_read_depth ? cfg->rdma_read_depth : 16;
+	if (requested > 255)
+		requested = 255;
+	unsigned initiator = caps.max_qp_init_rd_atom < 255 ? caps.max_qp_init_rd_atom : 255;
+	unsigned responder = caps.max_qp_rd_atom < 255 ? caps.max_qp_rd_atom : 255;
+	if (!initiator || !responder) {
+		rc = ENOTSUP;
+		goto fail;
+	}
+	ep->local.read_out = requested < initiator ? requested : initiator;
+	ep->local.read_in  = requested < responder ? requested : responder;
+	stage              = "ibv_query_port";
+	rc                 = ibv_query_port(ep->context, cfg->port, &port);
 	if (rc != 0)
 		goto fail;
 	if (port.state != IBV_PORT_ACTIVE) {
@@ -285,7 +302,7 @@ verbs_connect(struct crt_native_ep *ep, const struct crt_native_address *remote)
 	attr.path_mtu           = remote->mtu < ep->local.mtu ? remote->mtu : ep->local.mtu;
 	attr.dest_qp_num        = remote->qpn;
 	attr.rq_psn             = remote->psn;
-	attr.max_dest_rd_atomic = 1;
+	attr.max_dest_rd_atomic = ep->local.read_in;
 	attr.min_rnr_timer      = 12;
 	attr.ah_attr.port_num   = ep->config.port;
 	attr.ah_attr.dlid       = remote->lid;
@@ -301,12 +318,14 @@ verbs_connect(struct crt_native_ep *ep, const struct crt_native_address *remote)
 	if (rc != 0)
 		return rc;
 	memset(&attr, 0, sizeof(attr));
-	attr.qp_state      = IBV_QPS_RTS;
-	attr.sq_psn        = ep->local.psn;
-	attr.timeout       = 14;
-	attr.retry_cnt     = 7;
-	attr.rnr_retry     = 7;
-	attr.max_rd_atomic = 1;
+	attr.qp_state         = IBV_QPS_RTS;
+	attr.sq_psn           = ep->local.psn;
+	attr.timeout          = 14;
+	attr.retry_cnt        = 7;
+	attr.rnr_retry        = 7;
+	unsigned peer_credits = remote->read_in ? remote->read_in : 1;
+	ep->read_limit     = ep->local.read_out < peer_credits ? ep->local.read_out : peer_credits;
+	attr.max_rd_atomic = ep->read_limit;
 	rc                 = ibv_modify_qp(ep->qp, &attr,
 					   IBV_QP_STATE | IBV_QP_SQ_PSN | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
 					       IBV_QP_RNR_RETRY | IBV_QP_MAX_QP_RD_ATOMIC);
@@ -402,6 +421,8 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 		    length > UINT64_MAX - (remote->address + remote_offset))
 			return EINVAL;
 	}
+	if (opcode == CRT_NATIVE_READ && ep->reads == ep->read_limit)
+		return EAGAIN;
 	slot = ep->free_head;
 	if (slot == ep->config.depth) {
 		if (ep->config.wake)
@@ -435,6 +456,8 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 		ep->operations[slot] = (struct operation){
 		    .mr = mr, .cookie = cookie, .opcode = opcode, .length = length, .active = true};
 		ep->outstanding++;
+		if (opcode == CRT_NATIVE_READ)
+			ep->reads++;
 		mr->references++;
 	}
 	if (rc == EAGAIN && ep->config.wake)
@@ -531,6 +554,8 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 				      : op->opcode == CRT_NATIVE_RECV ? wc.byte_len
 								      : op->length,
 			};
+			if (op->opcode == CRT_NATIVE_READ)
+				ep->reads--;
 			op->mr->references--;
 			op->active    = false;
 			op->next_free = ep->free_head;

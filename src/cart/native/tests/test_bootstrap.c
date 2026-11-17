@@ -65,6 +65,10 @@ main(void)
 	assert(crt_native_hello_encode(&a, &l, frame) == 0);
 	assert(frame[12] == 0 && frame[13] == 0x12 && frame[14] == 0x34 && frame[15] == 0x56);
 	assert(crt_native_hello_decode(frame, &decoded, &limits) == 0);
+	assert(decoded.read_out == 1 && decoded.read_in == 1);
+	frame[4] = 1;
+	assert(crt_native_hello_decode(frame, &decoded, &limits) == EPROTO);
+	frame[4]  = 2;
 	frame[44] = 1;
 	assert(crt_native_hello_decode(frame, &decoded, &limits) == EPROTO);
 	for (unsigned malformed = 0; malformed < 2; malformed++) {

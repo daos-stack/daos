@@ -62,6 +62,14 @@ ibv_close_device(struct ibv_context *c)
 	closed_devices++;
 	return 0;
 }
+static unsigned configured_reads, configured_responders;
+int
+ibv_query_device(struct ibv_context *context_arg, struct ibv_device_attr *caps)
+{
+	(void)context_arg;
+	*caps = (struct ibv_device_attr){.max_qp_rd_atom = 8, .max_qp_init_rd_atom = 16};
+	return 0;
+}
 int
 ibv_query_port(struct ibv_context *c, uint8_t p, struct ibv_port_attr *a)
 {
@@ -144,6 +152,10 @@ ibv_modify_qp(struct ibv_qp *q, struct ibv_qp_attr *a, int mask)
 		return modify_qp_error;
 	(void)q;
 	(void)mask;
+	if (mask & IBV_QP_MAX_QP_RD_ATOMIC)
+		configured_reads = a->max_rd_atomic;
+	if (mask & IBV_QP_MAX_DEST_RD_ATOMIC)
+		configured_responders = a->max_dest_rd_atomic;
 	if (a->qp_state == IBV_QPS_ERR) {
 		while (num_accepted != 0)
 			completions[tail++] = (struct ibv_wc){.wr_id  = accepted[--num_accepted],
@@ -463,6 +475,41 @@ test_shared_cq(void)
 	assert(destroyed_cqs == cq_before + 1 && closed_devices == device_before + 1);
 }
 
+static void
+test_read_credits(void)
+{
+	const struct crt_native_ops *ops = &crt_native_verbs_ops;
+	struct crt_native_config     cfg = {
+		.device = "mock0", .port = 1, .gid_index = -1, .depth = 8, .rdma_read_depth = 12};
+	struct crt_native_ep           *ep;
+	struct crt_native_address       a;
+	struct crt_native_mr           *mr;
+	struct crt_native_remote_memory remote;
+	struct crt_native_completion    out[8];
+	unsigned                        count;
+	char                            buffer[64];
+	head = tail = num_accepted = 0;
+	assert(ops->open(&cfg, &ep) == 0 && ops->address(ep, &a) == 0);
+	assert(a.read_out == 12 && a.read_in == 8);
+	a.read_in = 3;
+	assert(ops->connect(ep, &a) == 0);
+	assert(configured_reads == 3 && configured_responders == 8);
+	assert(ops->register_memory(ep, buffer, sizeof(buffer), CRT_NATIVE_REMOTE_READ, &mr,
+				    &remote) == 0);
+	for (unsigned i = 0; i < 3; i++)
+		assert(ops->post(ep, CRT_NATIVE_READ, mr, 0, 8, &remote, 0, buffer) == 0);
+	assert(ops->post(ep, CRT_NATIVE_READ, mr, 0, 8, &remote, 0, buffer) == EAGAIN);
+	for (unsigned i = 0; i < num_accepted; i++)
+		completions[tail++] =
+		    (struct ibv_wc){.wr_id = accepted[i], .status = IBV_WC_SUCCESS};
+	num_accepted = 0;
+	assert(ops->progress(ep, out, 8, &count) == 0 && count == 3);
+	assert(ops->post(ep, CRT_NATIVE_READ, mr, 0, 8, &remote, 0, buffer) == 0);
+	assert(ops->close_begin(ep) == 0);
+	assert(ops->progress(ep, out, 8, &count) == 0 && count == 1);
+	assert(ops->quiesce(ep) == 0 && ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
+}
+
 int
 main(void)
 {
@@ -471,6 +518,7 @@ main(void)
 	test_slot_recycling();
 	test_allocation_failures();
 	test_shared_cq();
+	test_read_credits();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }
