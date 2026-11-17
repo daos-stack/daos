@@ -21,6 +21,7 @@ static unsigned           head, tail;
 static uint64_t           accepted[32];
 static unsigned           num_accepted;
 static int                post_error, poll_error;
+static unsigned           last_send_flags;
 static unsigned           poll_calls;
 static int                create_qp_error;
 static int                destroy_qp_error;
@@ -129,7 +130,10 @@ struct ibv_qp *
 ibv_create_qp(struct ibv_pd *p, struct ibv_qp_init_attr *a)
 {
 	(void)p;
-	(void)a;
+	if (a->cap.max_inline_data > 128) {
+		errno = EINVAL;
+		return NULL;
+	}
 	if (create_qp_error) {
 		errno = ENOMEM;
 		return NULL;
@@ -190,6 +194,7 @@ ibv_post_send(struct ibv_qp *q, struct ibv_send_wr *wr, struct ibv_send_wr **bad
 	(void)bad;
 	if (post_error != 0)
 		return post_error;
+	last_send_flags = wr->send_flags;
 	assert(wr->send_flags & IBV_SEND_SIGNALED);
 	accepted[num_accepted++] = wr->wr_id;
 	return 0;
@@ -510,6 +515,36 @@ test_read_credits(void)
 	assert(ops->quiesce(ep) == 0 && ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
 }
 
+static void
+test_inline_send(void)
+{
+	const struct crt_native_ops *ops = &crt_native_verbs_ops;
+	struct crt_native_config     cfg = {
+		.device = "mock0", .port = 1, .gid_index = -1, .depth = 4, .inline_size = 256};
+	struct crt_native_ep           *ep;
+	struct crt_native_address       address;
+	struct crt_native_mr           *mr;
+	struct crt_native_remote_memory remote;
+	struct crt_native_completion    out[4];
+	struct crt_native_stats         stats;
+	unsigned                        count;
+	char                            buffer[256];
+	head = tail = num_accepted = 0;
+	assert(ops->open(&cfg, &ep) == 0 && ops->address(ep, &address) == 0);
+	assert(ops->connect(ep, &address) == 0);
+	assert(ops->register_memory(ep, buffer, sizeof(buffer), 0, &mr, &remote) == 0);
+	assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 64, NULL, 0, buffer) == 0);
+	assert(last_send_flags & IBV_SEND_INLINE);
+	assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 256, NULL, 0, buffer) == 0);
+	assert(!(last_send_flags & IBV_SEND_INLINE));
+	ops->get_stats(ep, &stats);
+	assert(stats.inline_sends == 1 && stats.send_posts == 2);
+	assert(ops->deregister_memory(mr) == EBUSY);
+	assert(ops->close_begin(ep) == 0);
+	assert(ops->progress(ep, out, 4, &count) == 0 && count == 2);
+	assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
+}
+
 int
 main(void)
 {
@@ -519,6 +554,7 @@ main(void)
 	test_allocation_failures();
 	test_shared_cq();
 	test_read_credits();
+	test_inline_send();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }

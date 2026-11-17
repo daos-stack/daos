@@ -61,6 +61,7 @@ enum {
 	IBV_WR_RDMA_READ          = 1,
 	IBV_WR_RDMA_WRITE         = 2,
 	IBV_SEND_SIGNALED         = 2,
+	IBV_SEND_INLINE           = 8,
 	IBV_WC_SUCCESS            = 0,
 	IBV_WC_WR_FLUSH_ERR       = 5
 };
@@ -75,7 +76,7 @@ struct ibv_port_attr {
 	enum ibv_mtu active_mtu;
 };
 struct ibv_qp_cap {
-	uint32_t max_send_wr, max_recv_wr, max_send_sge, max_recv_sge;
+	uint32_t max_send_wr, max_recv_wr, max_send_sge, max_recv_sge, max_inline_data;
 };
 struct ibv_qp_init_attr {
 	struct ibv_cq    *send_cq, *recv_cq;

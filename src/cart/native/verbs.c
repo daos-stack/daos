@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <inttypes.h>
 #include <infiniband/verbs.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,7 +45,8 @@ struct crt_native_ep {
 	struct crt_native_address local;
 	struct operation         *operations;
 	unsigned                  outstanding;
-	unsigned                  read_limit, reads;
+	unsigned                  read_limit, reads, inline_limit;
+	struct crt_native_stats   stats;
 	struct ibv_wc            *pending;
 	unsigned                  pending_head, pending_count, group_slot;
 	unsigned                  free_head;
@@ -100,6 +102,14 @@ verbs_close(struct crt_native_ep *ep)
 		ep->config.group->endpoints[ep->group_slot] = NULL;
 		ep->config.group->count--;
 	}
+	if (ep->config.stats)
+		fprintf(stderr,
+			"doca+rc stats: send=%" PRIu64 " recv=%" PRIu64 " read=%" PRIu64
+			" write=%" PRIu64 " inline=%" PRIu64 " signaled=%" PRIu64 " cqes=%" PRIu64
+			" logical=%" PRIu64 "\n",
+			ep->stats.send_posts, ep->stats.recv_posts, ep->stats.read_posts,
+			ep->stats.write_posts, ep->stats.inline_sends, ep->stats.signaled_sends,
+			ep->stats.cqes, ep->stats.logical_completions);
 	free(ep->pending);
 	free(ep->operations);
 	free(ep);
@@ -241,16 +251,22 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 			goto fail;
 		}
 	}
-	init.send_cq          = ep->cq;
-	init.recv_cq          = ep->cq;
-	init.qp_type          = IBV_QPT_RC;
-	init.cap.max_send_wr  = cfg->depth;
-	init.cap.max_recv_wr  = cfg->depth;
-	init.cap.max_send_sge = 1;
-	init.cap.max_recv_sge = 1;
-	stage                 = "ibv_create_qp";
-	errno                 = 0;
-	ep->qp                = ibv_create_qp(ep->pd, &init);
+	init.send_cq             = ep->cq;
+	init.recv_cq             = ep->cq;
+	init.qp_type             = IBV_QPT_RC;
+	init.cap.max_send_wr     = cfg->depth;
+	init.cap.max_recv_wr     = cfg->depth;
+	init.cap.max_send_sge    = 1;
+	init.cap.max_recv_sge    = 1;
+	init.cap.max_inline_data = cfg->inline_size;
+	stage                    = "ibv_create_qp";
+	errno                    = 0;
+	ep->qp                   = ibv_create_qp(ep->pd, &init);
+	while (!ep->qp && init.cap.max_inline_data && (errno == EINVAL || errno == ENOTSUP)) {
+		init.cap.max_inline_data /= 2;
+		ep->qp = ibv_create_qp(ep->pd, &init);
+	}
+	ep->inline_limit = init.cap.max_inline_data;
 	if (ep->qp == NULL) {
 		rc = errno != 0 ? errno : ENOMEM;
 		goto fail;
@@ -442,9 +458,11 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 		send.sg_list    = &sge;
 		send.num_sge    = 1;
 		send.send_flags = IBV_SEND_SIGNALED;
-		send.opcode     = opcode == CRT_NATIVE_SEND   ? IBV_WR_SEND
-				  : opcode == CRT_NATIVE_READ ? IBV_WR_RDMA_READ
-							      : IBV_WR_RDMA_WRITE;
+		if (opcode == CRT_NATIVE_SEND && length <= ep->inline_limit)
+			send.send_flags |= IBV_SEND_INLINE;
+		send.opcode = opcode == CRT_NATIVE_SEND   ? IBV_WR_SEND
+			      : opcode == CRT_NATIVE_READ ? IBV_WR_RDMA_READ
+							  : IBV_WR_RDMA_WRITE;
 		if (opcode != CRT_NATIVE_SEND) {
 			send.wr.rdma.remote_addr = remote->address + remote_offset;
 			send.wr.rdma.rkey        = remote->key;
@@ -455,6 +473,19 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 		ep->free_head        = ep->operations[slot].next_free;
 		ep->operations[slot] = (struct operation){
 		    .mr = mr, .cookie = cookie, .opcode = opcode, .length = length, .active = true};
+		if (opcode == CRT_NATIVE_SEND) {
+			ep->stats.send_posts++;
+			ep->stats.send_batches++;
+			ep->stats.signaled_sends++;
+			if (send.send_flags & IBV_SEND_INLINE)
+				ep->stats.inline_sends++;
+		} else if (opcode == CRT_NATIVE_RECV) {
+			ep->stats.recv_posts++;
+			ep->stats.recv_batches++;
+		} else if (opcode == CRT_NATIVE_READ)
+			ep->stats.read_posts++;
+		else
+			ep->stats.write_posts++;
 		ep->outstanding++;
 		if (opcode == CRT_NATIVE_READ)
 			ep->reads++;
@@ -524,8 +555,12 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 				ep->pending_head = (ep->pending_head + 1) % ep->config.depth;
 			}
 			ep->pending_count -= rc;
-		} else
+		} else {
+			ep->stats.cq_polls++;
 			rc = ibv_poll_cq(ep->cq, (int)budget, batch);
+			if (rc > 0)
+				ep->stats.cqes += rc;
+		}
 		if (rc < 0) {
 			verbs_close_begin(ep);
 			return EIO;
@@ -561,6 +596,7 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 			op->next_free = ep->free_head;
 			ep->free_head = (unsigned)wc.wr_id;
 			ep->outstanding--;
+			ep->stats.logical_completions++;
 			(*count)++;
 		}
 		if (error != 0) {
@@ -680,6 +716,7 @@ verbs_group_progress(struct crt_native_group *g)
 			g->error = EPROTO;
 			continue;
 		}
+		ep->stats.cqes++;
 		bool empty     = ep->pending_count == 0;
 		batch[i].wr_id = index;
 		ep->pending[(ep->pending_head + ep->pending_count++) % ep->config.depth] = batch[i];
@@ -689,12 +726,20 @@ verbs_group_progress(struct crt_native_group *g)
 	return g->error;
 }
 
+static void
+verbs_get_stats(struct crt_native_ep *ep, struct crt_native_stats *out)
+{
+	if (ep && out)
+		*out = ep->stats;
+}
+
 const struct crt_native_ops crt_native_verbs_ops = {
     .name              = "verbs",
     .group_create      = verbs_group_create,
     .group_progress    = verbs_group_progress,
     .group_destroy     = verbs_group_destroy,
     .wake              = verbs_wake,
+    .get_stats         = verbs_get_stats,
     .capacity          = verbs_capacity,
     .open              = verbs_open,
     .address           = verbs_address,

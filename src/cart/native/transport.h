@@ -69,11 +69,19 @@ struct crt_native_remote_memory {
 	uint32_t key;
 };
 
+struct crt_native_stats {
+	uint64_t send_posts, recv_posts, read_posts, write_posts;
+	uint64_t send_batches, recv_batches, signaled_sends, inline_sends;
+	uint64_t cq_polls, cqes, logical_completions;
+};
+
 struct crt_native_config {
 	const char              *device;
 	uint8_t                  port;
 	int                      gid_index;
 	unsigned                 depth;
+	unsigned                 inline_size;
+	bool                     stats;
 	unsigned                 rdma_read_depth; /* zero selects 16, capped by hardware */
 	/* Optional owner-serialized CQ group, with a worker-safe wake notification. */
 	struct crt_native_group *group;
@@ -92,6 +100,7 @@ struct crt_native_ops {
 	int (*group_progress)(struct crt_native_group *);
 	int (*group_destroy)(struct crt_native_group *);
 	void (*wake)(struct crt_native_ep *);
+	void (*get_stats)(struct crt_native_ep *, struct crt_native_stats *);
 	/* Maximum combined outstanding SEND/RECV/READ/WRITE operations. */
 	unsigned (*capacity)(struct crt_native_ep *);
 	/* Failed opens may return a partial endpoint when cleanup also fails.
