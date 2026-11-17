@@ -2717,6 +2717,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	struct pl_map		*map;
 	struct daos_oclass_attr  oca;
 	struct cont_props	 props;
+	struct pl_obj_shard     *shard;
 	uint32_t                 shard_nr;
 	int			 rc = 0;
 
@@ -2743,6 +2744,24 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	agg_param->ap_credits += min(512, roundup(shard_nr, 32) / 32);
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
+	if (rc != 0)
+		goto out;
+
+	/*
+	 * Skip a stale shard, i.e. not placed on this target:
+	 * - during reintegration, peer updates still go to the old shard, newer than the reclaim
+	 *   epoch, so reclaim leaves them;
+	 * - the leader never aggregates the old shard, so its replicas are found unaggregated in
+	 *   every round and keep ap_min_unagg_eph, i.e. the EC aggregation epoch, below them.
+	 */
+	shard = pl_obj_get_shard(agg_entry->ae_obj_layout, entry->ie_oid.id_shard);
+	if (shard->po_target == -1 || shard->po_shard != entry->ie_oid.id_shard ||
+	    shard->po_rank != dss_self_rank() ||
+	    shard->po_index != dss_get_module_info()->dmi_tgt_id) {
+		D_DEBUG(DB_EPC, "Skip oid:" DF_UOID " stale shard not in layout\n",
+			DP_UOID(entry->ie_oid));
+		*acts |= VOS_ITER_CB_SKIP;
+	}
 
 out:
 	if (map != NULL)
