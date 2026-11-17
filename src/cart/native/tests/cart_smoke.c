@@ -171,7 +171,8 @@ main(int argc, char **argv)
 		fprintf(stderr, "usage: %s server | client doca+rc://SERVER_IPV4:PORT\n", argv[0]);
 		return 2;
 	}
-	bool server = !strcmp(argv[1], "server");
+	bool           server = !strcmp(argv[1], "server");
+	unsigned char *data   = NULL;
 	CHECK(d_log_init());
 	CHECK(crt_init(server ? "native_smoke" : NULL,
 		       server ? CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE : 0));
@@ -195,9 +196,11 @@ main(int argc, char **argv)
 		CHECK(crt_group_view_create("native_smoke", &group));
 		CHECK(crt_group_primary_rank_add(ctx, group, 0, argv[2]));
 		crt_endpoint_t endpoint = {.ep_grp = group, .ep_rank = 0, .ep_tag = 0};
-		unsigned char  data[BYTES];
 		d_iov_t        iov;
-		d_iov_set(&iov, data, sizeof(data));
+		data = malloc(BYTES);
+		if (data == NULL)
+			abort();
+		d_iov_set(&iov, data, BYTES);
 		d_sg_list_t sgl = {.sg_nr = 1, .sg_nr_out = 1, .sg_iovs = &iov};
 		crt_bulk_t  bulk;
 		CHECK(crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk));
@@ -209,7 +212,7 @@ main(int argc, char **argv)
 				struct input *in = crt_req_get(rpc);
 				in->sequence     = i;
 				in->bulk         = i & 1 ? bulk : CRT_BULK_NULL;
-				memset(data, 0x5a, sizeof(data));
+				memset(data, 0x5a, BYTES);
 			}
 			CHECK(crt_req_send(rpc, done, &c));
 			while (!c.done)
@@ -235,6 +238,8 @@ main(int argc, char **argv)
 		progress(ctx);
 	}
 	CHECK(rc);
+	/* The native registration cache can retain the bulk until context teardown. */
+	free(data);
 	CHECK(crt_finalize());
 	d_log_fini();
 	return 0;
