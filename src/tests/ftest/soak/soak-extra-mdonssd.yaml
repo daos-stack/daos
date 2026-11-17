@@ -1,5 +1,10 @@
 skip_add_log_msg: True
-soak_stress:
+# Shared defaults for all soak tests; test-specific settings take precedence.
+soak:
+  # Recreate the job pool each pass to apply the next memory ratio.
+  single_test_pool: false
+  # Percentages used in order, repeating after the last entry.
+  pool_mem_ratios: [25, 50, 100]
 ior_stress:
   transfer_size:
     - '1m'

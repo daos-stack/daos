@@ -83,7 +83,7 @@ def debug_logging(log, enable_debug_msg, log_msg):
         log.debug(log_msg)
 
 
-def add_pools(self, pool_names, ranks=None):
+def add_pools(self, pool_names, ranks=None, mem_ratio=None):
     """Create a list of pools that the various tests use for storage.
 
     Args:
@@ -91,8 +91,12 @@ def add_pools(self, pool_names, ranks=None):
         pool_names (list): list of pool namespaces from yaml file
                     /run/<test_params>/poollist/*
         ranks (list, optional):  ranks to include in pool. Defaults to None
+        mem_ratio (int, optional): memory ratio percentage overriding the pool yaml setting.
+            Defaults to None, preserving the pool yaml setting.
     """
     params = {}
+    if mem_ratio is not None:
+        params['mem_ratio'] = mem_ratio
     target_list = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
