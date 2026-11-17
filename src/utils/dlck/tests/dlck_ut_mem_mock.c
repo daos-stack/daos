@@ -3,12 +3,12 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <string.h>
-
+#include <setjmp.h>
 #include <cmocka.h>
+
+#include <string.h>
 
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)

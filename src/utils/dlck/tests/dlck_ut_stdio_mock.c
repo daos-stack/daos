@@ -3,33 +3,26 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#include <errno.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <stdio.h>
-
+#include <setjmp.h>
 #include <cmocka.h>
 
+#include <errno.h>
+#include <stdbool.h>
+#include <stdio.h>
+
 #include "dlck_ut_stdio_mock.h"
-
-#define MOCK_ASPRINTF_LENGTH 573
-
-FILE *const Mock_file_stream = (FILE *)0x5678;
-bool        mock_vfprintf_check_output;
 
 char *
 __wrap_d_asprintf2(int *rc, const char *fmt, ...)
 {
 	char *result;
 
+	assert_non_null(rc);
 	check_expected(fmt);
 	result = mock_ptr_type(char *);
-	if (result == NULL) {
-		*rc = -1;
-	} else {
-		*rc = MOCK_ASPRINTF_LENGTH;
-	}
+	*rc    = mock_type(int);
 	return result;
 }
 
@@ -63,19 +56,15 @@ __wrap_fclose(FILE *stream)
 int
 __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 {
-	int rc;
+	bool check_output;
+	int  rc;
 
 	check_expected_ptr(stream);
 	check_expected(fmt);
-	if (mock_vfprintf_check_output) {
-		char    output[128];
-		va_list copy;
-		int     length;
-
-		mock_vfprintf_check_output = false;
-		va_copy(copy, args);
-		length = vsnprintf(output, sizeof(output), fmt, copy);
-		va_end(copy);
+	check_output = mock_type(bool);
+	if (check_output) {
+		char output[128];
+		int  length = vsnprintf(output, sizeof(output), fmt, args);
 		assert_true(length >= 0 && length < sizeof(output));
 		check_expected(output);
 	}
@@ -86,6 +75,9 @@ __wrap_vfprintf(FILE *stream, const char *fmt, va_list args)
 	return rc;
 }
 
+/* Release builds use the fortified __vfprintf_chk entry point; route it through the mock so the
+ * fake stream never reaches libc.
+ */
 int
 __wrap___vfprintf_chk(FILE *stream, int flag, const char *fmt, va_list args)
 {

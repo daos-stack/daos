@@ -5,15 +5,17 @@
  */
 #define D_LOGFAC DD_FAC(tests)
 
-#include <stddef.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <setjmp.h>
+#include <cmocka.h>
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include <abt.h>
-#include <cmocka.h>
 
 #include <daos/debug.h>
 #include <daos/checker.h>
@@ -22,6 +24,8 @@
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"
 #include "dlck_ut.h"
+#include "dlck_ut_mem_mock.h"
+#include "dlck_ut_stdio_mock.h"
 
 #define MOCK_LOG_DIR ((char *)0x104D14)
 
@@ -32,7 +36,6 @@ static int
 setup(void **state)
 {
 	*state                     = &worker_checker_state;
-	mock_vfprintf_check_output = false;
 	mock_worker_fclose_rc      = 0;
 	return 0;
 }
@@ -83,8 +86,7 @@ setup_worker_checker(void **state)
 
 	ck = *state;
 	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
-	expect_string(__wrap_d_asprintf2, fmt, "%s/" DF_UUIDF "_%s%d");
-	will_return(__wrap_d_asprintf2, Mock_log_file);
+	EXPECT_D_ASPRINTF2("%s/" DF_UUIDF "_%s%d", Mock_log_file, 573);
 	expect_worker_fopen(false);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	assert_int_equal(
@@ -139,8 +141,7 @@ test_worker_init_log_open_failure(void **state)
 	struct checker_options options = {0};
 
 	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
-	expect_string(__wrap_d_asprintf2, fmt, "%s/" DF_UUIDF "_%s%d");
-	will_return(__wrap_d_asprintf2, Mock_log_file);
+	EXPECT_D_ASPRINTF2("%s/" DF_UUIDF "_%s%d", Mock_log_file, 573);
 	expect_worker_fopen(true);
 	expect_function_call(mock_main_vprintf);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
@@ -160,8 +161,7 @@ test_worker_init_log_path_alloc_failure(void **state)
 	struct checker_options options = {0};
 
 	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
-	expect_string(__wrap_d_asprintf2, fmt, "%s/" DF_UUIDF "_%s%d");
-	will_return(__wrap_d_asprintf2, NULL);
+	EXPECT_D_ASPRINTF2("%s/" DF_UUIDF "_%s%d", NULL, -1);
 	expect_function_call(mock_main_vprintf);
 	expect_value(__wrap_d_free, ptr, &Dcw);
 	assert_int_equal(
@@ -190,11 +190,7 @@ test_worker_vprintf_success(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_check_output = true;
-	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
-	expect_string(__wrap_vfprintf, fmt, "worker %d: %s");
-	expect_string(__wrap_vfprintf, output, "worker 42: ready");
-	will_return(__wrap_vfprintf, 16);
+	EXPECT_VFPRINTF(Mock_file_stream, "worker %d: %s", true, "worker 42: ready", 16, 0);
 	expect_value(__wrap_fflush, stream, Mock_file_stream);
 	will_return(__wrap_fflush, 0);
 	assert_int_equal(ck_common_printf(ck, "worker %d: %s", 42, "ready"), DER_SUCCESS);
@@ -207,11 +203,7 @@ test_worker_CK_PRINTF_with_indent(void **state)
 
 	ck->ck_level = 2;
 	ck->ck_indent_set(ck);
-	mock_vfprintf_check_output = true;
-	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
-	expect_string(__wrap_vfprintf, fmt, "%sworker %d");
-	expect_string(__wrap_vfprintf, output, "-- worker 42");
-	will_return(__wrap_vfprintf, 12);
+	EXPECT_VFPRINTF(Mock_file_stream, "%sworker %d", true, "-- worker 42", 12, 0);
 	expect_value(__wrap_fflush, stream, Mock_file_stream);
 	will_return(__wrap_fflush, 0);
 	CK_PRINTF(ck, "worker %d", 42);
@@ -223,10 +215,7 @@ test_worker_vprintf_vfprintf_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
-	expect_string(__wrap_vfprintf, fmt, "worker");
-	will_return(__wrap_vfprintf, -1);
-	will_return(__wrap_vfprintf, EIO);
+	EXPECT_VFPRINTF(Mock_file_stream, "worker", false, NULL, -1, EIO);
 	assert_int_equal(ck_common_printf(ck, "worker"), daos_errno2der(EIO));
 }
 
@@ -236,9 +225,7 @@ test_worker_vprintf_fflush_failure(void **state)
 {
 	struct checker *ck = *state;
 
-	expect_value(__wrap_vfprintf, stream, Mock_file_stream);
-	expect_string(__wrap_vfprintf, fmt, "worker");
-	will_return(__wrap_vfprintf, 1);
+	EXPECT_VFPRINTF(Mock_file_stream, "worker", false, NULL, 1, 0);
 	expect_value(__wrap_fflush, stream, Mock_file_stream);
 	will_return(__wrap_fflush, EOF);
 	will_return(__wrap_fflush, EIO);
@@ -320,10 +307,8 @@ static const struct CMUnitTest dlck_checker_worker_tests[] = {
 int
 main(int argc, char **argv)
 {
-	int rc = dlck_ut_filter(argc, argv);
-
-	if (rc != 0) {
-		return rc;
+	if (argc > 1) {
+		dlck_ut_filter(argc, argv);
 	}
 	d_register_alt_assert(mock_assert);
 	return cmocka_run_group_tests_name("dlck_checker_worker_ut", dlck_checker_worker_tests,

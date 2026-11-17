@@ -3,12 +3,12 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
 
 #include <abt.h>
-#include <cmocka.h>
 
 #include "dlck_ut_abt_mock.h"
 

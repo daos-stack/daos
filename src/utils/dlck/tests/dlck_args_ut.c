@@ -6,8 +6,8 @@
  */
 #define D_LOGFAC DD_FAC(tests)
 
-#include <stddef.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
 
@@ -138,10 +138,8 @@ static const struct CMUnitTest dlck_args_tests[] = {
 int
 main(int argc, char **argv)
 {
-	int rc = dlck_ut_filter(argc, argv);
-
-	if (rc != 0) {
-		return rc;
+	if (argc > 1) {
+		dlck_ut_filter(argc, argv);
 	}
 	/** collect function pointers to real parsers */
 	Argp_engine_parser_real = argp_engine.parser;

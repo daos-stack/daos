@@ -74,7 +74,7 @@ def build_dlck_checker_macros_ut(henv):
     henv.require('argobots', 'cmocka')
 
     libs = ['gurt', 'daos_common_pmem', 'cmocka']
-    srcs = ['dlck_checker_macros_ut.c', 'dlck_ut_stdio_mock.c']
+    srcs = ['dlck_checker_macros_ut.c', 'dlck_checker_ut_mock.c', 'dlck_ut_stdio_mock.c']
     henv.d_test_program('dlck_checker_macros_ut', srcs, LIBS=libs)
 
 

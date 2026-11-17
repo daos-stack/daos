@@ -5,9 +5,11 @@
  */
 #define D_LOGFAC DD_FAC(tests)
 
-#include <stddef.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <setjmp.h>
+#include <cmocka.h>
+
 #include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -15,23 +17,25 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <uuid/uuid.h>
-#include <cmocka.h>
 
 #include <abt.h>
+
 #include <daos_srv/daos_engine.h>
 #include <daos/checker.h>
 
 #include "../dlck_checker.h"
 #include "dlck_checker_ut_mock.h"
 #include "dlck_ut.h"
+#include "dlck_ut_abt_mock.h"
+#include "dlck_ut_mem_mock.h"
+#include "dlck_ut_stdio_mock.h"
 
 static struct checker main_checker_state;
 
 static int
 setup(void **state)
 {
-	*state                     = &main_checker_state;
-	mock_vfprintf_check_output = false;
+	*state = &main_checker_state;
 	return 0;
 }
 
@@ -116,13 +120,9 @@ test_vprintf_vfprintf_positive(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_check_output = true;
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
-	expect_value(__wrap_vfprintf, stream, stdout);
-	expect_string(__wrap_vfprintf, fmt, "main %d: %s");
-	expect_string(__wrap_vfprintf, output, "main 42: ready");
-	will_return(__wrap_vfprintf, 1);
+	EXPECT_VFPRINTF(stdout, "main %d: %s", true, "main 42: ready", 1, 0);
 	expect_value(__wrap_fflush, stream, stdout);
 	will_return(__wrap_fflush, 0);
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
@@ -138,10 +138,7 @@ test_vprintf_vfprintf_failure(void **state)
 
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
-	expect_value(__wrap_vfprintf, stream, stdout);
-	expect_string(__wrap_vfprintf, fmt, "test");
-	will_return(__wrap_vfprintf, -1);
-	will_return(__wrap_vfprintf, EIO);
+	EXPECT_VFPRINTF(stdout, "test", false, NULL, -1, EIO);
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_unlock, ABT_SUCCESS);
 	assert_int_equal(ck_common_printf(ck, "test"), daos_errno2der(EIO));
@@ -155,9 +152,7 @@ test_vprintf_fflush_failure(void **state)
 
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
-	expect_value(__wrap_vfprintf, stream, stdout);
-	expect_string(__wrap_vfprintf, fmt, "test");
-	will_return(__wrap_vfprintf, 1);
+	EXPECT_VFPRINTF(stdout, "test", false, NULL, 1, 0);
 	expect_value(__wrap_fflush, stream, stdout);
 	will_return(__wrap_fflush, EOF);
 	will_return(__wrap_fflush, EIO);
@@ -185,9 +180,7 @@ test_main_vprintf_unlock_failure(void **state)
 
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
-	expect_value(__wrap_vfprintf, stream, stdout);
-	expect_string(__wrap_vfprintf, fmt, "test");
-	will_return(__wrap_vfprintf, 1);
+	EXPECT_VFPRINTF(stdout, "test", false, NULL, 1, 0);
 	expect_value(__wrap_fflush, stream, stdout);
 	will_return(__wrap_fflush, 0);
 	expect_value(__wrap_ABT_mutex_unlock, mutex, Mock_mutex_handle);
@@ -324,10 +317,8 @@ static const struct CMUnitTest dlck_checker_tests[] = {
 int
 main(int argc, char **argv)
 {
-	int rc = dlck_ut_filter(argc, argv);
-
-	if (rc != 0) {
-		return rc;
+	if (argc > 1) {
+		dlck_ut_filter(argc, argv);
 	}
 	d_register_alt_assert(mock_assert);
 

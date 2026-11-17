@@ -8,10 +8,15 @@
 
 #include <stdio.h>
 
-static inline int
+static inline void
 dlck_ut_filter(int argc, char **argv)
 {
 #if CMOCKA_FILTER_SUPPORTED
+    	if (argc != 2) {  
+        	fprintf(stderr, "usage: %s <test_filter>\n", argv[0]);  
+        	exit(1);  
+    	} 
+	
 	if (argc > 1) {
 		char filter[256];
 		int  rc = snprintf(filter, sizeof(filter), "*%s*", argv[1]);
@@ -20,14 +25,14 @@ dlck_ut_filter(int argc, char **argv)
 			cmocka_set_test_filter(filter);
 		} else {
 			fprintf(stderr, "ERROR: Test filter '%s' cannot be applied.\n", argv[1]);
-			return 1;
+			exit(1);
 		}
 	}
 #else
-	(void)argc;
-	(void)argv;
+    	(void)argc;  
+	fprintf(stderr, "usage: %s\n", argv[0]);  
+    	exit(1); 
 #endif
-	return 0;
 }
 
 #endif /* __DLCK_UT_H__ */

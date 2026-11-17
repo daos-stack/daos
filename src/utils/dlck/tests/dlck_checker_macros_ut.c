@@ -5,20 +5,24 @@
  */
 #define D_LOGFAC DD_FAC(tests)
 
-#include <stddef.h>
-#include <stdint.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <setjmp.h>
+#include <cmocka.h>
+
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <cmocka.h>
+
+#include <abt.h>
 
 #include <daos/debug.h>
 #include <daos/checker.h>
 
 #include "dlck_checker_ut_mock.h"
 #include "dlck_ut.h"
+#include "dlck_ut_stdio_mock.h"
 
 #define INITIAL_WARNINGS 7
 
@@ -28,7 +32,6 @@ static int
 checker_vprintf(struct checker *ck, const char *fmt, va_list args)
 {
 	assert_ptr_equal(ck, &Checker);
-	mock_vfprintf_check_output = true;
 	/* Fake stream is safe: vfprintf is link-wrapped to __wrap_vfprintf. */
 	return vfprintf(Mock_file_stream, fmt, args);
 }
@@ -54,7 +57,6 @@ setup(void **state)
 	    .ck_vprintf             = checker_vprintf,
 	    .ck_status.warnings_num = INITIAL_WARNINGS,
 	};
-	mock_vfprintf_check_output = false;
 	*state                     = &Checker;
 	return 0;
 }
@@ -70,13 +72,8 @@ teardown(void **state)
 	return 0;
 }
 
-#define EXPECT_VFPRINTF(FMT, OUTPUT)                                                               \
-	do {                                                                                       \
-		expect_value(__wrap_vfprintf, stream, Mock_file_stream);                           \
-		expect_string(__wrap_vfprintf, fmt, FMT);                                          \
-		expect_string(__wrap_vfprintf, output, OUTPUT);                                    \
-		will_return(__wrap_vfprintf, strlen(OUTPUT));                                      \
-	} while (0)
+#define EXPECT_CHECKER_VFPRINTF(FMT, OUTPUT)                                                       \
+	EXPECT_VFPRINTF(Mock_file_stream, FMT, true, OUTPUT, strlen(OUTPUT), 0)
 
 /* CK_PRINTF: a format without arguments is printed after ck_prefix. */
 static void
@@ -84,7 +81,7 @@ test_CK_PRINTF_without_args(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%sready", "-> ready");
+	EXPECT_CHECKER_VFPRINTF("%sready", "-> ready");
 	CK_PRINTF(ck, "ready");
 }
 
@@ -94,7 +91,7 @@ test_CK_PRINTF(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%sworker %d: %s", "-> worker 42: ready");
+	EXPECT_CHECKER_VFPRINTF("%sworker %d: %s", "-> worker 42: ready");
 	CK_PRINTF(ck, "worker %d: %s", 42, "ready");
 }
 
@@ -104,7 +101,7 @@ test_CK_PRINTF_WO_PREFIX_without_args(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("ready", "ready");
+	EXPECT_CHECKER_VFPRINTF("ready", "ready");
 	CK_PRINTF_WO_PREFIX(ck, "ready");
 }
 
@@ -114,7 +111,7 @@ test_CK_PRINTF_WO_PREFIX(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("worker %d: %s", "worker 42: ready");
+	EXPECT_CHECKER_VFPRINTF("worker %d: %s", "worker 42: ready");
 	CK_PRINTF_WO_PREFIX(ck, "worker %d: %s", 42, "ready");
 }
 
@@ -124,7 +121,7 @@ test_CK_APPENDL_OK(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("ok.\n", "ok.\n");
+	EXPECT_CHECKER_VFPRINTF("ok.\n", "ok.\n");
 	CK_APPENDL_OK(ck);
 }
 
@@ -134,7 +131,7 @@ test_CK_APPENDL_RC_success(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("ok.\n", "ok.\n");
+	EXPECT_CHECKER_VFPRINTF("ok.\n", "ok.\n");
 	CK_APPENDL_RC(ck, DER_SUCCESS);
 }
 
@@ -144,7 +141,7 @@ test_CK_APPENDL_RC_error(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("error: " DF_RC "\n", "error: DER_IO(-2001): 'I / O error'\n");
+	EXPECT_CHECKER_VFPRINTF("error: " DF_RC "\n", "error: DER_IO(-2001): 'I / O error'\n");
 	CK_APPENDL_RC(ck, -DER_IO);
 }
 
@@ -154,8 +151,8 @@ test_CK_APPENDL_RC_positive_error(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("error: " DF_RC "\n",
-			"error: DER_UNKNOWN(1001): 'Unknown error code 1001'\n");
+	EXPECT_CHECKER_VFPRINTF("error: " DF_RC "\n",
+				"error: DER_UNKNOWN(1001): 'Unknown error code 1001'\n");
 	CK_APPENDL_RC(ck, DER_NO_PERM);
 }
 
@@ -165,7 +162,7 @@ test_CK_APPENDFL_ERR(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("error: worker %d: %s\n", "error: worker 42: failed\n");
+	EXPECT_CHECKER_VFPRINTF("error: worker %d: %s\n", "error: worker 42: failed\n");
 	CK_APPENDFL_ERR(ck, "worker %d: %s", 42, "failed");
 }
 
@@ -175,11 +172,11 @@ test_CK_APPENDFL_WARN(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("warning: worker %d: %s\n", "warning: worker 42: retry\n");
+	EXPECT_CHECKER_VFPRINTF("warning: worker %d: %s\n", "warning: worker 42: retry\n");
 	CK_APPENDFL_WARN(ck, "worker %d: %s", 42, "retry");
 	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 1);
 
-	EXPECT_VFPRINTF("warning: worker %d: %s\n", "warning: worker 43: skipped\n");
+	EXPECT_CHECKER_VFPRINTF("warning: worker %d: %s\n", "warning: worker 43: skipped\n");
 	CK_APPENDFL_WARN(ck, "worker %d: %s", 43, "skipped");
 	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 2);
 
@@ -193,11 +190,11 @@ test_CK_APPENDFL_WARN_without_args(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("warning: retry\n", "warning: retry\n");
+	EXPECT_CHECKER_VFPRINTF("warning: retry\n", "warning: retry\n");
 	CK_APPENDFL_WARN(ck, "retry");
 	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 1);
 
-	EXPECT_VFPRINTF("warning: skipped\n", "warning: skipped\n");
+	EXPECT_CHECKER_VFPRINTF("warning: skipped\n", "warning: skipped\n");
 	CK_APPENDFL_WARN(ck, "skipped");
 	assert_int_equal(ck->ck_status.warnings_num, INITIAL_WARNINGS + 2);
 
@@ -211,7 +208,7 @@ test_CK_APPENDL(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("ready\n", "ready\n");
+	EXPECT_CHECKER_VFPRINTF("ready\n", "ready\n");
 	CK_APPENDL(ck, "ready");
 }
 
@@ -221,7 +218,7 @@ test_CK_PRINTFL_RC_success_without_args(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%scheck: ok.\n", "-> check: ok.\n");
+	EXPECT_CHECKER_VFPRINTF("%scheck: ok.\n", "-> check: ok.\n");
 	CK_PRINTFL_RC(ck, DER_SUCCESS, "check");
 }
 
@@ -231,8 +228,8 @@ test_CK_PRINTFL_RC_error_without_args(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%serror: check: " DF_RC "\n",
-			"-> error: check: DER_IO(-2001): 'I / O error'\n");
+	EXPECT_CHECKER_VFPRINTF("%serror: check: " DF_RC "\n",
+				"-> error: check: DER_IO(-2001): 'I / O error'\n");
 	CK_PRINTFL_RC(ck, -DER_IO, "check");
 }
 
@@ -242,7 +239,7 @@ test_CK_PRINTFL_RC_success(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%sworker %d: %s: ok.\n", "-> worker 42: check: ok.\n");
+	EXPECT_CHECKER_VFPRINTF("%sworker %d: %s: ok.\n", "-> worker 42: check: ok.\n");
 	CK_PRINTFL_RC(ck, DER_SUCCESS, "worker %d: %s", 42, "check");
 }
 
@@ -252,8 +249,8 @@ test_CK_PRINTFL_RC_error(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%serror: worker %d: %s: " DF_RC "\n",
-			"-> error: worker 42: check: DER_IO(-2001): 'I / O error'\n");
+	EXPECT_CHECKER_VFPRINTF("%serror: worker %d: %s: " DF_RC "\n",
+				"-> error: worker 42: check: DER_IO(-2001): 'I / O error'\n");
 	CK_PRINTFL_RC(ck, -DER_IO, "worker %d: %s", 42, "check");
 }
 
@@ -289,7 +286,7 @@ test_CK_ASSERT_true_with_checker(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%svalid: %s\n", "-> valid: yes\n");
+	EXPECT_CHECKER_VFPRINTF("%svalid: %s\n", "-> valid: yes\n");
 	CK_ASSERT(ck, "valid: ", true);
 }
 
@@ -299,7 +296,7 @@ test_CK_ASSERT_false_with_checker(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_VFPRINTF("%svalid: %s\n", "-> valid: no\n");
+	EXPECT_CHECKER_VFPRINTF("%svalid: %s\n", "-> valid: no\n");
 	CK_ASSERT(ck, "valid: ", false);
 }
 
@@ -468,10 +465,8 @@ static const struct CMUnitTest dlck_checker_macros_tests[] = {
 int
 main(int argc, char **argv)
 {
-	int rc = dlck_ut_filter(argc, argv);
-
-	if (rc != 0) {
-		return rc;
+	if (argc > 1) {
+		dlck_ut_filter(argc, argv);
 	}
 	d_register_alt_assert(mock_assert);
 	return cmocka_run_group_tests_name("dlck_checker_macros_ut", dlck_checker_macros_tests,
