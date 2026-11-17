@@ -71,6 +71,10 @@ class DlckBasicTest(TestDlck):
             run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
             dlck.storage.value = "/mnt/dlck_test"
 
+            # Also, cleanup hugepages before running the dlck command.
+            cmd = 'sudo bash -c "ipcrm --all=shm && rm -f /dev/hugepages/spdk_*"'
+            run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
+
         self.log_step("Run dlck command to check the health of the pool and storage")
         dlck.timeout = 180
         result = dlck.run()
@@ -123,6 +127,10 @@ class DlckBasicTest(TestDlck):
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
             run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
             dlck.storage.value = "/mnt/dlck_test"
+
+            # Also, cleanup hugepages before running the dlck command.
+            cmd = 'sudo bash -c "ipcrm --all=shm && rm -f /dev/hugepages/spdk_*"'
+            run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
 
         for test_fault in fault_list:
             if test_fault == "DAOS_FAULT_POOL_OPEN_BIO" and \
