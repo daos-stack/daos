@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 set -euo pipefail
-shopt -s nullglob
 
 usage() {
   cat <<EOF
@@ -21,8 +20,8 @@ Args:
                      builds: .
 
 Options:
-    --build-range=[deps|test-deps|daos|all]
-             What to build. Default: all (excludes test dependencies).
+    --build-range=[deps|daos|all]
+                     What to build. Default: all
     --rpm-suffix=[el9|suse.lp155|suse.lp156]
                      RPM distribution suffix. Auto-detected from
                      /etc/os-release when omitted.
@@ -78,10 +77,10 @@ done
 verify_mode="${verify_mode:--Werror}"
 
 case "${build_range}" in
-  deps | test-deps | daos | all)
+  deps | daos | all)
     ;;
   *)
-    echo "ERROR: --build-range must be deps, test-deps, daos, or all (got: ${build_range})" >&2
+    echo "ERROR: --build-range must be deps, daos, or all (got: ${build_range})" >&2
     exit 1
     ;;
 esac
@@ -121,9 +120,7 @@ prepare_package_build_stage() {
             ;;
     esac
     PACKAGE_OUTPUT_DIR="${pkg_output_dir}/${1}"
-    if [[ "${build_range}" != test-deps ]]; then
-      rm -f "${PACKAGE_OUTPUT_DIR}"/*.rpm
-    fi
+    rm -f "${PACKAGE_OUTPUT_DIR}"/*.rpm
     mkdir -p "${PACKAGE_OUTPUT_DIR}"
   else
     PACKAGE_OUTPUT_DIR="${pkg_output_dir}"
@@ -141,7 +138,7 @@ verify_rpm_stage() {
 }
 
 source utils/sl/setup_local.sh
-if [[ "${build_range}" = deps || "${build_range}" = all ]]; then
+if [[ "${build_range}" =~ deps|all ]]; then
   prepare_package_build_stage deps
   utils/rpms/argobots.sh
   utils/rpms/fused.sh
@@ -156,14 +153,6 @@ if [[ "${build_range}" = deps || "${build_range}" = all ]]; then
   else
     verify_rpm_stage deps
   fi
-fi
-
-if [[ "${build_range}" = test-deps ]]; then
-  prepare_package_build_stage deps
-  for package_script in utils/rpms/test_deps/*.sh; do
-    bash "${package_script}"
-  done
-  verify_rpm_stage deps
 fi
 
 if [[ "${build_range}" =~ daos|all ]]; then

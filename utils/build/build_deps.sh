@@ -12,45 +12,39 @@ source "${script_dir}/build_utils.sh"
 
 usage() {
     cat <<EOF
-Usage: ${0##*/} [-f|--force] [--build-range=deps|test-deps|all] [SCONS_OPTION ...]
+Usage: ${0##*/} [-f|--force] [SCONS_OPTION]
        ${0##*/} -h | --help
 
-Build ordinary or test dependencies with scons. The script supplies the defaults
+Build the DAOS dependencies with scons. The script supplies the defaults
 listed below; all other options use SCons' own defaults unless explicitly
 overridden.
 
-The deps range runs \`scons install --build-deps=only [defaults] [SCONS_OPTION ...]\`.
-The test-deps range uses \`--build-test-deps=only\` instead.
-The all range uses \`--build-deps=only --build-test-deps=yes\` to build both groups.
+For build, the script always runs \`scons install --build-deps=only [defaults] "\$@"\`
 
 The following defaults apply unless overridden:
-    --build-range=deps  Build only the ordinary dependencies of DAOS
-    --jobs \$(nproc)    Use all available cores for parallel jobs
+    --build-deps=only   Build only the dependencies of DAOS
+    --jobs \$(nproc)     Use all available cores for parallel jobs
     USE_INSTALLED=all   Use installed dependencies
     PREFIX=/opt/daos    Install under /opt/daos
 
 Options:
-    -f, --force         Wipe all dependency directories before building,
-                        regardless of range; must be the first argument.
-    --build-range       deps (default), test-deps, or all (both groups).
-                        The deps range does not enable test dependencies.
+    -f, --force         Wipe dependency directories before building;
+                        must be given as the first argument.
     -h, --help          Show this help and exit
 
 Any other argument is forwarded verbatim to scons, e.g.:
 
     ${0##*/} TARGET_TYPE=debug DEPS=ofi --jobs 8
-    ${0##*/} --build-range=test-deps TEST_DEPS=slurm --jobs 8
-    ${0##*/} --build-range=all DEPS=ofi TEST_DEPS=slurm --jobs 8
 EOF
 }
+
+check_scons
 
 jobs_set=false
 prefix_set=false
 prefix_value="/opt/daos"
 use_installed_set=false
 force=false
-build_range=deps
-scons_options=()
 
 if [ "${1:-}" = "-f" ] || [ "${1:-}" = "--force" ]; then
     force=true
@@ -62,18 +56,7 @@ for arg in "$@"; do
             usage
             exit 0
             ;;
-        --build-range=*)
-            build_range="${arg#*=}"
-            continue
-            ;;
-        -f | --force)
-            if [[ "${force}" != true ]]; then
-                echo 'ERROR: --force must be the first argument' >&2
-                exit 1
-            fi
-            continue
-            ;;
-        -j | -j[0-9]* | --jobs | --jobs=*)
+        -j | --jobs )
             jobs_set=true
             ;;
         PREFIX=*)
@@ -84,14 +67,7 @@ for arg in "$@"; do
             use_installed_set=true
             ;;
     esac
-    scons_options+=("${arg}")
 done
-
-case "${build_range}" in
-    deps | test-deps | all) ;;
-    *) echo 'ERROR: --build-range must be deps, test-deps, or all' >&2; exit 1 ;;
-esac
-check_scons
 
 if [ "$force" = true ]; then
     echo "Removing \"${prefix_value}/prereq\""
@@ -100,15 +76,7 @@ if [ "$force" = true ]; then
     rm -rf "build/external"
 fi
 
-SCONS_ARGS=(install)
-if [[ "${build_range}" = test-deps ]]; then
-    SCONS_ARGS+=(--build-test-deps=only)
-else
-    SCONS_ARGS+=(--build-deps=only)
-    if [[ "${build_range}" = all ]]; then
-        SCONS_ARGS+=(--build-test-deps=yes)
-    fi
-fi
+SCONS_ARGS=(install --build-deps=only)
 if ! "$jobs_set"; then
     SCONS_ARGS+=(--jobs "$(nproc)")
 fi
@@ -118,9 +86,9 @@ fi
 if ! "$prefix_set"; then
     SCONS_ARGS+=("PREFIX=${prefix_value}")
 fi
-SCONS_ARGS+=("${scons_options[@]}")
+SCONS_ARGS+=("$@")
 
-echo "Building ${build_range} using scons with args:"
+echo "Building DAOS dependencies using scons with args:"
 echo "${SCONS_ARGS[*]}"
 
 scons "${SCONS_ARGS[@]}"
