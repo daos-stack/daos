@@ -421,17 +421,19 @@ log_rotate(void)
 				mst.log_file, strerror(errno));
 			return -1;
 		}
-		rc = fcntl(mst.log_fd, F_DUPFD, 128);
-		if (rc < 0) {
-			fprintf(stderr,
-				"d_log_write(): failed to recreate log file %s: %s\n",
-				mst.log_file, strerror(errno));
-			close(mst.log_fd);
-			return -1;
-		}
-		close(mst.log_fd);
-		mst.log_fd = rc;
 	}
+	rc = fcntl(mst.log_fd, F_DUPFD, 128);
+	if (rc < 0) {
+		fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n", mst.log_file,
+			strerror(errno));
+		if (!merge_stderr)
+			close(mst.log_fd);
+		mst.log_fd = -1;
+		return -1;
+	}
+	if (!merge_stderr)
+		close(mst.log_fd);
+	mst.log_fd = rc;
 
 	mst.log_size = 0;
 	mst.log_last_check_size = 0;
@@ -965,10 +967,13 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		if (rc < 0) {
 			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
 				mst.log_file, strerror(errno));
-			close(mst.log_fd);
+			if (!merge_stderr)
+				close(mst.log_fd);
+			mst.log_fd = -1;
 			goto error;
 		}
-		close(mst.log_fd);
+		if (!merge_stderr)
+			close(mst.log_fd);
 		mst.log_fd = rc;
 
 		if (!truncate) {

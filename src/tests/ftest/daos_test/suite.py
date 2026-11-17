@@ -318,6 +318,19 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
+    def test_daos_drain_simple_16(self):
+        """Jira ID: DAOS-19396
+
+        Test Description:
+            Run daos_test -b -s3 --subtests=16
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=cb,hw,medium,provider
+        :avocado: tags=daos_test,daos_core_test,rebuild
+        :avocado: tags=DaosCoreTest,test_daos_drain_simple_16
+        """
+        self.run_subtest()
+
     def test_daos_extend_simple(self):
         """Jira ID: DAOS-1568
 
@@ -395,6 +408,19 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test,rebuild
         :avocado: tags=DaosCoreTest,test_daos_rebuild_ec
+        """
+        self.run_subtest()
+
+    def test_daos_rebuild_ec_5_9(self):
+        """Jira ID: DAOS-19396
+
+        Test Description:
+            Run daos_test -S -s5 --subtests=5,9
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,provider
+        :avocado: tags=daos_test,daos_core_test,rebuild
+        :avocado: tags=DaosCoreTest,test_daos_rebuild_ec_5_9
         """
         self.run_subtest()
 
