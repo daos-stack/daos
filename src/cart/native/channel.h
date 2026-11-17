@@ -8,6 +8,8 @@
 #include "rpc.h"
 
 struct crt_native_channel;
+void
+crt_native_channel_get_stats(const struct crt_native_channel *, struct crt_native_rpc_stats *);
 int
 crt_native_channel_cancel(struct crt_native_channel *, uint64_t id, int error);
 int

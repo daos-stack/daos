@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <stdio.h>
@@ -357,9 +358,16 @@ release_peer_resources(struct crt_native_peer *p)
 	if (p->session && (rc = crt_native_bulk_session_quiesce(p->session)) != 0)
 		return rc;
 	if (p->channel) {
+		struct crt_native_rpc_stats stats;
+		crt_native_channel_get_stats(p->channel, &stats);
 		rc = crt_native_channel_destroy(p->channel);
 		if (rc)
 			return rc;
+		if (n->config.stats)
+			fprintf(stderr,
+				"doca+rc RPC stats: early_retained=%" PRIu64
+				" early_copies=%" PRIu64 "\n",
+				stats.early_retained, stats.early_copies);
 		p->channel = NULL;
 	}
 	if (n->callbacks.destroy && (rc = n->callbacks.destroy(n->arg, p)) != 0)

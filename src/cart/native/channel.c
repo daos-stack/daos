@@ -15,15 +15,17 @@
 
 enum io_state { IDLE, POSTED, HELD, PINNED };
 struct channel_io {
-	bool                    receive;
-	bool                    delivered;
-	enum io_state           state;
-	unsigned                index;
-	size_t                  size;
-	struct crt_native_token token;
-	atomic_uint             refs;
-	uint64_t                generation;
-	unsigned                released_next;
+	bool                       receive;
+	bool                       delivered;
+	enum io_state              state;
+	unsigned                   index;
+	size_t                     size;
+	struct crt_native_token    token;
+	atomic_uint                refs;
+	uint64_t                   generation;
+	unsigned                   released_next;
+	struct crt_native_rx_lease early;
+	struct channel_io         *saved_delivering;
 };
 struct crt_native_channel {
 	const struct crt_native_ops *ops;
@@ -61,6 +63,42 @@ stop(struct crt_native_channel *c, int error)
 	/* Retry a failed QP error transition on subsequent shutdown calls. */
 	rc = c->ops->close_begin(c->ep);
 	return rc != 0 ? rc : c->error;
+}
+
+static int
+retain_early(void *arg, const void *payload, size_t size, void **cookie)
+{
+	struct crt_native_channel *c  = arg;
+	struct channel_io         *io = c->delivering;
+	if (!io)
+		return EINVAL;
+	int rc = crt_native_channel_retain(c, payload, size, &io->early);
+	if (!rc)
+		*cookie = io;
+	return rc;
+}
+static void
+enter_early(void *arg, void *cookie)
+{
+	struct crt_native_channel *c  = arg;
+	struct channel_io         *io = cookie;
+	io->saved_delivering          = c->delivering;
+	c->delivering                 = io;
+}
+static void
+release_early(void *arg, void *cookie)
+{
+	struct crt_native_channel *c  = arg;
+	struct channel_io         *io = cookie;
+	c->delivering                 = io->saved_delivering;
+	crt_native_channel_release(&io->early);
+}
+
+void
+crt_native_channel_get_stats(const struct crt_native_channel *c, struct crt_native_rpc_stats *out)
+{
+	if (c)
+		crt_native_rpc_get_stats(c->rpc, out);
 }
 
 int
@@ -112,6 +150,9 @@ crt_native_channel_create(const struct crt_native_ops *ops, struct crt_native_ep
 	rc = crt_native_rpc_create(c->count / 2, c->frame_size, handler, arg, &c->rpc);
 	if (rc != 0)
 		goto fail;
+	struct crt_native_receive_hooks hooks = {
+	    .arg = c, .retain = retain_early, .enter = enter_early, .release = release_early};
+	crt_native_rpc_receive_hooks(c->rpc, &hooks);
 	void *base;
 	crt_native_rpc_buffers(c->rpc, &base, &tx_size);
 	c->tx_buffer = base;

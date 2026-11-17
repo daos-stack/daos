@@ -58,6 +58,25 @@ crt_native_rpc_set_release_handler(struct crt_native_rpc *, crt_native_release_t
 int
 crt_native_rpc_queue_release(struct crt_native_rpc *, uint64_t lease_id);
 
+struct crt_native_rpc_stats {
+	uint64_t early_retained, early_copies;
+	uint64_t request_frames, reply_frames, release_frames, release_ids, piggyback_ids;
+};
+struct crt_native_receive_hooks {
+	void *arg;
+	int (*retain)(void *, const void *, size_t, void **);
+	void (*enter)(void *, void *);
+	void (*release)(void *, void *);
+};
+/* Configure while idle. Retained early RX remains owned through SEND completion
+ * and the completion callback. enter/release bracket that callback, including
+ * errors; release must drop the retained view exactly once.
+ */
+int
+crt_native_rpc_receive_hooks(struct crt_native_rpc *, const struct crt_native_receive_hooks *);
+void
+crt_native_rpc_get_stats(const struct crt_native_rpc *, struct crt_native_rpc_stats *);
+
 int
 crt_native_rpc_create(unsigned depth, size_t frame_size, crt_native_handler_t, void *,
 		      struct crt_native_rpc **);

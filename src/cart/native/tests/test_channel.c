@@ -271,10 +271,70 @@ asynchronous_receives(void)
 	drain(ca);
 }
 
+struct early_result {
+	struct result              result;
+	struct crt_native_channel *channel;
+	struct crt_native_rx_lease lease;
+	const void                *payload;
+};
+static void
+early_done(void *arg, int error, uint32_t status, const void *payload, size_t size)
+{
+	struct early_result *r = arg;
+	done(&r->result, error, status, payload, size);
+	if (!error) {
+		assert(crt_native_channel_retain(r->channel, payload, size, &r->lease) == 0);
+		r->payload = payload;
+	}
+}
+static void
+test_early_reply_ownership(void)
+{
+	for (unsigned canceled = 0; canceled < 2; canceled++) {
+		struct crt_native_ep *a = calloc(1, sizeof(*a)), *b = calloc(1, sizeof(*b));
+		assert(a && b);
+		a->peer = b;
+		b->peer = a;
+		struct crt_native_channel *ca, *cb;
+		struct crt_native_limits   limits  = {.frame_size = 128, .receives = 8};
+		struct early_result        result  = {0};
+		unsigned                   handled = 0, completed;
+		uint64_t                   id;
+		assert(crt_native_channel_create(&ops, a, &limits, echo, &handled, &ca) == 0);
+		assert(crt_native_channel_create(&ops, b, &limits, echo, &handled, &cb) == 0);
+		result.channel = ca;
+		assert(crt_native_channel_start(ca) == 0 && crt_native_channel_start(cb) == 0);
+		assert(crt_native_channel_call(ca, 17, "hello", 5, early_done, &result, &id) == 0);
+		assert(crt_native_channel_progress(ca, &completed) == 0);
+		struct queued send = a->cq[a->cq_head++ % QUEUE];
+		assert(send.completion.opcode == CRT_NATIVE_SEND);
+		assert(crt_native_channel_progress(cb, &completed) == 0);
+		assert(crt_native_channel_progress(ca, &completed) == 0 && result.result.done == 0);
+		struct crt_native_rpc_stats stats;
+		crt_native_channel_get_stats(ca, &stats);
+		assert(stats.early_retained == 1 && stats.early_copies == 0);
+		assert(crt_native_channel_destroy(ca) == EBUSY);
+		if (canceled)
+			assert(crt_native_channel_cancel(ca, id, ECANCELED) == 0);
+		a->cq[a->cq_tail++ % QUEUE] = send;
+		assert(crt_native_channel_progress(ca, &completed) == 0);
+		assert(result.result.done == 1 && result.result.failed == canceled);
+		if (!canceled) {
+			assert(memcmp(result.payload, "hello", 5) == 0);
+			assert(crt_native_channel_release(&result.lease) == 0);
+		}
+		drain(ca);
+		drain(cb);
+		free(a);
+		free(b);
+	}
+}
+
 int
 main(void)
 {
 	asynchronous_receives();
+	test_early_reply_ownership();
 	struct crt_native_ep       a = {0}, b = {0};
 	struct crt_native_channel *ca, *cb;
 	struct crt_native_limits   limits = {.frame_size = 128, .receives = 8};

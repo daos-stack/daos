@@ -21,6 +21,8 @@ struct entry {
 	crt_native_done_t done;
 	void             *arg;
 	uint8_t          *frame, *response;
+	const void       *response_view;
+	void             *rx_cookie;
 };
 struct crt_native_rpc {
 	unsigned             depth, free_head, request_head, request_tail, reply_head, reply_tail;
@@ -39,6 +41,8 @@ struct crt_native_rpc {
 	unsigned            *deadlines;
 	unsigned             deadline_count;
 	uint64_t             now_ns;
+	struct crt_native_receive_hooks rx_hooks;
+	struct crt_native_rpc_stats     stats;
 };
 
 static void
@@ -144,7 +148,14 @@ finish_payload(struct crt_native_rpc *rpc, unsigned slot, const void *response)
 	 * call cannot overwrite the borrowed response while it is being consumed.
 	 */
 	rpc->callback = true;
+	if (e->rx_cookie)
+		rpc->rx_hooks.enter(rpc->rx_hooks.arg, e->rx_cookie);
 	done(arg, error, status, response, size);
+	if (e->rx_cookie) {
+		rpc->rx_hooks.release(rpc->rx_hooks.arg, e->rx_cookie);
+		e->rx_cookie     = NULL;
+		e->response_view = NULL;
+	}
 	rpc->callback  = false;
 	e->state       = FREE;
 	e->next        = rpc->free_head;
@@ -155,7 +166,26 @@ finish_payload(struct crt_native_rpc *rpc, unsigned slot, const void *response)
 static void
 finish(struct crt_native_rpc *rpc, unsigned slot)
 {
-	finish_payload(rpc, slot, rpc->requests[slot].response);
+	struct entry *e = &rpc->requests[slot];
+	finish_payload(rpc, slot, e->response_view ? e->response_view : e->response);
+}
+
+int
+crt_native_rpc_receive_hooks(struct crt_native_rpc                 *rpc,
+			     const struct crt_native_receive_hooks *hooks)
+{
+	if (!rpc || !hooks || !hooks->retain || !hooks->enter || !hooks->release ||
+	    !crt_native_rpc_idle(rpc))
+		return EINVAL;
+	rpc->rx_hooks = *hooks;
+	return 0;
+}
+
+void
+crt_native_rpc_get_stats(const struct crt_native_rpc *rpc, struct crt_native_rpc_stats *out)
+{
+	if (rpc && out)
+		*out = rpc->stats;
 }
 
 int
@@ -308,6 +338,8 @@ crt_native_rpc_call_encoded(struct crt_native_rpc *rpc, uint32_t opcode,
 	e->received      = false;
 	e->error         = 0;
 	e->response_size = 0;
+	e->response_view = NULL;
+	e->rx_cookie     = NULL;
 	e->done          = done;
 	e->arg           = arg;
 	rc               = encode_frame(rpc, e, false, encode, encoder_arg);
@@ -532,9 +564,16 @@ crt_native_rpc_receive(struct crt_native_rpc *rpc, const void *frame, size_t siz
 		if (e->state == WAIT_REPLY)
 			/* SEND is complete: callback consumes RX before repost. */
 			finish_payload(rpc, slot, payload);
-		else
-			/* Preserve early replies until the accepted SEND completes. */
+		else if (rpc->rx_hooks.retain &&
+			 rpc->rx_hooks.retain(rpc->rx_hooks.arg, payload, h.payload_size,
+					      &e->rx_cookie) == 0) {
+			e->response_view = payload;
+			rpc->stats.early_retained++;
+		} else {
+			/* Standalone users without RX ownership hooks retain the fallback. */
 			memcpy(e->response, payload, h.payload_size);
+			rpc->stats.early_copies++;
+		}
 		return 0;
 	}
 	e = &rpc->replies[slot];
