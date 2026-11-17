@@ -246,24 +246,26 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 		log, buf := logging.NewTestLogger(t.Name())
 		defer test.ShowBufferOnFailure(t, buf)
 
-		var ei *EngineInstance
+		// A real directory, so the superblock write succeeds and a ready reaches the join.
+		testDir, cleanup := test.CreateTestDir(t)
+		defer cleanup()
+
+		joinReqs := make(chan *control.SystemJoinReq, 4)
+		recordJoin := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+			joinReqs <- req
+			return nil, errors.New("join failed")
+		}
+
 		var starts uint32
-		queuedAtRestart := int32(-1)
-		ei = newRunnableTestInstance(t, log, engine.NewTestRunner(&engine.TestRunnerConfig{
-			// The runner is started after any discard and before the wait for ready.
-			StartCb: func() {
-				if atomic.LoadUint32(&starts) == 1 {
-					atomic.StoreInt32(&queuedAtRestart, int32(len(ei.drpcReady)))
-				}
-				atomic.AddUint32(&starts, 1)
-			},
+		ei := newRunnableTestInstance(t, log, engine.NewTestRunner(&engine.TestRunnerConfig{
+			StartCb: func() { atomic.AddUint32(&starts, 1) },
 			RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
 				if atomic.LoadUint32(&starts) > 1 {
 					<-ctx.Done() // the second engine stays up
 				}
 				return &engine.RunnerExitInfo{Error: errors.New("boom"), PID: 1234}
 			},
-		}, runnableEngineConfig("/mnt/test")), failJoin)
+		}, runnableEngineConfig(testDir)), recordJoin)
 		exits := recordExits(ei)
 
 		ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
@@ -273,17 +275,26 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 		nextExit(t, exits, "engine exit was never handled")
 
 		// The exited engine sent its ready notification just before it died.
-		ei.NotifyDrpcReady(getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0))
-		waitFor(t, 2*time.Second, "ready notification was not queued", func() bool {
-			return len(ei.drpcReady) == 1
-		})
+		stale := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
+		stale.Incarnation = 777
+		ei.NotifyDrpcReady(stale)
+		// A send on an unbuffered channel cannot be observed; give it time to be pending.
+		time.Sleep(50 * time.Millisecond)
 
 		ei.requestStart(ctx)
 		waitFor(t, 2*time.Second, "engine was not started again", func() bool {
 			return atomic.LoadUint32(&starts) == 2
 		})
-		if queued := atomic.LoadInt32(&queuedAtRestart); queued != 0 {
-			t.Fatalf("%d ready notification(s) from the exited engine queued at the next start", queued)
+
+		fresh := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
+		fresh.Incarnation = 888
+		ei.NotifyDrpcReady(fresh)
+
+		select {
+		case req := <-joinReqs:
+			test.AssertEqual(t, uint64(888), req.Incarnation, "next start joined with the exited engine's ready")
+		case <-time.After(2 * time.Second):
+			t.Fatal("no join after the new engine's ready")
 		}
 	})
 
