@@ -2101,7 +2101,10 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		/* Modification within single RDG, elect leader as standalone modification does. */
 		uint8_t	*bit_map;
 
-		i = dc_tx_leftmost_req(tx, true);
+		if (tx->tx_write_cnt > 0)
+			i = dc_tx_leftmost_req(tx, true);
+		else
+			i = dc_tx_leftmost_req(tx, false);
 		dcsr = &tx->tx_req_cache[i];
 		obj = dcsr->dcsr_obj;
 
