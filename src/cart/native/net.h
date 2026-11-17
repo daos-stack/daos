@@ -33,6 +33,13 @@ const char *
 crt_native_net_uri(const struct crt_native_net *);
 int
 crt_native_net_lookup(struct crt_native_net *, const char *uri, struct crt_native_peer **);
+/* Each successful lookup owns one address reference. Release is worker-safe.
+ * Looked-up address shells stay stable until context destruction to support
+ * CaRT's borrowed cache lookups; failed hardware resources are reaped earlier.
+ * Uncached accepted peers return their slots once DMA and consumers drain.
+ */
+void
+crt_native_peer_put(struct crt_native_peer *);
 int
 crt_native_net_progress(struct crt_native_net *, unsigned *work);
 int

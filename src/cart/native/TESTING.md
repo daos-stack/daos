@@ -102,3 +102,9 @@ include bounded eager bodies, no bound/forwarded bulk, no automatic reconnection
 and unqualified SWIM/collectives. A passing smoke test does not qualify a DAOS
 deployment. Report the first failing API/status and server/client logs when
 testing unsupported or unvalidated paths.
+
+After repeated client or fio runs, verify that a new `daos cont list POOL` still
+works without restarting the server. Progress retires failed peer hardware after
+DMA, receive leases, requests and bulk consumers drain. The portable connection
+test covers 128 sequential clients with only two server peer slots, checking that
+endpoint and registered-memory counts return to baseline between clients.

@@ -50,6 +50,8 @@ int
 crt_native_ctx_addr(struct crt_hg_context *, char *, size_t *);
 int
 crt_native_addr_lookup(struct crt_hg_context *, const char *, void **);
+void
+crt_native_addr_free(void *);
 int
 crt_native_req_create(struct crt_hg_context *, struct crt_rpc_priv *);
 void

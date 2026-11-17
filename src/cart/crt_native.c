@@ -30,6 +30,7 @@ struct bridge_peer {
 	struct crt_native_cart_bulk  *bulk;
 	struct incoming              *incoming;
 	unsigned                      capacity, free_head;
+	unsigned                      requests, incoming_active;
 	struct crt_native_rpc_state  *waiting;
 	struct crt_native_rpc_state **waiting_tail;
 };
@@ -128,6 +129,9 @@ remove_pending(struct crt_native_rpc_state *s)
 static void
 add_request(struct crt_native_context *c, struct crt_native_rpc_state *s)
 {
+	struct bridge_peer *p = crt_native_peer_data(s->peer);
+	D_ASSERT(p != NULL);
+	p->requests++;
 	s->next     = c->requests;
 	s->previous = &c->requests;
 	if (s->next)
@@ -186,6 +190,7 @@ received(void *arg, struct crt_native_peer *peer, struct crt_native_rpc *engine,
 		return;
 	}
 	in->event.client = false;
+	p->incoming_active++;
 	queue_event(c, &in->event);
 }
 
@@ -338,6 +343,8 @@ destroy_peer(void *arg, struct crt_native_peer *peer)
 	struct bridge_peer        *p = crt_native_peer_data(peer);
 	if (p == NULL)
 		return 0;
+	if (p->requests || p->incoming_active)
+		return EBUSY;
 	int rc = p->bulk ? crt_native_cart_bulk_destroy(p->bulk) : 0;
 	if (rc != 0)
 		return EBUSY;
@@ -529,14 +536,28 @@ crt_native_addr_lookup(struct crt_hg_context *hg, const char *uri, void **out)
 	lock(c);
 	struct crt_native_peer *peer;
 	int rc = c->stopping ? ECANCELED : crt_native_net_lookup(c->net, uri, &peer);
+	if (!rc) {
+		int status = crt_native_peer_status(peer);
+		if (status && status != EINPROGRESS) {
+			crt_native_peer_put(peer);
+			rc = status;
+		}
+	}
 	if (!rc && !peer_data(c, peer)) {
 		crt_native_peer_fail(peer, ENOMEM);
+		crt_native_peer_put(peer);
 		rc = ENOMEM;
 	}
 	if (!rc)
 		*out = peer;
 	unlock(c);
 	return from_errno(rc);
+}
+
+void
+crt_native_addr_free(void *addr)
+{
+	crt_native_peer_put(addr);
 }
 
 int
@@ -551,6 +572,11 @@ crt_native_req_create(struct crt_hg_context *hg, struct crt_rpc_priv *rpc)
 	*s                             = (struct crt_native_rpc_state){
 					.context = c, .rpc = rpc, .peer = (void *)rpc->crp_hg_addr};
 	lock(c);
+	int status = crt_native_peer_status(s->peer);
+	if (status && status != EINPROGRESS) {
+		unlock(c);
+		return from_errno(status);
+	}
 	add_request(c, s);
 	rpc->crp_native = s;
 	unlock(c);
@@ -716,8 +742,10 @@ dispatch_incoming(struct crt_native_context *c, struct incoming *in)
 recycle:
 	lock(c);
 	struct bridge_peer *p = crt_native_peer_data(in->peer);
-	in->next              = p->free_head;
-	p->free_head          = in->index;
+	D_ASSERT(p->incoming_active > 0);
+	p->incoming_active--;
+	in->next     = p->free_head;
+	p->free_head = in->index;
 	unlock(c);
 }
 
@@ -947,6 +975,8 @@ crt_native_req_destroy(struct crt_rpc_priv *rpc)
 	*s->previous = s->next;
 	if (s->next)
 		s->next->previous = s->previous;
+	D_ASSERT(p != NULL && p->requests > 0);
+	p->requests--;
 	c->references--;
 	unlock(c);
 	crt_rpc_priv_fini(rpc);
@@ -1015,6 +1045,11 @@ crt_native_protocol_info(struct crt_protocol_info **out)
 }
 
 #else /* explicit unsupported-build behavior, no silent Mercury fallback */
+void
+crt_native_addr_free(void *addr)
+{
+	(void)addr;
+}
 int
 crt_native_ctx_init(struct crt_hg_context *h, int i, bool p, int f)
 {

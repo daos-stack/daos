@@ -5,6 +5,7 @@
 #include "../net.h"
 #include <assert.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,13 +33,14 @@ struct crt_native_ep {
 	unsigned              id, head, tail, rx_head, rx_tail, registered;
 	bool                  closing, closed;
 };
-static struct crt_native_ep *endpoints[128];
+static struct crt_native_ep *endpoints[2048];
 static unsigned              endpoint_count;
+static int                   dereg_error;
 static int
 open_ep(const struct crt_native_config *config, struct crt_native_ep **out)
 {
 	(void)config;
-	assert(endpoint_count < 128);
+	assert(endpoint_count < 2048);
 	struct crt_native_ep *ep = calloc(1, sizeof(*ep));
 	assert(ep != NULL);
 	ep->id                      = endpoint_count + 1;
@@ -84,6 +86,8 @@ static int
 dereg(struct crt_native_mr *mr)
 {
 	assert(mr->refs == 0);
+	if (dereg_error)
+		return dereg_error;
 	mr->ep->registered--;
 	free(mr);
 	return 0;
@@ -173,7 +177,11 @@ static const struct crt_native_ops ops = {.open              = open_ep,
 					  .close             = close_ep};
 
 struct stats {
-	unsigned ready, received, completed, failed;
+	unsigned                   ready, received, completed, failed;
+	bool                       hold_receive;
+	bool                       hold_destroy;
+	struct crt_native_rx_lease lease;
+	struct crt_native_peer    *retained_peer;
 };
 static int
 ready(void *arg, struct crt_native_peer *peer)
@@ -191,6 +199,13 @@ request(void *arg, struct crt_native_peer *peer, struct crt_native_rpc *rpc,
 	struct stats *s = arg;
 	s->received++;
 	assert(opcode == 17 && size == 5 && memcmp(payload, "hello", 5) == 0);
+	if (s->hold_receive) {
+		assert(crt_native_channel_retain(crt_native_peer_channel(peer), payload, size,
+						 &s->lease) == 0);
+		s->retained_peer = peer;
+	}
+	if (s->hold_destroy)
+		s->retained_peer = peer;
 	assert(crt_native_rpc_reply(rpc, token, 0, payload, size) == 0);
 }
 static void
@@ -215,12 +230,86 @@ failed_done(void *arg, int error, uint32_t status, const void *payload, size_t s
 	assert(error == ECONNRESET && size == 0);
 	(*(unsigned *)arg)++;
 }
+static int
+destroy_data(void *arg, struct crt_native_peer *peer)
+{
+	(void)peer;
+	return ((struct stats *)arg)->hold_destroy ? EBUSY : 0;
+}
 static void
 drive(struct crt_native_net *a, struct crt_native_net *b)
 {
 	unsigned work;
 	assert(crt_native_net_progress(a, &work) == 0);
 	assert(crt_native_net_progress(b, &work) == 0);
+}
+
+static void *
+release_address(void *arg)
+{
+	crt_native_peer_put(arg);
+	return NULL;
+}
+
+static void
+test_connection_churn(void)
+{
+	struct crt_native_net   *server;
+	struct crt_native_config config = {
+	    .device = "fake", .port = 1, .gid_index = -1, .depth = 32};
+	struct crt_native_limits        limits = {.frame_size = 128, .receives = 8};
+	struct crt_native_net_callbacks cb     = {
+		.ready = ready, .request = request, .failed = failed, .destroy = destroy_data};
+	struct stats ss = {0};
+	assert(crt_native_net_create(&ops, &config, &limits, "127.0.0.1", 0, 2, 1000, &cb, &ss,
+				     &server) == 0);
+	/* Many more clients than available server slots, without restarting it. */
+	for (unsigned round = 0; round < 128; round++) {
+		struct crt_native_net  *client;
+		struct crt_native_peer *peer;
+		struct stats            cs = {0};
+		ss.hold_receive            = round == 0;
+		ss.hold_destroy            = round == 2;
+		assert(crt_native_net_create(&ops, &config, &limits, "127.0.0.1", 0, 2, 1000, &cb,
+					     &cs, &client) == 0);
+		assert(crt_native_net_lookup(client, crt_native_net_uri(server), &peer) == 0);
+		for (unsigned i = 0; i < 20000 && crt_native_peer_status(peer); i++)
+			drive(client, server);
+		assert(crt_native_peer_status(peer) == 0);
+		uint64_t id;
+		assert(crt_native_channel_call(crt_native_peer_channel(peer), 17, "hello", 5, done,
+					       &cs, &id) == 0);
+		for (unsigned i = 0; i < 128 && !cs.completed; i++)
+			drive(client, server);
+		assert(cs.completed == 1);
+		/* Failed deregistration must retain resources and retry later. */
+		dereg_error = round == 1 ? EBUSY : 0;
+		crt_native_peer_put(peer);
+		assert(crt_native_net_shutdown(client) == 0);
+		for (unsigned i = 0; i < 64; i++)
+			drive(client, server);
+		if (ss.hold_receive) {
+			assert(crt_native_peer_channel(ss.retained_peer) != NULL);
+			assert(crt_native_channel_release(&ss.lease) == 0);
+			ss.retained_peer = NULL;
+		}
+		if (ss.hold_destroy) {
+			assert(crt_native_peer_bulk_endpoint(ss.retained_peer) != NULL);
+			ss.hold_destroy  = false;
+			ss.retained_peer = NULL;
+		}
+		if (dereg_error)
+			assert(crt_native_net_destroy(client) == EBUSY);
+		dereg_error = 0;
+		for (unsigned i = 0; i < 64; i++)
+			drive(client, server);
+		assert(crt_native_net_destroy(client) == 0);
+		/* QPs/CQs and registered memory must return to baseline each round. */
+		for (unsigned i = 0; i < endpoint_count; i++)
+			assert(endpoints[i]->closed && endpoints[i]->registered == 0);
+	}
+	assert(ss.received == 128);
+	assert(crt_native_net_destroy(server) == 0);
 }
 
 int
@@ -244,6 +333,7 @@ main(void)
 	assert(crt_native_net_lookup(a, crt_native_net_uri(b), &ab) == 0);
 	assert(crt_native_net_lookup(b, crt_native_net_uri(a), &ba) == 0);
 	assert(crt_native_net_lookup(a, crt_native_net_uri(b), &again) == 0 && again == ab);
+	crt_native_peer_put(again);
 	for (unsigned i = 0;
 	     i < 20000 && (crt_native_peer_status(ab) || crt_native_peer_status(ba)); i++)
 		drive(a, b);
@@ -274,15 +364,26 @@ main(void)
 	for (unsigned i = 0; i < 128; i++)
 		drive(a, b);
 	assert(failure_completions == 1 && sa.failed && sb.failed);
+	/* A cached address shell is safe after its hardware has been reclaimed. */
+	assert(crt_native_peer_status(ab) == ECONNRESET);
+	assert(crt_native_peer_channel(ab) == NULL && crt_native_peer_bulk_endpoint(ab) == NULL);
 	assert(crt_native_net_shutdown(a) == 0 && crt_native_net_shutdown(b) == 0);
 	for (unsigned i = 0; i < 8; i++)
 		drive(a, b);
+	assert(crt_native_net_destroy(a) == EBUSY);
+	pthread_t releaser;
+	assert(pthread_create(&releaser, NULL, release_address, ab) == 0);
+	for (unsigned i = 0; i < 8; i++)
+		drive(a, b);
+	assert(pthread_join(releaser, NULL) == 0);
+	crt_native_peer_put(ba);
 	assert(crt_native_net_destroy(a) == 0 && crt_native_net_destroy(b) == 0);
+	test_connection_churn();
 	for (unsigned i = 0; i < endpoint_count; i++) {
 		assert(endpoints[i]->closed && endpoints[i]->registered == 0);
 		free(endpoints[i]);
 	}
-	puts("Native network: loopback TCP bootstrap, simultaneous connects, READY barrier, cached "
-	     "peers, full-duplex RPC and teardown passed");
+	puts("Native network: loopback bootstrap, full-duplex RPC, cached address lifetime, "
+	     "worker release and 128-client resource/slot reclamation passed");
 	return 0;
 }

@@ -10,6 +10,7 @@
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -24,6 +25,7 @@ enum peer_state { CONNECTING, HELLO, PREPOST, READY_WAIT, READY, FAILED };
 struct crt_native_peer {
 	struct crt_native_net          *net;
 	struct crt_native_peer         *next;
+	struct crt_native_peer        **previous;
 	struct crt_native_ep           *control_ep, *bulk_ep;
 	struct crt_native_channel      *channel;
 	struct crt_native_bulk_session *session;
@@ -37,6 +39,9 @@ struct crt_native_peer {
 	uint64_t                        deadline;
 	void                           *data;
 	bool                            outbound;
+	bool                            addressed;
+	bool                            resources_released;
+	atomic_uint                     references;
 };
 struct crt_native_net {
 	const struct crt_native_ops    *ops;
@@ -184,7 +189,11 @@ add_peer(struct crt_native_net *n, int fd, const struct sockaddr_in *address, bo
 	p->state    = connecting ? CONNECTING : HELLO;
 	p->deadline = now_ms() + n->timeout_ms;
 	p->next     = n->peers;
-	n->peers    = p;
+	p->previous = &n->peers;
+	if (p->next)
+		p->next->previous = &p->next;
+	atomic_init(&p->references, 0);
+	n->peers = p;
 	n->count++;
 	int rc = n->ops->open(&n->config, &p->control_ep);
 	if (rc == 0)
@@ -216,6 +225,8 @@ crt_native_net_lookup(struct crt_native_net *n, const char *uri, struct crt_nati
 		return EINVAL;
 	for (struct crt_native_peer *p = n->peers; p != NULL; p = p->next)
 		if (p->state != FAILED && strcmp(uri, p->uri) == 0) {
+			p->addressed = true;
+			atomic_fetch_add(&p->references, 1);
 			*out = p;
 			return 0;
 		}
@@ -257,8 +268,75 @@ crt_native_net_lookup(struct crt_native_net *n, const char *uri, struct crt_nati
 		return rc;
 	}
 	snprintf((*out)->uri, sizeof((*out)->uri), "doca+rc://%s:%u", ip, port);
-	(*out)->outbound = true;
+	(*out)->outbound  = true;
+	(*out)->addressed = true;
+	atomic_fetch_add(&(*out)->references, 1);
 	return 0;
+}
+
+void
+crt_native_peer_put(struct crt_native_peer *p)
+{
+	if (p)
+		atomic_fetch_sub(&p->references, 1);
+}
+
+/* Keep the address shell while caches reference it, but retire every hardware
+ * resource once DMA and asynchronous consumers have drained. All steps retry
+ * safely after partial cleanup; the destroy callback must preserve busy data.
+ */
+static int
+release_peer_resources(struct crt_native_peer *p)
+{
+	struct crt_native_net *n = p->net;
+	int                    rc;
+	if (p->resources_released)
+		return 0;
+	if (p->channel && (rc = n->ops->quiesce(p->control_ep)) != 0)
+		return rc;
+	if (p->session && (rc = crt_native_bulk_session_quiesce(p->session)) != 0)
+		return rc;
+	if (p->channel) {
+		rc = crt_native_channel_destroy(p->channel);
+		if (rc)
+			return rc;
+		p->channel = NULL;
+	}
+	if (n->callbacks.destroy && (rc = n->callbacks.destroy(n->arg, p)) != 0)
+		return rc;
+	if (p->session) {
+		rc = crt_native_bulk_session_destroy(p->session);
+		if (rc)
+			return rc;
+		p->session = NULL;
+	}
+	if (p->control_ep) {
+		rc = n->ops->close(p->control_ep);
+		if (rc)
+			return rc;
+		p->control_ep = NULL;
+	}
+	if (p->bulk_ep) {
+		rc = n->ops->close(p->bulk_ep);
+		if (rc)
+			return rc;
+		p->bulk_ep = NULL;
+	}
+	p->resources_released = true;
+	return 0;
+}
+
+static void
+remove_peer(struct crt_native_peer *p)
+{
+	struct crt_native_net *n = p->net;
+	*p->previous             = p->next;
+	if (p->next)
+		p->next->previous = p->previous;
+	if (n->cursor == p)
+		n->cursor = p->next ? p->next : n->peers;
+	n->count--;
+	free(p);
 }
 
 static int
@@ -289,6 +367,8 @@ step(struct crt_native_peer *p)
 {
 	struct crt_native_net *n = p->net;
 	if (p->state == FAILED) {
+		if (p->resources_released)
+			return 0;
 		unsigned completed;
 		if (p->channel) {
 			crt_native_channel_shutdown(p->channel, p->error);
@@ -296,12 +376,7 @@ step(struct crt_native_peer *p)
 		}
 		if (n->callbacks.progress)
 			n->callbacks.progress(n->arg, p);
-		if (p->session)
-			crt_native_bulk_session_quiesce(p->session);
-		else if (p->bulk_ep)
-			n->ops->quiesce(p->bulk_ep);
-		if (p->control_ep)
-			n->ops->quiesce(p->control_ep);
+		release_peer_resources(p);
 		return 0;
 	}
 	if (p->state != READY && now_ms() >= p->deadline)
@@ -428,16 +503,20 @@ crt_native_net_progress(struct crt_native_net *n, unsigned *work)
 	}
 	if (n->cursor == NULL)
 		n->cursor = n->peers;
-	struct crt_native_peer *start = n->cursor;
-	for (unsigned budget = 0; budget < 32 && n->cursor != NULL; budget++) {
+	unsigned budget = n->count < 32 ? n->count : 32;
+	for (; budget && n->cursor != NULL; budget--) {
 		struct crt_native_peer *p = n->cursor;
 		n->cursor                 = p->next ? p->next : n->peers;
 		int rc                    = step(p);
 		if (rc != 0)
 			crt_native_peer_fail(p, rc);
+		/* CaRT can borrow a cached address between cache lookup and request
+		 * creation. Keep looked-up shells stable until context destruction;
+		 * uncached accepted clients have no such borrowers and free slots.
+		 */
+		if (p->resources_released && !p->addressed && atomic_load(&p->references) == 0)
+			remove_peer(p);
 		(*work)++;
-		if (n->cursor == start)
-			break;
 	}
 	n->progressing = false;
 	return 0;
@@ -465,38 +544,13 @@ crt_native_net_destroy(struct crt_native_net *n)
 		return EINVAL;
 	crt_native_net_shutdown(n);
 	while (n->peers) {
-		struct crt_native_peer *p = n->peers;
-		int                     rc;
-		if (p->channel) {
-			rc = crt_native_channel_destroy(p->channel);
-			if (rc)
-				return rc;
-			p->channel = NULL;
-		}
-		if (n->callbacks.destroy && (rc = n->callbacks.destroy(n->arg, p)) != 0)
+		struct crt_native_peer *p  = n->peers;
+		int                     rc = release_peer_resources(p);
+		if (rc)
 			return rc;
-		if (p->session) {
-			rc = crt_native_bulk_session_destroy(p->session);
-			if (rc)
-				return rc;
-			p->session = NULL;
-		}
-		if (p->control_ep) {
-			rc = n->ops->close(p->control_ep);
-			if (rc)
-				return rc;
-			p->control_ep = NULL;
-		}
-		if (p->bulk_ep) {
-			rc = n->ops->close(p->bulk_ep);
-			if (rc)
-				return rc;
-			p->bulk_ep = NULL;
-		}
-		n->peers  = p->next;
-		n->cursor = n->peers;
-		n->count--;
-		free(p);
+		if (atomic_load(&p->references))
+			return EBUSY;
+		remove_peer(p);
 	}
 	free(n);
 	return 0;

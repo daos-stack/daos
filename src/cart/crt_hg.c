@@ -331,9 +331,10 @@ out:
 int
 crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 {
-	/* Native peers are context-owned stable cache entries. */
-	if (hg_ctx->chc_provider == CRT_PROV_DOCA_RC)
+	if (hg_ctx->chc_provider == CRT_PROV_DOCA_RC) {
+		crt_native_addr_free(addr);
 		return 0;
+	}
 	hg_return_t	ret = HG_SUCCESS;
 
 	ret = HG_Addr_free(hg_ctx->chc_hgcla, addr);

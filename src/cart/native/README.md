@@ -15,6 +15,8 @@ See [IMPLEMENTATION.md](IMPLEMENTATION.md) for implementation status.
 - `net.h`: nonblocking IPv4 TCP endpoint/limit negotiation, separate RC control
   and bulk endpoints, receive preposting and a READY barrier. TCP carries
   bootstrap/liveness only; RPC payloads use RC. Simultaneous connects are supported.
+  Failed connections release hardware resources during progress; uncached accepted
+  clients also release their peer slots after asynchronous consumers have drained.
 - `rpc.h` / `channel.h`: registered eager frames, generational matching, independent
   request/reply/control reserves, backpressure, deadline heap and RX leases.
 - `proc.h` / `cart_proc.h`: bounded, versioned big-endian encoding using existing
@@ -49,6 +51,8 @@ do not constitute a successful Linux link, real-HCA test or DAOS qualification.
 - Bound bulk and forwarding decoded keys to another peer are unsupported.
   Collective header/dispatch wiring does not establish collective compatibility.
 - Failed cached peers do not reconnect automatically; recreate their context.
+  Cached address shells stay stable until context destruction, while their failed
+  connection's QPs, CQs, protection domains and registered buffers retire earlier.
 - Native one-way completion waits for an internal server release acknowledgment.
 - DC, GPU submission, selective signaling, full recovery, SWIM/collective
   qualification and comparative benchmarks remain future work.
