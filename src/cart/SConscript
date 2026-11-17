@@ -76,10 +76,15 @@ def scons():
 
     sources = list(SRC)
     if env.get('CART_NATIVE_RC'):
-        config = denv.Configure()
-        if not config.CheckCHeader('infiniband/verbs.h') or not config.CheckLib('ibverbs'):
-            raise RuntimeError('CART_NATIVE_RC requires libibverbs development headers and library')
-        denv = config.Finish()
+        cenv = denv.Clone()
+        cenv.Replace(LIBS=[])
+        config = cenv.Configure()
+        have_verbs = config.CheckCHeader('infiniband/verbs.h') and config.CheckLib('ibverbs')
+        config.Finish()
+        if not have_verbs:
+            raise RuntimeError('CART_NATIVE_RC requires libibverbs development headers and '
+                               'library')
+        denv.AppendUnique(LIBS=['ibverbs'])
         sources.extend(['native/verbs.c', 'native/wire.c', 'native/bootstrap.c',
                         'native/rpc.c', 'native/channel.c', 'native/net.c'])
 
