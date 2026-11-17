@@ -948,11 +948,8 @@ struct obj_io_context {
 	uint32_t		 ioc_opc;
 	uint64_t		 ioc_start_time;
 	uint64_t		 ioc_io_size;
-	uint32_t		 ioc_began:1,
-				 ioc_update_ec_ts:1,
-				 ioc_free_sgls:1,
-				 ioc_lost_reply:1,
-				 ioc_fetch_snap:1;
+	uint32_t ioc_began : 1, ioc_update_ec_ts : 1, ioc_free_sgls : 1, ioc_lost_reply : 1,
+	    ioc_fetch_snap : 1, ioc_drop_cond : 1;
 };
 
 static inline uint64_t

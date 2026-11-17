@@ -764,8 +764,12 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, bool 
 
 		if (pl_shard->po_target == -1 || pl_shard->po_shard == -1 ||
 		    pl_shard->po_rebuilding || pl_shard->po_reintegrating) {
-			if (candidate >= 0)
-				D_GOTO(unlock, rc = candidate);
+			/* The old leader may be still healthy behind this shard. */
+			if (candidate >= 0) {
+				if (old_leader == UINT32_MAX || found)
+					D_GOTO(unlock, rc = candidate);
+				continue;
+			}
 
 			D_ERROR(DF_OID" unhealthy targets exceed the max redundancy, e_p %d"
 				" shard %d %u/%u/%u\n", DP_OID(obj->cob_md.omd_id),
@@ -1602,9 +1606,13 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 
 	if (flags & OBJ_TGT_FLAG_FW_LEADER_INFO) {
 		obj_auxi->flags |= ORF_CONTAIN_LEADER;
-		/* Single RDG modification: do not forward the unused slots of skipped shards. */
-		req_tgts->ort_grp_size -= skipped;
-		obj_auxi->leader_tgt = req_tgts->ort_shard_tgts[0].st_tgt_id;
+		/*
+		 * Single RDG modification: do not forward the unused slots of skipped shards.
+		 * Derive the size from the packed targets rather than a skipped count, since
+		 * a missing shard with no spare target cannot be cleared from the bitmap.
+		 */
+		req_tgts->ort_grp_size = tgt - req_tgts->ort_shard_tgts;
+		obj_auxi->leader_tgt   = req_tgts->ort_shard_tgts[0].st_tgt_id;
 	}
 
 	if ((flags == 0 || flags & OBJ_TGT_FLAG_FW_LEADER_INFO) && bit_map == NIL_BITMAP)

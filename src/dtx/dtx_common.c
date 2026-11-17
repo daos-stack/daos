@@ -1101,6 +1101,8 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 
 	if (flags & DTX_RELAY)
 		dlh->dlh_relay = 1;
+	if (flags & DTX_LEADER_DELAY)
+		dlh->dlh_leader_delay = 1;
 
 	dth = &dlh->dlh_handle;
 	rc = dtx_handle_init(dti, coh, epoch, dlh->dlh_relay ? false : true, sub_modification_cnt,
@@ -2174,7 +2176,7 @@ again2:
 
 exec:
 	/* Execute the local operation only for once. */
-	if (dlh->dlh_forward_idx == 0)
+	if (dlh->dlh_forward_idx == 0 && likely(!dlh->dlh_leader_delay))
 		local_rc = func(dlh, func_arg, -1, NULL);
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
@@ -2220,6 +2222,12 @@ exec:
 
 			dlh->dlh_drop_cond = 0;
 		}
+	}
+
+	if (unlikely(dlh->dlh_leader_delay)) {
+		local_rc = func(dlh, func_arg, -1, NULL);
+		if (local_rc != 0 && local_rc != allow_failure)
+			D_GOTO(out, rc = local_rc);
 	}
 
 	if (likely(dlh->dlh_delay_sub_cnt == 0))
