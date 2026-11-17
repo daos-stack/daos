@@ -38,7 +38,7 @@ from SCons.SConf import SetCacheMode
 from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
 from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
-TEST_DEPENDENCIES = ('slurm',)
+TEST_DEPENDENCIES = ()
 
 
 class DownloadFailure(Exception):
