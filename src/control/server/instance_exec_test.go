@@ -226,9 +226,6 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 				t.Fatalf("expected %q in log", want)
 			}
 		}
-		if strings.Contains(buf.String(), "removing socket file") {
-			t.Fatal("socket removal error logged for an engine that never had a socket")
-		}
 
 		reqCtx, reqCancel := context.WithTimeout(ctx, time.Second)
 		defer reqCancel()
@@ -239,15 +236,27 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 		waitFor(t, 2*time.Second, "engine was not started again", func() bool {
 			return atomic.LoadUint32(&starts) == 2
 		})
+		// The restart is only accepted once the exit has been fully handled.
+		if strings.Contains(buf.String(), "removing socket file") {
+			t.Fatal("socket removal error logged for an engine that never had a socket")
+		}
 	})
 
 	t.Run("ready queued by the exited engine is discarded", func(t *testing.T) {
 		log, buf := logging.NewTestLogger(t.Name())
 		defer test.ShowBufferOnFailure(t, buf)
 
+		var ei *EngineInstance
 		var starts uint32
-		ei := newRunnableTestInstance(t, log, engine.NewTestRunner(&engine.TestRunnerConfig{
-			StartCb: func() { atomic.AddUint32(&starts, 1) },
+		queuedAtRestart := int32(-1)
+		ei = newRunnableTestInstance(t, log, engine.NewTestRunner(&engine.TestRunnerConfig{
+			// The runner is started after any discard and before the wait for ready.
+			StartCb: func() {
+				if atomic.LoadUint32(&starts) == 1 {
+					atomic.StoreInt32(&queuedAtRestart, int32(len(ei.drpcReady)))
+				}
+				atomic.AddUint32(&starts, 1)
+			},
 			RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
 				if atomic.LoadUint32(&starts) > 1 {
 					<-ctx.Done() // the second engine stays up
@@ -264,18 +273,17 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 		nextExit(t, exits, "engine exit was never handled")
 
 		// The exited engine sent its ready notification just before it died.
-		stale := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
-		stale.Incarnation = 777
-		ei.NotifyDrpcReady(stale)
-		time.Sleep(50 * time.Millisecond) // let the notification queue
+		ei.NotifyDrpcReady(getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0))
+		waitFor(t, 2*time.Second, "ready notification was not queued", func() bool {
+			return len(ei.drpcReady) == 1
+		})
 
 		ei.requestStart(ctx)
 		waitFor(t, 2*time.Second, "engine was not started again", func() bool {
 			return atomic.LoadUint32(&starts) == 2
 		})
-		time.Sleep(200 * time.Millisecond)
-		if strings.Contains(buf.String(), "incarnation=777") {
-			t.Fatal("ready notification from the exited engine was used for the next start")
+		if queued := atomic.LoadInt32(&queuedAtRestart); queued != 0 {
+			t.Fatalf("%d ready notification(s) from the exited engine queued at the next start", queued)
 		}
 	})
 
