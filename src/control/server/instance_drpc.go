@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -57,6 +57,7 @@ func (ei *EngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	ei.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, ei.Index(), msg)
 
 	ei.setDrpcSocket(msg.DrpcListenerSock)
+	ei.setScmPageSize(msg.ScmPageSize)
 
 	go func() {
 		ei.drpcReady <- msg

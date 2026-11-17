@@ -22,6 +22,7 @@ message NotifyReadyReq {
 	repeated string secondaryUris = 7; // secondary CaRT URIs
 	repeated uint32 secondaryNctxs = 8; // number of CaRT contexts for each secondary provider
 	bool check_mode = 9; // True if engine started in checker mode
+	uint64          scm_page_size = 10;   // Page size the VOS memory (SCM) files are aligned to
 }
 
 // NotifyReadyResp is nil.

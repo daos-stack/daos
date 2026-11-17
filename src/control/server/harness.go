@@ -54,6 +54,7 @@ type Engine interface {
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
 	GetRank() (ranklist.Rank, error)
 	GetTargetCount() int
+	GetScmPageSize() uint64
 	Index() uint32
 	IsStarted() bool
 	IsReady() bool

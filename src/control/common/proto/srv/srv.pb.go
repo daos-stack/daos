@@ -32,15 +32,16 @@ const (
 
 type NotifyReadyReq struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Uri              string                 `protobuf:"bytes,1,opt,name=uri,proto3" json:"uri,omitempty"`                               // Primary CaRT URI
-	Nctxs            uint32                 `protobuf:"varint,2,opt,name=nctxs,proto3" json:"nctxs,omitempty"`                          // Number of primary CaRT contexts
-	DrpcListenerSock string                 `protobuf:"bytes,3,opt,name=drpcListenerSock,proto3" json:"drpcListenerSock,omitempty"`     // Path to I/O Engine's dRPC listener socket
-	InstanceIdx      uint32                 `protobuf:"varint,4,opt,name=instanceIdx,proto3" json:"instanceIdx,omitempty"`              // I/O Engine instance index
-	Ntgts            uint32                 `protobuf:"varint,5,opt,name=ntgts,proto3" json:"ntgts,omitempty"`                          // number of VOS targets allocated in I/O Engine
-	Incarnation      uint64                 `protobuf:"varint,6,opt,name=incarnation,proto3" json:"incarnation,omitempty"`              // HLC incarnation number
-	SecondaryUris    []string               `protobuf:"bytes,7,rep,name=secondaryUris,proto3" json:"secondaryUris,omitempty"`           // secondary CaRT URIs
-	SecondaryNctxs   []uint32               `protobuf:"varint,8,rep,packed,name=secondaryNctxs,proto3" json:"secondaryNctxs,omitempty"` // number of CaRT contexts for each secondary provider
-	CheckMode        bool                   `protobuf:"varint,9,opt,name=check_mode,json=checkMode,proto3" json:"check_mode,omitempty"` // True if engine started in checker mode
+	Uri              string                 `protobuf:"bytes,1,opt,name=uri,proto3" json:"uri,omitempty"`                                        // Primary CaRT URI
+	Nctxs            uint32                 `protobuf:"varint,2,opt,name=nctxs,proto3" json:"nctxs,omitempty"`                                   // Number of primary CaRT contexts
+	DrpcListenerSock string                 `protobuf:"bytes,3,opt,name=drpcListenerSock,proto3" json:"drpcListenerSock,omitempty"`              // Path to I/O Engine's dRPC listener socket
+	InstanceIdx      uint32                 `protobuf:"varint,4,opt,name=instanceIdx,proto3" json:"instanceIdx,omitempty"`                       // I/O Engine instance index
+	Ntgts            uint32                 `protobuf:"varint,5,opt,name=ntgts,proto3" json:"ntgts,omitempty"`                                   // number of VOS targets allocated in I/O Engine
+	Incarnation      uint64                 `protobuf:"varint,6,opt,name=incarnation,proto3" json:"incarnation,omitempty"`                       // HLC incarnation number
+	SecondaryUris    []string               `protobuf:"bytes,7,rep,name=secondaryUris,proto3" json:"secondaryUris,omitempty"`                    // secondary CaRT URIs
+	SecondaryNctxs   []uint32               `protobuf:"varint,8,rep,packed,name=secondaryNctxs,proto3" json:"secondaryNctxs,omitempty"`          // number of CaRT contexts for each secondary provider
+	CheckMode        bool                   `protobuf:"varint,9,opt,name=check_mode,json=checkMode,proto3" json:"check_mode,omitempty"`          // True if engine started in checker mode
+	ScmPageSize      uint64                 `protobuf:"varint,10,opt,name=scm_page_size,json=scmPageSize,proto3" json:"scm_page_size,omitempty"` // Page size the VOS memory (SCM) files are aligned to
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -136,6 +137,13 @@ func (x *NotifyReadyReq) GetCheckMode() bool {
 		return x.CheckMode
 	}
 	return false
+}
+
+func (x *NotifyReadyReq) GetScmPageSize() uint64 {
+	if x != nil {
+		return x.ScmPageSize
+	}
+	return 0
 }
 
 type GetPoolSvcReq struct {
@@ -490,7 +498,7 @@ var File_srv_srv_proto protoreflect.FileDescriptor
 
 const file_srv_srv_proto_rawDesc = "" +
 	"\n" +
-	"\rsrv/srv.proto\x12\x03srv\"\xab\x02\n" +
+	"\rsrv/srv.proto\x12\x03srv\"\xcf\x02\n" +
 	"\x0eNotifyReadyReq\x12\x10\n" +
 	"\x03uri\x18\x01 \x01(\tR\x03uri\x12\x14\n" +
 	"\x05nctxs\x18\x02 \x01(\rR\x05nctxs\x12*\n" +
@@ -501,7 +509,9 @@ const file_srv_srv_proto_rawDesc = "" +
 	"\rsecondaryUris\x18\a \x03(\tR\rsecondaryUris\x12&\n" +
 	"\x0esecondaryNctxs\x18\b \x03(\rR\x0esecondaryNctxs\x12\x1d\n" +
 	"\n" +
-	"check_mode\x18\t \x01(\bR\tcheckMode\"#\n" +
+	"check_mode\x18\t \x01(\bR\tcheckMode\x12\"\n" +
+	"\rscm_page_size\x18\n" +
+	" \x01(\x04R\vscmPageSize\"#\n" +
 	"\rGetPoolSvcReq\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"B\n" +
 	"\x0eGetPoolSvcResp\x12\x16\n" +
