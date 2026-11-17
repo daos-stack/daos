@@ -12,11 +12,11 @@ static inline void
 dlck_ut_filter(int argc, char **argv)
 {
 #if CMOCKA_FILTER_SUPPORTED
-    	if (argc != 2) {  
-        	fprintf(stderr, "usage: %s <test_filter>\n", argv[0]);  
-        	exit(1);  
-    	} 
-	
+	if (argc != 2) {
+		fprintf(stderr, "usage: %s <test_filter>\n", argv[0]);
+		exit(1);
+	}
+
 	if (argc > 1) {
 		char filter[256];
 		int  rc = snprintf(filter, sizeof(filter), "*%s*", argv[1]);
@@ -29,9 +29,9 @@ dlck_ut_filter(int argc, char **argv)
 		}
 	}
 #else
-    	(void)argc;  
-	fprintf(stderr, "usage: %s\n", argv[0]);  
-    	exit(1); 
+	(void)argc;
+	fprintf(stderr, "usage: %s\n", argv[0]);
+	exit(1);
 #endif
 }
 

@@ -24,7 +24,7 @@
 
 #define EXPECT_D_ASPRINTF2(FMT, PTR, RC)                                                           \
 	do {                                                                                       \
-		expect_string(__wrap_d_asprintf2, fmt, FMT);                                        \
+		expect_string(__wrap_d_asprintf2, fmt, FMT);                                       \
 		will_return(__wrap_d_asprintf2, PTR);                                              \
 		will_return(__wrap_d_asprintf2, RC);                                               \
 	} while (0)
