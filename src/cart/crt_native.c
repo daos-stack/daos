@@ -229,6 +229,9 @@ static void
 failed(void *arg, struct crt_native_peer *peer, int error)
 {
 	struct crt_native_context *c = arg;
+	if (error != ECANCELED && error != ESHUTDOWN)
+		D_ERROR("doca+rc: context %d peer %s failed: errno=%d (%s)\n", c->cart->cc_idx,
+			crt_native_peer_uri(peer), error, strerror(error));
 	for (struct crt_native_rpc_state *s = c->requests; s != NULL; s = s->next)
 		if (s->peer == peer && s->submitted && !s->sent && !s->event_queued)
 			completed(s, error, 0, NULL, 0);
@@ -534,22 +537,29 @@ crt_native_addr_lookup(struct crt_hg_context *hg, const char *uri, void **out)
 	if (c == NULL || out == NULL)
 		return -DER_INVAL;
 	lock(c);
+	const char             *stage = "network lookup";
 	struct crt_native_peer *peer;
 	int rc = c->stopping ? ECANCELED : crt_native_net_lookup(c->net, uri, &peer);
 	if (!rc) {
 		int status = crt_native_peer_status(peer);
 		if (status && status != EINPROGRESS) {
+			stage = "peer setup";
 			crt_native_peer_put(peer);
 			rc = status;
 		}
 	}
 	if (!rc && !peer_data(c, peer)) {
+		stage = "allocate peer state";
 		crt_native_peer_fail(peer, ENOMEM);
 		crt_native_peer_put(peer);
 		rc = ENOMEM;
 	}
 	if (!rc)
 		*out = peer;
+	else
+		D_ERROR("doca+rc: context %d address lookup failed at %s: uri=%s "
+			"errno=%d (%s)\n",
+			c->cart->cc_idx, stage, uri ? uri : "(null)", rc, strerror(rc));
 	unlock(c);
 	return from_errno(rc);
 }
