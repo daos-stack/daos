@@ -126,6 +126,9 @@ module_hotfixes=true\n" >> "$repos_dir$repo:$branch:$build_number".repo
 done
 
 disable_repos "$repos_dir" "${save_repos[@]}"
+if [ -n "$REPO_FILE_URL" ]; then
+    dnf config-manager --set-disabled daos-stack-deps-el-9-stable-local-artifactory
+fi
 
 if [ -n "$REPO_FILE_URL" ]; then
 # Calculate trusted-host and trusted_base_url for artifactory/repository
