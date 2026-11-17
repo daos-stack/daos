@@ -19,8 +19,7 @@ arch=$(uname -i)
 apt_get_install_args="${1:-}"
 
 : "${PYTHON_VERSION:=3}"
-: "${INSTALL_BUILD_TEST_DEPS:=false}"
-case "${INSTALL_BUILD_TEST_DEPS}" in
+case "${INSTALL_BUILD_TEST_DEPS:-false}" in
     true|false) ;;
     *) echo 'INSTALL_BUILD_TEST_DEPS must be true or false' >&2; exit 1 ;;
 esac
@@ -80,7 +79,7 @@ apt-get install ${apt_get_install_args} \
     libncurses-dev \
     yasm
 
-if [[ "${INSTALL_BUILD_TEST_DEPS}" = true ]]; then
+if [[ "${INSTALL_BUILD_TEST_DEPS:-false}" = true ]]; then
     # slurm build dependencies
     # shellcheck disable=SC2086
     apt-get install ${apt_get_install_args} \
