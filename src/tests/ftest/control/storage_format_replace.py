@@ -38,11 +38,8 @@ class StorageFormatReplaceTest(TestWithServers):
 
         Args:
             host (NodeSet): host to simulate storage loss on
-            rank (int): rank running on the host, stopped before killing its processes so the
-                system membership reflects its departure immediately instead of relying on
-                swim to detect it
+            rank (int): rank running on the host
         """
-        self.server_managers[0].stop_ranks([rank])
         stop_processes(self.log, host, self.server_managers[0].manager.job.command_regex)
         scm_mount = self.server_managers[0].manager.job.yaml.engine_params[0].get_value(
             "scm_mount")
@@ -67,25 +64,28 @@ class StorageFormatReplaceTest(TestWithServers):
         self.wait_for_rank_states(rank)
 
     def wait_for_rank_states(self, rank, timeout=WAIT_TIMEOUT):
-        """Query the system until the replaced rank is stopped and all other ranks are joined.
+        """Query the system until the replaced rank is down and all other ranks are joined.
 
         Args:
             rank (int): rank whose storage media loss was simulated
             timeout (int, optional): max seconds to wait. Defaults to WAIT_TIMEOUT.
         """
+        # states a rank may land in once swim detects an ungracefully-killed process, matching
+        # lib/control/storage.go's replaceableMemberFilter
+        down_states = ("excluded", "stopped", "errored", "unresponsive")
         other_ranks = [r for r in self.server_managers[0].ranks if r != rank]
         start = time.time()
         while True:
             data = self.server_managers[0].get_current_state()
             self.log.info("System query while waiting for rank %d to leave: %s", rank, data)
-            rank_stopped = rank in data and data[rank]["state"] == "stopped"
+            rank_down = rank in data and data[rank]["state"] in down_states
             others_joined = all(r in data and data[r]["state"] == "joined" for r in other_ranks)
-            if rank_stopped and others_joined:
+            if rank_down and others_joined:
                 return
             if time.time() - start > timeout:
                 self.fail(
-                    f"Timed out waiting for rank {rank} to be stopped and ranks {other_ranks} "
-                    f"to stay joined before storage format --replace: {data}")
+                    f"Timed out waiting for rank {rank} to leave the system and ranks "
+                    f"{other_ranks} to stay joined before storage format --replace: {data}")
             time.sleep(1)
 
     def test_storage_format_replace(self):
@@ -97,6 +97,7 @@ class StorageFormatReplaceTest(TestWithServers):
         :avocado: tags=StorageFormatReplaceTest,test_storage_format_replace
         """
         host, rank = self.pick_rank()
+        before_state = self.server_managers[0].get_current_state()
 
         self.log_step(f"Simulate storage media loss for rank {rank} on {host}")
         self.simulate_storage_loss(host, rank)
@@ -108,3 +109,25 @@ class StorageFormatReplaceTest(TestWithServers):
         self.log_step(f"Rank {rank} rejoins with its original rank reclaimed")
         if self.server_managers[0].check_rank_state([rank], ["joined"], 60):
             self.fail(f"Rank {rank} did not rejoin after storage format --replace")
+
+        self.log_step(
+            f"Verify rank {rank} rejoined with a new UUID and all other ranks kept theirs")
+        after_state = self.server_managers[0].get_current_state()
+        self.assertEqual(
+            set(before_state), set(after_state),
+            f"System membership changed after --replace: before={before_state} "
+            f"after={after_state}")
+        self.assertNotEqual(
+            before_state[rank]["uuid"], after_state[rank]["uuid"],
+            f"Rank {rank} kept its original UUID after --replace instead of being reformatted")
+        for other_rank, info in before_state.items():
+            if other_rank == rank:
+                continue
+            self.assertEqual(
+                info["uuid"], after_state[other_rank]["uuid"],
+                f"Rank {other_rank}'s UUID changed unexpectedly after replacing rank {rank}")
+
+        # Killing the process (instead of a graceful dmg system stop) never updated the harness's
+        # expected-state bookkeeping for rank, so resync it to the current (queried) states here
+        # so tearDown()'s verification doesn't flag a mismatch.
+        self.server_managers[0].verify_expected_states(set_expected=True)
