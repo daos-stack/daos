@@ -522,7 +522,9 @@ class DdbTest(TestWithServers):
 
         self.log_step("Create a pool and a container.")
         pool = self.get_pool(connect=True)
-        container = self.get_container(pool)
+        # ddb value_load writes the new value without a checksum, so a checksum-enabled
+        # container would reject the later fetch with -DER_CSUM.
+        container = self.get_container(pool, properties="cksum:off,srv_cksum:off")
 
         self.log_step("Insert one object with one dkey with API.")
         obj_dataset = insert_objects(
