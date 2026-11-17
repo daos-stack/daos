@@ -264,7 +264,8 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	if (!ds_pool_restricted(svc->cs_pool, false)) {
 		rc = cont_destroyer_start(svc);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_UUID ": start cont destroyer failed", DP_UUID(svc->cs_pool_uuid));
+			DL_ERROR(rc, DF_UUID ": start cont destroyer failed",
+				 DP_UUID(svc->cs_pool_uuid));
 			goto err_pool;
 		}
 	}
@@ -2307,7 +2308,7 @@ static bool
 cont_destroyer_started(struct cont_svc *svc)
 {
 	struct cont_destroyer *destroyer = &svc->cs_destroyer;
-	bool started;
+	bool                   started;
 
 	ABT_mutex_lock(destroyer->csd_mutex);
 	started = (destroyer->csd_ult != ABT_THREAD_NULL);
