@@ -40,6 +40,7 @@ def scons():
 
     unit_env = tenv.Clone()
     unit_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    unit_env.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
 
     libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
                  'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'ssl', 'pthread', 'abt']

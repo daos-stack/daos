@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -78,6 +79,7 @@ fabric_ifaces:
   -
      iface: ib3
      domain: mlx5_3
+provider_idx: 1
 `)
 
 	badLogMaskCfg := test.CreateTestFile(t, dir, `
@@ -202,6 +204,7 @@ exclude_fabric_ifaces: ["ib3"]
 						},
 					},
 				},
+				ProviderIdx: 1,
 			},
 		},
 	} {

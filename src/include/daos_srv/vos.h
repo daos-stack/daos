@@ -18,7 +18,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/placement.h>
-#include <daos_srv/checker.h>
+#include <daos/checker.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos_types.h>
 
@@ -125,9 +125,10 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param[in] dti		Pointer to the DTX identifier.
  * \param[in,out] epoch		Pointer to current epoch, if it is zero and if the DTX exists, then
  *				the DTX's epoch will be saved in it.
- * \param[out] pm_ver		Hold the DTX's pool map version.
+ * \param[in,out] pm_ver	For resync case, input the recovery's captured pool map version;
+ *				For resent case, it output DTX's pool map version.
  * \param[out] dck		Pointer to the key for CoS cache.
- * \param[in] for_refresh	It is for DTX_REFRESH or not.
+ * \param[in] intent		The purpose for check DTX.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -142,11 +143,12 @@ vos_dtx_validation(struct dtx_handle *dth);
  *				   about the existence of the DTX entry, need to
  *				   retry sometime later.
  *			DTX_ST_INITED	means that the DTX is just initialized but not prepared.
+ *			-DER_INPROGRESS means a resync check found an attached or preparing DTX.
  *			Other negative value if error.
  */
 int
-vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
+vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch, uint32_t *pm_ver,
+	      struct dtx_cos_key *dck, enum dtx_check_intent intent);
 
 /**
  * Load participants information for the given DTX.
@@ -202,7 +204,7 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool keep_act
  * \param coh     [IN]	Container open handle.
  * \param dti     [IN]	The DTX identifiers to be aborted.
  * \param epoch   [IN]	The max epoch for the DTX to be aborted.
- * \param version [IN]	The max version for the DTX to be aborted.
+ * \param version [IN]	Pool map version authorizing the abort; zero bypasses version checks.
  *
  * \return		Zero on success, negative value if error.
  */
@@ -918,6 +920,10 @@ vos_obj_mark_corruption(daos_handle_t coh, daos_epoch_t epoch, uint32_t pm_ver, 
  * The upper layer must explicitly call \a vos_fetch_end to finalize the
  * I/O and release resources.
  *
+ * With VOS_OF_FETCH_CSUM, the fetch only lists the extents and their checksums and reads no data.
+ * It takes a single iod (\a nr is 1), no shadows (\a shadows is NULL) and no
+ * VOS_OF_FETCH_RECX_LIST: -DER_INVAL is returned otherwise, whatever the data.
+ *
  * TODO: add more detail descriptions for punched or missing records.
  *
  * \param[in] coh	Container open handle
@@ -967,7 +973,7 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
  *			is provided.
- * \param flags [IN]	conditional flags
+ * \param flags [IN]	conditional flags.
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
@@ -1348,17 +1354,14 @@ vos_iter_validate(daos_handle_t ih);
 /**
  * Check an iterator.
  *
- * \param[in] ih			Iterator handle.
- * \param[in] report_fn			Report function.
- * \param[in] report_arg		Argument for the report function.
- * \param[in] error_on_non_zero_padding	Trigger an error on non-zero padding.
+ * \param[in] ih	Iterator handle.
+ * \param[in] ck	Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Errors returned by the iterator check.
  */
 int
-vos_iter_check(daos_handle_t ih, report_fn_t report_fn, void *report_arg,
-	       bool error_on_non_zero_padding);
+vos_iter_check(daos_handle_t ih, struct checker *ck);
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a

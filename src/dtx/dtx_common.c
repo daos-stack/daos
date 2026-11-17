@@ -1231,6 +1231,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	    (dth->dth_dist || dth->dth_modification_cnt > 0)) {
 		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
 		if (unlikely(result < 0)) {
+			if (result == -DER_ALREADY)
+				goto out;
+
 			D_ERROR(DF_UUID": Fail to persistently store DTX "DF_DTI": "DF_RC"\n",
 				DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(result));
 			goto abort;
@@ -1360,9 +1363,9 @@ abort:
 		 */
 		vos_dtx_cleanup(dth, true);
 		if (dlh->dlh_coll)
-			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch);
+			dtx_coll_abort(cont, dlh->dlh_coll_entry, dth->dth_epoch, dth->dth_ver);
 		else
-			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
+			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch, dth->dth_ver);
 		aborted = true;
 	}
 
@@ -1480,8 +1483,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
 	 * to regard it as failed transaction and abort it.
 	 */
-	if (result == 0 && !dth->dth_active && (dth->dth_dist || dth->dth_modification_cnt > 0))
+	if (result == 0 && !dth->dth_active && (dth->dth_dist || dth->dth_modification_cnt > 0)) {
 		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
+		if (unlikely(result == -DER_ALREADY))
+			result = 0;
+	}
 
 	if (result < 0) {
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
@@ -1902,7 +1908,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, false);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, DCI_RESENT);
 	switch (rc) {
 	case DTX_ST_INITED:
 		return -DER_INPROGRESS;
