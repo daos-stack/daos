@@ -33,6 +33,7 @@ struct crt_native_peer {
 	struct sockaddr_in              address;
 	char                            uri[64];
 	int                             fd, error;
+	short                           socket_events;
 	enum peer_state                 state;
 	uint8_t                         tx[NET_HELLO], rx[NET_HELLO], ready_tx, ready_rx;
 	size_t                          sent, received;
@@ -42,6 +43,7 @@ struct crt_native_peer {
 	bool                            addressed;
 	bool                            resources_released;
 	atomic_uint                     references;
+	unsigned                        slot;
 };
 struct crt_native_net {
 	const struct crt_native_ops    *ops;
@@ -49,9 +51,16 @@ struct crt_native_net {
 	struct crt_native_limits        limits;
 	struct crt_native_net_callbacks callbacks;
 	void                           *arg;
-	struct crt_native_peer         *peers, *cursor;
+	struct crt_native_peer         *peers;
 	unsigned                        count, max_peers, timeout_ms, port;
 	int                             listener;
+	struct pollfd                  *pollfds;
+	struct crt_native_peer        **pollpeers;
+	uint64_t                        next_socket_poll;
+	struct crt_native_peer        **slots;
+	atomic_uint_fast64_t           *runnable;
+	unsigned                        words, ready_cursor;
+	struct crt_native_group        *group;
 	char                            uri[64];
 	bool                            closing, progressing;
 };
@@ -63,6 +72,19 @@ now_ms(void)
 	if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
 		return 0;
 	return (uint64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+void
+crt_native_peer_kick(struct crt_native_peer *p)
+{
+	if (p)
+		atomic_fetch_or(&p->net->runnable[p->slot / 64], UINT64_C(1) << (p->slot % 64));
+}
+
+static void
+wake_peer(void *arg)
+{
+	crt_native_peer_kick(arg);
 }
 
 static int
@@ -89,6 +111,7 @@ crt_native_peer_fail(struct crt_native_peer *p, int error)
 	if (p->state != FAILED) {
 		p->state = FAILED;
 		p->error = error;
+		crt_native_peer_kick(p);
 		if (p->fd >= 0) {
 			close(p->fd);
 			p->fd = -1;
@@ -150,9 +173,24 @@ crt_native_net_create(const struct crt_native_ops *ops, const struct crt_native_
 	n->arg        = arg;
 	n->max_peers  = max_peers;
 	n->timeout_ms = timeout_ms;
-	n->listener   = socket(AF_INET, SOCK_STREAM, 0);
-	int rc        = n->listener < 0 ? errno : configure_socket(n->listener);
-	int one       = 1;
+	n->words      = (max_peers + 63) / 64;
+	n->slots      = calloc(max_peers, sizeof(*n->slots));
+	n->runnable   = calloc(n->words, sizeof(*n->runnable));
+	n->pollfds    = calloc(max_peers + 1, sizeof(*n->pollfds));
+	n->pollpeers  = calloc(max_peers + 1, sizeof(*n->pollpeers));
+	if (!n->pollfds || !n->pollpeers || !n->slots || !n->runnable) {
+		free(n->slots);
+		free(n->runnable);
+		free(n->pollfds);
+		free(n->pollpeers);
+		free(n);
+		return ENOMEM;
+	}
+	for (unsigned i = 0; i < n->words; i++)
+		atomic_init(&n->runnable[i], 0);
+	n->listener = socket(AF_INET, SOCK_STREAM, 0);
+	int rc      = n->listener < 0 ? errno : configure_socket(n->listener);
+	int one     = 1;
 	if (!rc && setsockopt(n->listener, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)))
 		rc = errno;
 	if (rc == 0 && bind(n->listener, (void *)&address, sizeof(address)) != 0)
@@ -165,8 +203,22 @@ crt_native_net_create(const struct crt_native_ops *ops, const struct crt_native_
 	if (rc != 0) {
 		if (n->listener >= 0)
 			close(n->listener);
+		free(n->slots);
+		free(n->runnable);
+		free(n->pollfds);
+		free(n->pollpeers);
 		free(n);
 		return rc;
+	}
+	if (ops->group_create && ops->group_progress && ops->group_destroy) {
+		rc = ops->group_create(config, 2 * max_peers, &n->group);
+		if (rc) {
+			/* Preserve partial group handles when cleanup needs a retry. */
+			if (crt_native_net_destroy(n) != 0)
+				*out = n;
+			return rc;
+		}
+		n->config.group = n->group;
 	}
 	n->port = ntohs(address.sin_port);
 	snprintf(n->uri, sizeof(n->uri), "doca+rc://%s:%u", ip, n->port);
@@ -183,21 +235,29 @@ add_peer(struct crt_native_net *n, int fd, const struct sockaddr_in *address, bo
 	struct crt_native_peer *p = calloc(1, sizeof(*p));
 	if (p == NULL)
 		return ENOMEM;
-	p->net      = n;
-	p->fd       = fd;
-	p->address  = *address;
-	p->state    = connecting ? CONNECTING : HELLO;
-	p->deadline = now_ms() + n->timeout_ms;
-	p->next     = n->peers;
-	p->previous = &n->peers;
+	for (p->slot = 0; n->slots[p->slot]; p->slot++)
+		;
+	n->slots[p->slot] = p;
+	p->net            = n;
+	p->fd             = fd;
+	p->address        = *address;
+	p->state          = connecting ? CONNECTING : HELLO;
+	p->deadline       = now_ms() + n->timeout_ms;
+	p->next           = n->peers;
+	p->previous       = &n->peers;
 	if (p->next)
 		p->next->previous = &p->next;
 	atomic_init(&p->references, 0);
 	n->peers = p;
 	n->count++;
-	int rc = n->ops->open(&n->config, &p->control_ep);
+	n->next_socket_poll = 0;
+	crt_native_peer_kick(p);
+	struct crt_native_config config = n->config;
+	config.wake                     = wake_peer;
+	config.wake_arg                 = p;
+	int rc                          = n->ops->open(&config, &p->control_ep);
 	if (rc == 0)
-		rc = n->ops->open(&n->config, &p->bulk_ep);
+		rc = n->ops->open(&config, &p->bulk_ep);
 	struct crt_native_address control, bulk;
 	if (rc == 0)
 		rc = n->ops->address(p->control_ep, &control);
@@ -333,9 +393,9 @@ remove_peer(struct crt_native_peer *p)
 	*p->previous             = p->next;
 	if (p->next)
 		p->next->previous = p->previous;
-	if (n->cursor == p)
-		n->cursor = p->next ? p->next : n->peers;
 	n->count--;
+	n->slots[p->slot] = NULL;
+	atomic_fetch_and(&n->runnable[p->slot / 64], ~(UINT64_C(1) << (p->slot % 64)));
 	free(p);
 }
 
@@ -382,13 +442,11 @@ step(struct crt_native_peer *p)
 	if (p->state != READY && now_ms() >= p->deadline)
 		return ETIMEDOUT;
 	if (p->state == CONNECTING) {
-		struct pollfd fd = {.fd = p->fd, .events = POLLOUT};
-		int           rc = poll(&fd, 1, 0), error = 0;
-		if (rc < 0)
-			return errno == EINTR ? 0 : errno;
-		if (rc == 0)
+		int error = 0;
+		if (!p->socket_events)
 			return 0;
-		socklen_t size = sizeof(error);
+		p->socket_events = 0;
+		socklen_t size   = sizeof(error);
 		if (getsockopt(p->fd, SOL_SOCKET, SO_ERROR, &error, &size) != 0)
 			return errno;
 		if (error)
@@ -454,7 +512,8 @@ step(struct crt_native_peer *p)
 			return rc == EAGAIN ? 0 : rc;
 		if (p->ready_rx != 1)
 			return EPROTO;
-		p->state = READY;
+		p->state         = READY;
+		p->socket_events = 0;
 		return 0;
 	}
 	if (p->state == READY) {
@@ -465,14 +524,17 @@ step(struct crt_native_peer *p)
 		int      rc = crt_native_channel_progress(p->channel, &completed);
 		if (rc != 0 && rc != EAGAIN)
 			return rc;
-		uint8_t extra;
-		ssize_t count = recv(p->fd, &extra, 1, MSG_PEEK);
-		if (count == 0)
-			return ECONNRESET;
-		if (count > 0)
-			return EPROTO;
-		if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-			return errno;
+		if (p->socket_events) {
+			p->socket_events = 0;
+			uint8_t extra;
+			ssize_t count = recv(p->fd, &extra, 1, MSG_PEEK);
+			if (count == 0)
+				return ECONNRESET;
+			if (count > 0)
+				return EPROTO;
+			if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+				return errno;
+		}
 		if (n->callbacks.progress)
 			rc = n->callbacks.progress(n->arg, p);
 		if (rc == 0)
@@ -482,13 +544,34 @@ step(struct crt_native_peer *p)
 	return 0;
 }
 
-int
-crt_native_net_progress(struct crt_native_net *n, unsigned *work)
+/* TCP is bootstrap/liveness only. Batch readiness checks at most once per
+ * millisecond; RDMA progress never probes each idle socket on every visit.
+ */
+static int
+progress_sockets(struct crt_native_net *n, unsigned *work)
 {
-	if (n == NULL || work == NULL || n->progressing)
-		return EINVAL;
-	*work          = 0;
-	n->progressing = true;
+	uint64_t now = now_ms();
+	if (now < n->next_socket_poll)
+		return 0;
+	n->next_socket_poll = now + 1;
+	unsigned count      = 1;
+	n->pollfds[0]       = (struct pollfd){.fd = n->listener, .events = POLLIN};
+	for (struct crt_native_peer *p = n->peers; p; p = p->next) {
+		if (!p->resources_released)
+			crt_native_peer_kick(p);
+		if (p->fd < 0)
+			continue;
+		n->pollpeers[count] = p;
+		n->pollfds[count++] = (struct pollfd){
+		    .fd = p->fd, .events = p->state == CONNECTING ? POLLOUT : POLLIN};
+	}
+	int rc = poll(n->pollfds, count, 0);
+	if (rc < 0)
+		return errno == EINTR ? 0 : errno;
+	for (unsigned i = 1; i < count; i++)
+		n->pollpeers[i]->socket_events |= n->pollfds[i].revents;
+	if (rc == 0 || !(n->pollfds[0].revents & POLLIN))
+		return 0;
 	for (unsigned budget = 0; budget < 16 && !n->closing; budget++) {
 		struct sockaddr_in address;
 		socklen_t          size = sizeof(address);
@@ -501,23 +584,71 @@ crt_native_net_progress(struct crt_native_net *n, unsigned *work)
 		else
 			(*work)++;
 	}
-	if (n->cursor == NULL)
-		n->cursor = n->peers;
-	unsigned budget = n->count < 32 ? n->count : 32;
-	for (; budget && n->cursor != NULL; budget--) {
-		struct crt_native_peer *p = n->cursor;
-		n->cursor                 = p->next ? p->next : n->peers;
-		int rc                    = step(p);
-		if (rc != 0)
-			crt_native_peer_fail(p, rc);
-		/* CaRT can borrow a cached address between cache lookup and request
-		 * creation. Keep looked-up shells stable until context destruction;
-		 * uncached accepted clients have no such borrowers and free slots.
-		 */
-		if (p->resources_released && !p->addressed && atomic_load(&p->references) == 0)
-			remove_peer(p);
-		(*work)++;
+	return 0;
+}
+
+int
+crt_native_net_progress(struct crt_native_net *n, unsigned *work)
+{
+	if (n == NULL || work == NULL || n->progressing)
+		return EINVAL;
+	*work          = 0;
+	n->progressing = true;
+	int socket_rc  = progress_sockets(n, work);
+	if (socket_rc) {
+		n->progressing = false;
+		return socket_rc;
 	}
+	if (n->group) {
+		int rc = n->ops->group_progress(n->group);
+		if (rc)
+			for (struct crt_native_peer *p = n->peers; p; p = p->next)
+				crt_native_peer_fail(p, rc);
+	} else {
+		/* Backends without grouped polling retain the portable polling path. */
+		for (struct crt_native_peer *p = n->peers; p; p = p->next)
+			if (!p->resources_released)
+				crt_native_peer_kick(p);
+	}
+	uint64_t pending[64]; /* max_peers <= 4096 */
+	for (unsigned i = 0; i < n->words; i++)
+		pending[i] = atomic_exchange(&n->runnable[i], 0);
+	unsigned budget = 32, start = n->ready_cursor;
+	for (unsigned pass = 0; pass < 2 && budget; pass++) {
+		unsigned begin = pass ? 0 : start;
+		unsigned end   = pass ? start : n->max_peers;
+		for (unsigned word = begin / 64; word * 64 < end && budget; word++) {
+			uint64_t bits = pending[word];
+			if (word == begin / 64)
+				bits &= UINT64_MAX << (begin % 64);
+			if (end / 64 == word)
+				bits &= (UINT64_C(1) << (end % 64)) - 1;
+			while (bits && budget) {
+				unsigned bit  = (unsigned)__builtin_ctzll(bits);
+				unsigned slot = word * 64 + bit;
+				uint64_t mask = UINT64_C(1) << bit;
+				bits &= ~mask;
+				pending[word] &= ~mask;
+				struct crt_native_peer *p = n->slots[slot];
+				if (!p)
+					continue;
+				n->ready_cursor = (slot + 1) % n->max_peers;
+				int rc          = step(p);
+				if (rc)
+					crt_native_peer_fail(p, rc);
+				if (p->resources_released && !p->addressed &&
+				    atomic_load(&p->references) == 0)
+					remove_peer(p);
+				else if (p->state != READY && !p->resources_released)
+					crt_native_peer_kick(p);
+				(*work)++;
+				budget--;
+			}
+		}
+	}
+	for (unsigned i = 0; i < n->words; i++)
+		if (pending[i])
+			atomic_fetch_or(&n->runnable[i], pending[i]);
 	n->progressing = false;
 	return 0;
 }
@@ -552,6 +683,15 @@ crt_native_net_destroy(struct crt_native_net *n)
 			return EBUSY;
 		remove_peer(p);
 	}
+	if (n->group) {
+		int rc = n->ops->group_destroy(n->group);
+		if (rc)
+			return rc;
+	}
+	free(n->slots);
+	free(n->runnable);
+	free(n->pollfds);
+	free(n->pollpeers);
 	free(n);
 	return 0;
 }

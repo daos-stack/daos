@@ -25,7 +25,8 @@ struct incoming {
 	unsigned                   index, next;
 };
 struct bridge_peer {
-	struct bridge_peer           *next;
+	struct bridge_peer           *next, *dispatch_next;
+	bool                          dispatch_queued;
 	struct crt_native_peer       *peer;
 	struct crt_native_cart_bulk  *bulk;
 	struct incoming              *incoming;
@@ -39,7 +40,7 @@ struct crt_native_context {
 	pthread_mutex_t              mutex, progress_mutex;
 	struct crt_native_net       *net;
 	struct crt_native_rpc_state *requests;
-	struct bridge_peer          *peers;
+	struct bridge_peer          *peers, *bulk_dispatch;
 	struct crt_native_event     *events, *events_tail;
 	char                        *device;
 	struct crt_native_ep        *probe;
@@ -285,14 +286,25 @@ prepare_header(struct crt_rpc_priv *rpc)
 	return 0;
 }
 
+static void
+queue_bulk_callbacks(struct crt_native_context *c, struct bridge_peer *p)
+{
+	if (!p->dispatch_queued && crt_native_cart_bulk_has_callbacks(p->bulk)) {
+		p->dispatch_next   = c->bulk_dispatch;
+		c->bulk_dispatch   = p;
+		p->dispatch_queued = true;
+	}
+}
+
 static int
 drive_peer(void *arg, struct crt_native_peer *peer)
 {
-	(void)arg;
-	struct bridge_peer *p = crt_native_peer_data(peer);
+	struct crt_native_context *c = arg;
+	struct bridge_peer        *p = crt_native_peer_data(peer);
 	if (p == NULL || p->bulk == NULL)
 		return 0;
 	int rc = crt_native_cart_bulk_progress(p->bulk);
+	queue_bulk_callbacks(c, p);
 	if (rc != 0 && rc != -DER_AGAIN && rc != -DER_CANCELED)
 		return EIO;
 	if (crt_native_peer_status(peer) != 0)
@@ -346,7 +358,7 @@ destroy_peer(void *arg, struct crt_native_peer *peer)
 	struct bridge_peer        *p = crt_native_peer_data(peer);
 	if (p == NULL)
 		return 0;
-	if (p->requests || p->incoming_active)
+	if (p->requests || p->incoming_active || p->dispatch_queued)
 		return EBUSY;
 	int rc = p->bulk ? crt_native_cart_bulk_destroy(p->bulk) : 0;
 	if (rc != 0)
@@ -611,7 +623,8 @@ crt_native_req_send(struct crt_rpc_priv *rpc)
 	s->pending_previous   = p->waiting_tail;
 	*p->waiting_tail      = s;
 	p->waiting_tail       = &s->pending_next;
-	int error             = crt_native_peer_status(s->peer);
+	crt_native_peer_kick(s->peer);
+	int error = crt_native_peer_status(s->peer);
 	if (error != 0 && error != EINPROGRESS)
 		completed(s, error, 0, NULL, 0);
 	unlock(s->context);
@@ -651,6 +664,7 @@ crt_native_reply_send(struct crt_rpc_priv *rpc)
 		rc = crt_native_rpc_reply_encoded(s->engine, s->token, 0, encode, s);
 		if (!rc)
 			s->reply_queued = true;
+		crt_native_peer_kick(s->peer);
 	}
 	int result = s->error < 0 ? s->error : from_errno(rc);
 	unlock(s->context);
@@ -847,14 +861,23 @@ crt_native_ctx_progress(struct crt_hg_context *hg)
 			dispatch_incoming(c, container_of(event, struct incoming, event));
 		callbacks++;
 	}
-	/* Lookup threads may prepend peers. Existing next links remain immutable
-	 * until fini, which also holds progress_mutex. Snapshot the head under lock.
+	/* Dispatch only bindings with completed callbacks, outside the context
+	 * lock. The queued flag pins their peer data until dispatch completes.
 	 */
-	lock(c);
-	struct bridge_peer *peers = c->peers;
-	unlock(c);
-	for (struct bridge_peer *p = peers; p; p = p->next)
+	for (unsigned budget = 0; budget < 32; budget++) {
+		lock(c);
+		struct bridge_peer *p = c->bulk_dispatch;
+		if (p)
+			c->bulk_dispatch = p->dispatch_next;
+		unlock(c);
+		if (!p)
+			break;
 		callbacks += crt_native_cart_bulk_dispatch(p->bulk);
+		lock(c);
+		p->dispatch_queued = false;
+		queue_bulk_callbacks(c, p);
+		unlock(c);
+	}
 	pthread_mutex_unlock(&c->progress_mutex);
 	return rc ? from_errno(rc) : callbacks ? 0 : -DER_TIMEDOUT;
 }

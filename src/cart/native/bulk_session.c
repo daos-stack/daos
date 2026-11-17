@@ -321,6 +321,8 @@ crt_native_bulk_import_put(struct crt_native_bulk_session *s, uint64_t id)
 	else
 		s->ack_head = slot;
 	s->ack_tail = slot;
+	if (s->ops->wake)
+		s->ops->wake(s->ep);
 	return 0;
 }
 

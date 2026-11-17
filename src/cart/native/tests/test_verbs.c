@@ -386,6 +386,83 @@ test_allocation_failures(void)
 	assert(ops->close(ep) == 0);
 }
 
+static void
+woken(void *arg)
+{
+	(*(unsigned *)arg)++;
+}
+
+static void
+test_shared_cq(void)
+{
+	const struct crt_native_ops *ops = &crt_native_verbs_ops;
+	struct crt_native_config     cfg = {
+		.device = "mock0", .port = 1, .gid_index = -1, .depth = 4, .wake = woken};
+	struct crt_native_group        *g;
+	struct crt_native_ep           *a, *b;
+	struct crt_native_mr           *amr, *bmr;
+	struct crt_native_remote_memory remote;
+	struct crt_native_address       address;
+	struct crt_native_completion    out[4];
+	char                            abuf[16], bbuf[16];
+	unsigned                        count, awakes = 0, bwakes = 0;
+	head = tail = num_accepted = 0;
+	unsigned cq_before = destroyed_cqs, device_before = closed_devices;
+	assert(ops->group_create(&cfg, 2, &g) == 0);
+	cfg.group    = g;
+	cfg.wake_arg = &awakes;
+	assert(ops->open(&cfg, &a) == 0);
+	assert(ops->close(a) == 0);
+	assert(ops->open(&cfg, &a) == 0);
+	cfg.wake_arg = &bwakes;
+	assert(ops->open(&cfg, &b) == 0);
+	assert(ops->group_destroy(g) == EBUSY);
+	assert(ops->address(a, &address) == 0 && ops->connect(a, &address) == 0);
+	assert(ops->address(b, &address) == 0 && ops->connect(b, &address) == 0);
+	assert(ops->register_memory(a, abuf, sizeof(abuf), 0, &amr, &remote) == 0);
+	assert(ops->register_memory(b, bbuf, sizeof(bbuf), 0, &bmr, &remote) == 0);
+	assert(ops->post(a, CRT_NATIVE_SEND, amr, 0, 8, NULL, 0, abuf) == 0);
+	assert(ops->post(b, CRT_NATIVE_SEND, bmr, 0, 8, NULL, 0, bbuf) == 0);
+	assert(num_accepted == 2);
+	/* Interleave endpoint completions on one hardware CQ. */
+	completions[tail++]   = (struct ibv_wc){.wr_id = accepted[1], .status = IBV_WC_SUCCESS};
+	completions[tail++]   = (struct ibv_wc){.wr_id = accepted[0], .status = IBV_WC_SUCCESS};
+	num_accepted          = 0;
+	unsigned polls_before = poll_calls;
+	awakes = bwakes = 0;
+	assert(ops->group_progress(g) == 0);
+	assert(poll_calls == polls_before + 1 && awakes == 1 && bwakes == 1);
+	assert(ops->deregister_memory(amr) == EBUSY);
+	assert(ops->deregister_memory(bmr) == EBUSY);
+	assert(ops->progress(a, out, 4, &count) == 0 && count == 1);
+	assert(out[0].cookie == abuf && out[0].error == 0 && out[0].bytes == 8);
+	assert(ops->progress(b, out, 4, &count) == 0 && count == 1);
+	assert(out[0].cookie == bbuf && out[0].error == 0 && out[0].bytes == 8);
+	assert(poll_calls == polls_before + 1); /* Endpoint progress never polls the CQ. */
+	/* A shared CQ error must still allow later flush completions to drain. */
+	assert(ops->post(a, CRT_NATIVE_SEND, amr, 0, 8, NULL, 0, abuf) == 0);
+	assert(ops->post(b, CRT_NATIVE_SEND, bmr, 0, 8, NULL, 0, bbuf) == 0);
+	poll_error = 1;
+	assert(ops->group_progress(g) == EIO);
+	assert(ops->close_begin(a) == 0 && ops->close_begin(b) == 0);
+	assert(ops->quiesce(a) == EBUSY && ops->quiesce(b) == EBUSY);
+	assert(ops->group_progress(g) == EIO);
+	assert(ops->progress(a, out, 4, &count) == EIO && count == 1);
+	assert(out[0].cookie == abuf && out[0].error == ECANCELED);
+	assert(ops->progress(b, out, 4, &count) == EIO && count == 1);
+	assert(out[0].cookie == bbuf && out[0].error == ECANCELED);
+	assert(ops->deregister_memory(amr) == 0);
+	assert(ops->deregister_memory(bmr) == 0);
+	assert(ops->close_begin(a) == 0 && ops->quiesce(a) == 0);
+	assert(ops->close(a) == 0);
+	assert(destroyed_cqs == cq_before && closed_devices == device_before);
+	/* Failed groups reject new endpoints while existing handles drain. */
+	assert(ops->open(&cfg, &a) == EIO && a == NULL);
+	assert(ops->close(b) == 0);
+	assert(ops->group_destroy(g) == 0);
+	assert(destroyed_cqs == cq_before + 1 && closed_devices == device_before + 1);
+}
+
 int
 main(void)
 {
@@ -393,6 +470,7 @@ main(void)
 	test_success_and_open_failure();
 	test_slot_recycling();
 	test_allocation_failures();
+	test_shared_cq();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }

@@ -17,6 +17,13 @@ See [IMPLEMENTATION.md](IMPLEMENTATION.md) for implementation status.
   bootstrap/liveness only; RPC payloads use RC. Simultaneous connects are supported.
   Failed connections release hardware resources during progress; uncached accepted
   clients also release their peer slots after asynchronous consumers have drained.
+- The verbs backend shares one hardware CQ and device context per network context.
+  Endpoints retain private PDs and QPs. A bounded shared poll routes completions
+  to endpoint queues and wakes the corresponding peer; endpoint progress does not
+  poll hardware again. Worker submissions and receive releases also wake peers.
+  Runnable peers use a rotating bitmap, and completed bulk callbacks use a ready
+  list. TCP readiness and the timer/retry sweep run at a one-millisecond cadence;
+  `accept` and liveness reads run only after socket readiness is reported.
 - `rpc.h` / `channel.h`: registered eager frames, generational matching, independent
   request/reply/control reserves, backpressure, deadline heap and RX leases.
 - `proc.h` / `cart_proc.h`: bounded, versioned big-endian encoding using existing
@@ -52,7 +59,8 @@ do not constitute a successful Linux link, real-HCA test or DAOS qualification.
   Collective header/dispatch wiring does not establish collective compatibility.
 - Failed cached peers do not reconnect automatically; recreate their context.
   Cached address shells stay stable until context destruction, while their failed
-  connection's QPs, CQs, protection domains and registered buffers retire earlier.
+  connection's QPs, private protection domains and registered buffers retire
+  earlier. The context's shared CQ remains until its last endpoint is closed.
 - Native one-way completion waits for an internal server release acknowledgment.
 - DC, GPU submission, selective signaling, full recovery, SWIM/collective
   qualification and comparative benchmarks remain future work.

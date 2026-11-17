@@ -461,13 +461,15 @@ crt_native_cart_bulk_transfer(struct crt_native_cart_bulk *b, struct crt_bulk_de
 	atomic_store(&op->cancel, false);
 	op->active = true;
 	b->active_operations++;
-	pthread_mutex_unlock(&registry_lock);
 	if (id != NULL)
 		*id = op;
 	unsigned head = atomic_load(&b->incoming);
 	do {
 		op->incoming_next = head;
 	} while (!atomic_compare_exchange_weak(&b->incoming, &head, slot));
+	if (b->ops->wake)
+		b->ops->wake(b->ep);
+	pthread_mutex_unlock(&registry_lock);
 	return 0;
 }
 
@@ -524,6 +526,12 @@ crt_native_cart_bulk_defer_callbacks(struct crt_native_cart_bulk *b)
 		return -DER_INVAL;
 	b->defer_callbacks = true;
 	return 0;
+}
+
+bool
+crt_native_cart_bulk_has_callbacks(const struct crt_native_cart_bulk *b)
+{
+	return b && b->completed_head != b->capacity;
 }
 
 unsigned

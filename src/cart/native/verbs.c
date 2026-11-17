@@ -5,6 +5,7 @@
 #include "transport.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <infiniband/verbs.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,15 @@ struct operation {
 	bool                   active;
 };
 
+struct crt_native_group {
+	struct ibv_context    *context;
+	struct ibv_cq         *cq;
+	struct crt_native_ep **endpoints;
+	unsigned               capacity, count, next_slot, depth;
+	char                  *device;
+	int                    error;
+};
+
 struct crt_native_ep {
 	struct ibv_context       *context;
 	struct ibv_pd            *pd;
@@ -34,6 +44,8 @@ struct crt_native_ep {
 	struct crt_native_address local;
 	struct operation         *operations;
 	unsigned                  outstanding;
+	struct ibv_wc            *pending;
+	unsigned                  pending_head, pending_count, group_slot;
 	unsigned                  free_head;
 	unsigned                  registrations;
 	bool                      connected;
@@ -66,7 +78,7 @@ verbs_close(struct crt_native_ep *ep)
 			return rc;
 		ep->qp = NULL;
 	}
-	if (ep->cq != NULL) {
+	if (ep->cq != NULL && ep->config.group == NULL) {
 		rc = ibv_destroy_cq(ep->cq);
 		if (rc != 0)
 			return rc;
@@ -78,11 +90,16 @@ verbs_close(struct crt_native_ep *ep)
 			return rc;
 		ep->pd = NULL;
 	}
-	if (ep->context != NULL) {
+	if (ep->context != NULL && ep->config.group == NULL) {
 		rc = ibv_close_device(ep->context);
 		if (rc != 0)
 			return rc;
 	}
+	if (ep->config.group && ep->config.group->endpoints[ep->group_slot] == ep) {
+		ep->config.group->endpoints[ep->group_slot] = NULL;
+		ep->config.group->count--;
+	}
+	free(ep->pending);
 	free(ep->operations);
 	free(ep);
 	return 0;
@@ -119,27 +136,52 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	}
 	for (unsigned i = 0; i < cfg->depth; i++)
 		ep->operations[i].next_free = i + 1;
-	stage   = "ibv_get_device_list";
-	errno   = 0;
-	devices = ibv_get_device_list(&count);
-	if (devices == NULL) {
-		rc = errno != 0 ? errno : ENODEV;
-		goto fail;
-	}
-	stage = "find device";
-	for (int i = 0; i < count; i++) {
-		if (strcmp(cfg->device, ibv_get_device_name(devices[i])) == 0) {
-			stage       = "ibv_open_device";
-			errno       = 0;
-			ep->context = ibv_open_device(devices[i]);
-			if (ep->context == NULL)
-				rc = errno != 0 ? errno : EIO;
-			break;
+	if (cfg->group) {
+		struct crt_native_group *g = cfg->group;
+		stage                      = "join shared CQ group";
+		if (cfg->depth != g->depth || strcmp(cfg->device, g->device) != 0) {
+			rc = EINVAL;
+			goto fail;
 		}
+		if (g->error || g->count == g->capacity) {
+			rc = g->error ? g->error : ENOSPC;
+			goto fail;
+		}
+		while (g->endpoints[g->next_slot])
+			g->next_slot = (g->next_slot + 1) % g->capacity;
+		ep->group_slot               = g->next_slot;
+		g->endpoints[ep->group_slot] = ep;
+		g->count++;
+		ep->context = g->context;
+		ep->cq      = g->cq;
+		ep->pending = calloc(cfg->depth, sizeof(*ep->pending));
+		if (!ep->pending) {
+			rc = ENOMEM;
+			goto fail;
+		}
+	} else {
+		stage   = "ibv_get_device_list";
+		errno   = 0;
+		devices = ibv_get_device_list(&count);
+		if (devices == NULL) {
+			rc = errno != 0 ? errno : ENODEV;
+			goto fail;
+		}
+		stage = "find device";
+		for (int i = 0; i < count; i++) {
+			if (strcmp(cfg->device, ibv_get_device_name(devices[i])) == 0) {
+				stage       = "ibv_open_device";
+				errno       = 0;
+				ep->context = ibv_open_device(devices[i]);
+				if (ep->context == NULL)
+					rc = errno != 0 ? errno : EIO;
+				break;
+			}
+		}
+		ibv_free_device_list(devices);
+		if (ep->context == NULL)
+			goto fail;
 	}
-	ibv_free_device_list(devices);
-	if (ep->context == NULL)
-		goto fail;
 	stage = "ibv_query_port";
 	rc    = ibv_query_port(ep->context, cfg->port, &port);
 	if (rc != 0)
@@ -173,12 +215,14 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 		rc = errno != 0 ? errno : ENOMEM;
 		goto fail;
 	}
-	stage  = "ibv_create_cq";
-	errno  = 0;
-	ep->cq = ibv_create_cq(ep->context, (int)cfg->depth, NULL, NULL, 0);
-	if (ep->cq == NULL) {
-		rc = errno != 0 ? errno : ENOMEM;
-		goto fail;
+	if (!cfg->group) {
+		stage  = "ibv_create_cq";
+		errno  = 0;
+		ep->cq = ibv_create_cq(ep->context, (int)cfg->depth, NULL, NULL, 0);
+		if (ep->cq == NULL) {
+			rc = errno != 0 ? errno : ENOMEM;
+			goto fail;
+		}
 	}
 	init.send_cq          = ep->cq;
 	init.recv_cq          = ep->cq;
@@ -293,7 +337,7 @@ verbs_register(struct crt_native_ep *ep, void *buffer, size_t length, unsigned r
 	mr = calloc(1, sizeof(*mr));
 	if (mr == NULL)
 		return ENOMEM;
-	errno = 0;
+	errno  = 0;
 	mr->mr = ibv_reg_mr(ep->pd, buffer, length, access);
 	if (mr->mr == NULL) {
 		int rc = errno != 0 ? errno : ENOMEM;
@@ -359,18 +403,21 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 			return EINVAL;
 	}
 	slot = ep->free_head;
-	if (slot == ep->config.depth)
+	if (slot == ep->config.depth) {
+		if (ep->config.wake)
+			ep->config.wake(ep->config.wake_arg);
 		return EAGAIN;
+	}
 	sge = (struct ibv_sge){.addr   = (uintptr_t)mr->mr->addr + offset,
 			       .length = (uint32_t)length,
 			       .lkey   = mr->mr->lkey};
 	if (opcode == CRT_NATIVE_RECV) {
-		recv.wr_id   = slot;
+		recv.wr_id   = (uint64_t)ep->group_slot << 32 | slot;
 		recv.sg_list = &sge;
 		recv.num_sge = 1;
 		rc           = ibv_post_recv(ep->qp, &recv, &bad_recv);
 	} else {
-		send.wr_id      = slot;
+		send.wr_id      = (uint64_t)ep->group_slot << 32 | slot;
 		send.sg_list    = &sge;
 		send.num_sge    = 1;
 		send.send_flags = IBV_SEND_SIGNALED;
@@ -390,6 +437,8 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 		ep->outstanding++;
 		mr->references++;
 	}
+	if (rc == EAGAIN && ep->config.wake)
+		ep->config.wake(ep->config.wake_arg);
 	return rc;
 }
 
@@ -445,7 +494,15 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 
 		if (budget > sizeof(batch) / sizeof(batch[0]))
 			budget = sizeof(batch) / sizeof(batch[0]);
-		rc = ibv_poll_cq(ep->cq, (int)budget, batch);
+		if (ep->config.group) {
+			rc = ep->pending_count < budget ? ep->pending_count : budget;
+			for (int i = 0; i < rc; i++) {
+				batch[i]         = ep->pending[ep->pending_head];
+				ep->pending_head = (ep->pending_head + 1) % ep->config.depth;
+			}
+			ep->pending_count -= rc;
+		} else
+			rc = ibv_poll_cq(ep->cq, (int)budget, batch);
 		if (rc < 0) {
 			verbs_close_begin(ep);
 			return EIO;
@@ -486,7 +543,9 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 			return error;
 		}
 	}
-	return 0;
+	if (ep->pending_count && ep->config.wake)
+		ep->config.wake(ep->config.wake_arg);
+	return ep->config.group ? ep->config.group->error : 0;
 }
 
 static unsigned
@@ -495,8 +554,122 @@ verbs_capacity(struct crt_native_ep *ep)
 	return ep == NULL ? 0 : ep->config.depth;
 }
 
+static void
+verbs_wake(struct crt_native_ep *ep)
+{
+	if (ep->config.wake)
+		ep->config.wake(ep->config.wake_arg);
+}
+
+static int
+verbs_group_destroy(struct crt_native_group *g)
+{
+	int rc;
+	if (!g)
+		return EINVAL;
+	if (g->count)
+		return EBUSY;
+	if (g->cq) {
+		rc = ibv_destroy_cq(g->cq);
+		if (rc)
+			return rc;
+		g->cq = NULL;
+	}
+	if (g->context) {
+		rc = ibv_close_device(g->context);
+		if (rc)
+			return rc;
+	}
+	free(g->endpoints);
+	free(g->device);
+	free(g);
+	return 0;
+}
+
+static int
+verbs_group_create(const struct crt_native_config *cfg, unsigned capacity,
+		   struct crt_native_group **out)
+{
+	if (!cfg || !cfg->device || !out || !capacity || !cfg->depth ||
+	    capacity > INT_MAX / cfg->depth)
+		return EINVAL;
+	*out                       = NULL;
+	struct crt_native_group *g = calloc(1, sizeof(*g));
+	if (!g)
+		return ENOMEM;
+	g->capacity  = capacity;
+	g->depth     = cfg->depth;
+	g->device    = malloc(strlen(cfg->device) + 1);
+	g->endpoints = calloc(capacity, sizeof(*g->endpoints));
+	int rc       = ENOMEM;
+	if (!g->endpoints || !g->device)
+		goto fail;
+	strcpy(g->device, cfg->device);
+	int                 count;
+	struct ibv_device **devices = ibv_get_device_list(&count);
+	if (!devices) {
+		rc = errno ? errno : ENODEV;
+		goto fail;
+	}
+	rc = ENODEV;
+	for (int i = 0; i < count; i++)
+		if (strcmp(cfg->device, ibv_get_device_name(devices[i])) == 0) {
+			g->context = ibv_open_device(devices[i]);
+			rc         = g->context ? 0 : (errno ? errno : EIO);
+			break;
+		}
+	ibv_free_device_list(devices);
+	if (rc)
+		goto fail;
+	g->cq = ibv_create_cq(g->context, (int)(capacity * cfg->depth), NULL, NULL, 0);
+	if (!g->cq) {
+		rc = errno ? errno : ENOMEM;
+		goto fail;
+	}
+	*out = g;
+	return 0;
+fail:
+	report_error(cfg, "create shared CQ group", rc);
+	if (verbs_group_destroy(g))
+		*out = g;
+	return rc;
+}
+
+static int
+verbs_group_progress(struct crt_native_group *g)
+{
+	struct ibv_wc batch[32];
+	if (!g)
+		return EINVAL;
+	/* Keep draining flush CQEs after an error; registrations stay pinned. */
+	/* One bounded CQ poll for the whole context, including control and bulk. */
+	int count = ibv_poll_cq(g->cq, 32, batch);
+	if (count < 0)
+		return g->error = EIO;
+	for (int i = 0; i < count; i++) {
+		unsigned              slot  = batch[i].wr_id >> 32;
+		unsigned              index = (uint32_t)batch[i].wr_id;
+		struct crt_native_ep *ep    = slot < g->capacity ? g->endpoints[slot] : NULL;
+		if (!ep || index >= ep->config.depth || !ep->operations[index].active ||
+		    ep->pending_count == ep->config.depth) {
+			g->error = EPROTO;
+			continue;
+		}
+		bool empty     = ep->pending_count == 0;
+		batch[i].wr_id = index;
+		ep->pending[(ep->pending_head + ep->pending_count++) % ep->config.depth] = batch[i];
+		if (empty)
+			verbs_wake(ep);
+	}
+	return g->error;
+}
+
 const struct crt_native_ops crt_native_verbs_ops = {
     .name              = "verbs",
+    .group_create      = verbs_group_create,
+    .group_progress    = verbs_group_progress,
+    .group_destroy     = verbs_group_destroy,
+    .wake              = verbs_wake,
     .capacity          = verbs_capacity,
     .open              = verbs_open,
     .address           = verbs_address,

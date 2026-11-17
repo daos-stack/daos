@@ -184,6 +184,8 @@ crt_native_channel_call(struct crt_native_channel *c, uint32_t opcode, const voi
 		return c->error;
 	if (!c->started)
 		return ENOTCONN;
+	if (c->ops->wake)
+		c->ops->wake(c->ep);
 	return crt_native_rpc_call(c->rpc, opcode, data, size, done, arg, id);
 }
 
@@ -198,6 +200,8 @@ crt_native_channel_call_encoded(struct crt_native_channel *c, uint32_t opcode,
 		return c->error;
 	if (!c->started)
 		return ENOTCONN;
+	if (c->ops->wake)
+		c->ops->wake(c->ep);
 	return crt_native_rpc_call_encoded(c->rpc, opcode, encode, encode_arg, done, arg, id);
 }
 
@@ -221,6 +225,8 @@ crt_native_channel_queue_release(struct crt_native_channel *c, uint64_t id)
 		return c->error;
 	if (!c->started)
 		return ENOTCONN;
+	if (c->ops->wake)
+		c->ops->wake(c->ep);
 	return crt_native_rpc_queue_release(c->rpc, id);
 }
 
@@ -233,6 +239,8 @@ crt_native_channel_set_deadline(struct crt_native_channel *c, uint64_t id, uint6
 int
 crt_native_channel_cancel(struct crt_native_channel *c, uint64_t id, int error)
 {
+	if (c && c->ops->wake)
+		c->ops->wake(c->ep);
 	return c == NULL ? EINVAL : crt_native_rpc_cancel(c->rpc, id, error);
 }
 
@@ -280,6 +288,8 @@ crt_native_channel_release(struct crt_native_rx_lease *lease)
 		} while (!atomic_compare_exchange_weak(&c->released_head, &head, io->index));
 	}
 	*lease = (struct crt_native_rx_lease){0};
+	if (c->ops->wake)
+		c->ops->wake(c->ep);
 	/* Last operation touching c: destroy may run after this decrement. */
 	atomic_fetch_sub(&c->leases, 1);
 	return 0;

@@ -40,6 +40,9 @@ crt_native_net_lookup(struct crt_native_net *, const char *uri, struct crt_nativ
  */
 void
 crt_native_peer_put(struct crt_native_peer *);
+/* Worker-safe; the peer must remain owned until this call returns. */
+void
+crt_native_peer_kick(struct crt_native_peer *);
 int
 crt_native_net_progress(struct crt_native_net *, unsigned *work);
 int

@@ -108,3 +108,17 @@ works without restarting the server. Progress retires failed peer hardware after
 DMA, receive leases, requests and bulk consumers drain. The portable connection
 test covers 128 sequential clients with only two server peer slots, checking that
 endpoint and registered-memory counts return to baseline between clients.
+
+The portable network suite runs both grouped and standalone polling modes. Its
+idle-loop syscall counters check that connected idle peers generate no `accept`
+or `MSG_PEEK` calls, and that TCP polling is periodic rather than per progress
+call. It also exercises 70 concurrently ready peers across the 32-peer scheduling
+budget and a bitmap word boundary. The verbs suite verifies interleaved endpoint
+completions on one shared CQ, retained registration ownership until delivery,
+group lifetime, and flushing after a shared poll error.
+
+For performance comparisons, rebuild/install both client and server, restart the
+server, and use the same fio job file, CPU/NUMA placement, object class, dataset
+and warm-up settings as the Mercury/UCX baseline. Record IOPS, latency percentiles
+and client/server CPU use. Portable tests establish correctness properties, not
+an IOPS target; actual throughput requires the real-HCA fio run.

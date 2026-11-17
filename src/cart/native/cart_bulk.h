@@ -29,6 +29,9 @@ int
 crt_native_cart_bulk_progress(struct crt_native_cart_bulk *);
 int
 crt_native_cart_bulk_defer_callbacks(struct crt_native_cart_bulk *);
+/* Owner-only query; completed callbacks are queued by owner progress. */
+bool
+crt_native_cart_bulk_has_callbacks(const struct crt_native_cart_bulk *);
 unsigned
 crt_native_cart_bulk_dispatch(struct crt_native_cart_bulk *);
 int

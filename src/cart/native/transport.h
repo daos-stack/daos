@@ -28,6 +28,7 @@
  */
 struct crt_native_ep;
 struct crt_native_mr;
+struct crt_native_group;
 
 enum crt_native_access {
 	CRT_NATIVE_REMOTE_READ  = 1,
@@ -68,14 +69,27 @@ struct crt_native_remote_memory {
 };
 
 struct crt_native_config {
-	const char *device;
-	uint8_t     port;
-	int         gid_index;
-	unsigned    depth;
+	const char              *device;
+	uint8_t                  port;
+	int                      gid_index;
+	unsigned                 depth;
+	/* Optional owner-serialized CQ group, with a worker-safe wake notification. */
+	struct crt_native_group *group;
+	void (*wake)(void *);
+	void *wake_arg;
 };
 
 struct crt_native_ops {
 	const char *name;
+	/* Optional shared polling domain. Each endpoint retains a private PD.
+	 * group_progress polls once and routes completions to endpoint queues;
+	 * endpoint progress consumes those queues without polling hardware again.
+	 * All group/endpoint operations are serialized by the same owner.
+	 */
+	int (*group_create)(const struct crt_native_config *, unsigned, struct crt_native_group **);
+	int (*group_progress)(struct crt_native_group *);
+	int (*group_destroy)(struct crt_native_group *);
+	void (*wake)(struct crt_native_ep *);
 	/* Maximum combined outstanding SEND/RECV/READ/WRITE operations. */
 	unsigned (*capacity)(struct crt_native_ep *);
 	/* Failed opens may return a partial endpoint when cleanup also fails.
