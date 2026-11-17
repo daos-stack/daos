@@ -310,36 +310,30 @@ FAULTS = {
     'DAOS_FAULT_POOL_OPEN_UUID': {
         'id': '131589',
         'interval': '2'},  # skip sys_db
-    'DAOS_FAULT_BTREE_OPEN_INV_CLASS_28': {
-        'id': '131590',
-        'interval': '28',  # containers tree fine-tuned
-        'max_faults': '1'},
-    'DAOS_FAULT_BTREE_OPEN_INV_CLASS_29': {
-        'id': '131590',
-        'interval': '29',  # gc tree fine-tuned
-        'max_faults': '1'},
-    'DAOS_FAULT_BTREE_OPEN_UNREG_CLASS_28': {
-        'id': '131591',
-        'interval': '28',  # containers tree fine-tuned
-        'max_faults': '1'},
-    'DAOS_FAULT_BTREE_OPEN_UNREG_CLASS_29': {
-        'id': '131591',
-        'interval': '29',  # gc tree fine-tuned
-        'max_faults': '1'},
-    'DAOS_FAULT_BTREE_FEATURES_28': {
-        'id': '131592',
-        'interval': '28',  # containers tree fine-tuned
-        'max_faults': '1'},
-    'DAOS_FAULT_BTREE_FEATURES_29': {
-        'id': '131592',
-        'interval': '29',  # gc tree fine-tuned
-        'max_faults': '1'},
     'DAOS_FAULT_POOL_EXT_PADDING': {
         'id': '131593',
         'interval': '1'},
     'DAOS_FAULT_POOL_EXT_RESERVED': {
         'id': '131594',
         'interval': '1'},
+    'DAOS_FAULT_CONT_TREE_INV_CLASS': {
+        'id': '131595',
+        'max_faults': '1'},
+    'DAOS_FAULT_CONT_TREE_UNREG_CLASS': {
+        'id': '131596',
+        'max_faults': '1'},
+    'DAOS_FAULT_CONT_TREE_FEATURES': {
+        'id': '131597',
+        'max_faults': '1'},
+    'DAOS_FAULT_GC_TREE_INV_CLASS': {
+        'id': '131598',
+        'max_faults': '1'},
+    'DAOS_FAULT_GC_TREE_UNREG_CLASS': {
+        'id': '131599',
+        'max_faults': '1'},
+    'DAOS_FAULT_GC_TREE_FEATURES': {
+        'id': '131600',
+        'max_faults': '1'},
 }
 
 

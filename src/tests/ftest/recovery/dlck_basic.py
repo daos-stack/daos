@@ -61,10 +61,10 @@ class DlckBasicTest(TestDlck):
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
-            # Mount 128G of memory-backed tmpfs for testing purposes
+            # Mount 256G of memory-backed tmpfs for testing purposes
             cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
                   'mount -t tmpfs -o rw,uid=daos_server,' \
-                  'gid=daos_server,mode=0775 tmpfs /mnt/dlck_test"'
+                  'gid=daos_server,mode=0775,size=256G tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
@@ -114,10 +114,10 @@ class DlckBasicTest(TestDlck):
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
-            # Mount 128G of memory-backed tmpfs for testing purposes
+            # Mount 256G of memory-backed tmpfs for testing purposes
             cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
                   'mount -t tmpfs -o rw,uid=daos_server,' \
-                  'gid=daos_server,mode=0775 tmpfs /mnt/dlck_test"'
+                  'gid=daos_server,mode=0775,size=256G tmpfs /mnt/dlck_test"'
             run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
             # Display the tmpfs mount
             run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
@@ -145,6 +145,13 @@ class DlckBasicTest(TestDlck):
             dlck.timeout = 180
             result = dlck.run()
             errors.extend(self.check_dlck_result(result, test_fault))
+
+        # umount /mnt/dlck_test and remove /mnt/dlck_test
+        cmd = 'sudo bash -c "umount /mnt/dlck_test && rm -rf /mnt/dlck_test"'
+        run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
+        # Display the tmpfs mount
+        run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
+        run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
 
         self.log_step("Perform dmg system start after running dlck command")
         dmg.system_start()
