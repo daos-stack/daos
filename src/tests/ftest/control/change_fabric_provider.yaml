@@ -1,10 +1,13 @@
 hosts:
   test_servers: 3
-  test_clients: 2
+  test_clients: 1
+
 setup:
   start_agents_once: false
   start_servers_once: false
+
 timeout: 600
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -13,10 +16,13 @@ server_config:
       log_mask: INFO
       storage: auto
   system_ram_reserved: 2
+
 pool:
   size: 90%
+
 container:
   type: POSIX
+
 ior:
   env_vars:
     - D_LOG_MASK=INFO
@@ -32,5 +38,6 @@ ior:
   block_size: '100M'
   write_x: 2
   read_x: 1
+
 dfuse:
   disable_caching: true
