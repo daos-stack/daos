@@ -38,7 +38,6 @@ disable_repos () {
             mv "$repo".repo{.tmp,}
         done
         popd
-        dnf config-manager --set-disabled daos-stack-deps-el-8-stable-local-artifactory
     fi
 }
 
@@ -132,6 +131,9 @@ module_hotfixes=true\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
 done
 
 disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
+if [ -n "$REPO_FILE_URL" ]; then
+    dnf config-manager --set-disabled daos-stack-deps-el-8-stable-local-artifactory
+fi
 
 if [ -n "$REPO_FILE_URL" ]; then
     trusted_host="${REPO_FILE_URL##*//}"
