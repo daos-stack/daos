@@ -224,6 +224,13 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 		return
 	}
 
+	// A ready notification still queued here came from an engine that has since exited.
+	select {
+	case <-ei.drpcReady:
+		ei.log.Debugf("instance %d: discarding stale ready notification", ei.Index())
+	default:
+	}
+
 	runnerExitChan, err := ei.start(ctx)
 	if err != nil {
 		return

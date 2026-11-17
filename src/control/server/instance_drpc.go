@@ -150,8 +150,8 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	if localState != system.MemberStateReady {
 		// member not ready for dRPC comms, annotate result with last error if stopped
 		var err error
-		if lastErr := ei.lastErr(); localState == system.MemberStateStopped && lastErr != nil {
-			err = lastErr
+		if localState == system.MemberStateStopped {
+			err = ei.lastErr()
 		}
 		return system.NewMemberResult(rank, err, localState)
 	}

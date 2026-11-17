@@ -21,6 +21,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	sysprov "github.com/daos-stack/daos/src/control/provider/system"
@@ -106,27 +107,56 @@ func TestIOEngineInstance_exit(t *testing.T) {
 	}
 }
 
-// newRunnableTestInstance returns an instance whose format() completes without waiting (storage
-// mounted, no format needed, superblock set) so Run() proceeds straight to the runner.
-func newRunnableTestInstance(t *testing.T, log logging.Logger, trc *engine.TestRunnerConfig) *EngineInstance {
-	t.Helper()
-
-	cfg := engine.MockConfig().WithStorage(
+// runnableEngineConfig returns an engine config whose storage needs no format.
+func runnableEngineConfig(mnt string) *engine.Config {
+	return engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
 			WithStorageClass(storage.ClassDcpm.String()).
-			WithScmMountPoint("/mnt/test").
+			WithScmMountPoint(mnt).
 			WithScmDeviceList("/dev/foo"),
 	)
+}
+
+// newRunnableTestInstance returns an instance whose format() completes without waiting (storage
+// mounted, no format needed, superblock set) so Run() proceeds straight to the runner.
+func newRunnableTestInstance(t *testing.T, log logging.Logger, runner EngineRunner, joinFn systemJoinFn) *EngineInstance {
+	t.Helper()
+
 	msc := &sysprov.MockSysConfig{IsMountedBool: true, GetfsStr: "ext4"}
-	mp := storage.NewProvider(log, 0, &cfg.Storage,
+	mp := storage.NewProvider(log, 0, &runner.GetConfig().Storage,
 		sysprov.NewMockSysProvider(log, msc),
 		scm.NewMockProvider(log, &scm.MockBackendConfig{}, msc),
 		nil, &storage.MockMetadataProvider{})
 
-	ei := NewEngineInstance(log, mp, nil, engine.NewTestRunner(trc, cfg), nil)
+	ei := NewEngineInstance(log, mp, joinFn, runner, nil)
 	ei.setSuperblock(&Superblock{Rank: ranklist.NewRankPtr(0), ValidRank: true})
 
 	return ei
+}
+
+// killedOnCancelRunner delivers its exit the way the real runner does once its context is
+// cancelled: unconditionally, closing the channel afterwards.
+type killedOnCancelRunner struct {
+	*engine.TestRunner
+	exit   *engine.RunnerExitInfo
+	starts uint32
+	stop   chan struct{} // closed at test end to release an exit nobody read
+}
+
+func (r *killedOnCancelRunner) Start(ctx context.Context) (engine.RunnerExitChan, error) {
+	atomic.AddUint32(&r.starts, 1)
+
+	exitCh := make(engine.RunnerExitChan)
+	go func() {
+		<-ctx.Done()
+		select {
+		case exitCh <- r.exit:
+			close(exitCh)
+		case <-r.stop:
+		}
+	}()
+
+	return exitCh, nil
 }
 
 func waitFor(t *testing.T, timeout time.Duration, msg string, cond func() bool) {
@@ -145,37 +175,49 @@ func waitFor(t *testing.T, timeout time.Duration, msg string, cond func() bool) 
 // before it sends its ready notification is handled like any other exit, and that the instance
 // can be started again afterwards.
 func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
+	type exitInfo struct {
+		pid int
+		err error
+	}
+	recordExits := func(ei *EngineInstance) chan exitInfo {
+		exits := make(chan exitInfo, 8)
+		ei.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ uint64, exitErr error, exPid int) error {
+			exits <- exitInfo{pid: exPid, err: exitErr}
+			return nil
+		})
+		return exits
+	}
+	nextExit := func(t *testing.T, exits chan exitInfo, msg string) exitInfo {
+		t.Helper()
+		select {
+		case got := <-exits:
+			return got
+		case <-time.After(2 * time.Second):
+			t.Fatal(msg)
+		}
+		return exitInfo{}
+	}
+	failJoin := func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error) {
+		return nil, errors.New("join failed")
+	}
+
 	t.Run("exit is handled and restart is deliverable", func(t *testing.T) {
 		log, buf := logging.NewTestLogger(t.Name())
 		defer test.ShowBufferOnFailure(t, buf)
 
 		var starts uint32
-		ei := newRunnableTestInstance(t, log, &engine.TestRunnerConfig{
+		ei := newRunnableTestInstance(t, log, engine.NewTestRunner(&engine.TestRunnerConfig{
 			StartCb:        func() { atomic.AddUint32(&starts, 1) },
 			RunnerExitInfo: &engine.RunnerExitInfo{Error: errors.New("boom"), PID: 1234},
-		})
-
-		type exitInfo struct {
-			pid int
-			err error
-		}
-		exits := make(chan exitInfo, 2)
-		ei.OnInstanceExit(func(_ context.Context, _ uint32, _ ranklist.Rank, _ uint64, exitErr error, exPid int) error {
-			exits <- exitInfo{pid: exPid, err: exitErr}
-			return nil
-		})
+		}, runnableEngineConfig("/mnt/test")), nil)
+		exits := recordExits(ei)
 
 		ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
 		defer cancel()
 
 		ei.Run(ctx)
 
-		var got exitInfo
-		select {
-		case got = <-exits:
-		case <-time.After(2 * time.Second):
-			t.Fatal("engine exit was never handled")
-		}
+		got := nextExit(t, exits, "engine exit was never handled")
 		test.AssertEqual(t, 1234, got.pid, "unexpected pid passed to exit callback")
 		test.CmpErr(t, errors.New("boom"), got.err)
 		test.CmpErr(t, errors.New("boom"), ei.lastErr())
@@ -183,6 +225,9 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 			if !strings.Contains(buf.String(), want) {
 				t.Fatalf("expected %q in log", want)
 			}
+		}
+		if strings.Contains(buf.String(), "removing socket file") {
+			t.Fatal("socket removal error logged for an engine that never had a socket")
 		}
 
 		reqCtx, reqCancel := context.WithTimeout(ctx, time.Second)
@@ -196,18 +241,102 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 		})
 	})
 
+	t.Run("ready queued by the exited engine is discarded", func(t *testing.T) {
+		log, buf := logging.NewTestLogger(t.Name())
+		defer test.ShowBufferOnFailure(t, buf)
+
+		var starts uint32
+		ei := newRunnableTestInstance(t, log, engine.NewTestRunner(&engine.TestRunnerConfig{
+			StartCb: func() { atomic.AddUint32(&starts, 1) },
+			RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+				if atomic.LoadUint32(&starts) > 1 {
+					<-ctx.Done() // the second engine stays up
+				}
+				return &engine.RunnerExitInfo{Error: errors.New("boom"), PID: 1234}
+			},
+		}, runnableEngineConfig("/mnt/test")), failJoin)
+		exits := recordExits(ei)
+
+		ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
+		defer cancel()
+
+		ei.Run(ctx)
+		nextExit(t, exits, "engine exit was never handled")
+
+		// The exited engine sent its ready notification just before it died.
+		stale := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
+		stale.Incarnation = 777
+		ei.NotifyDrpcReady(stale)
+		time.Sleep(50 * time.Millisecond) // let the notification queue
+
+		ei.requestStart(ctx)
+		waitFor(t, 2*time.Second, "engine was not started again", func() bool {
+			return atomic.LoadUint32(&starts) == 2
+		})
+		time.Sleep(200 * time.Millisecond)
+		if strings.Contains(buf.String(), "incarnation=777") {
+			t.Fatal("ready notification from the exited engine was used for the next start")
+		}
+	})
+
+	t.Run("engine killed after a failed startup is reaped", func(t *testing.T) {
+		log, buf := logging.NewTestLogger(t.Name())
+		defer test.ShowBufferOnFailure(t, buf)
+
+		// A real directory, so the superblock write succeeds and the join is what fails.
+		testDir, cleanup := test.CreateTestDir(t)
+		defer cleanup()
+
+		stop := make(chan struct{})
+		defer close(stop)
+		runner := &killedOnCancelRunner{
+			TestRunner: engine.NewTestRunner(nil, runnableEngineConfig(testDir)),
+			exit:       &engine.RunnerExitInfo{Error: errors.New("killed"), PID: 4321},
+			stop:       stop,
+		}
+		ei := newRunnableTestInstance(t, log, runner, failJoin)
+		exits := recordExits(ei)
+
+		ctx, cancel := context.WithTimeout(test.Context(t), 5*time.Second)
+		defer cancel()
+
+		ei.Run(ctx)
+		waitFor(t, 2*time.Second, "engine was not started", func() bool {
+			return atomic.LoadUint32(&runner.starts) == 1
+		})
+		ei.NotifyDrpcReady(getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0))
+
+		got := nextExit(t, exits, "failed startup was never handled")
+		test.AssertEqual(t, 0, got.pid, "unexpected pid for the startup failure")
+		test.CmpErr(t, errors.New("join failed"), got.err)
+
+		got = nextExit(t, exits, "engine killed after the failed startup was never reaped")
+		test.AssertEqual(t, 4321, got.pid, "unexpected pid for the killed engine")
+		test.CmpErr(t, errors.New("killed"), got.err)
+
+		reqCtx, reqCancel := context.WithTimeout(ctx, time.Second)
+		defer reqCancel()
+		ei.requestStart(reqCtx)
+		if reqCtx.Err() != nil {
+			t.Fatal("requestStart blocked after a failed startup")
+		}
+		waitFor(t, 2*time.Second, "engine was not started again", func() bool {
+			return atomic.LoadUint32(&runner.starts) == 2
+		})
+	})
+
 	t.Run("shutdown before ready", func(t *testing.T) {
 		log, buf := logging.NewTestLogger(t.Name())
 		defer test.ShowBufferOnFailure(t, buf)
 
 		var starts uint32
-		ei := newRunnableTestInstance(t, log, &engine.TestRunnerConfig{
+		ei := newRunnableTestInstance(t, log, engine.NewTestRunner(&engine.TestRunnerConfig{
 			StartCb: func() { atomic.AddUint32(&starts, 1) },
 			RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
 				<-ctx.Done()
 				return &engine.RunnerExitInfo{Error: errors.New("ending")}
 			},
-		})
+		}, runnableEngineConfig("/mnt/test")), nil)
 
 		ctx, cancel := context.WithCancel(test.Context(t))
 		defer cancel()
