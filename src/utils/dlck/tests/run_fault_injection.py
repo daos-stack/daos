@@ -18,14 +18,16 @@ import yaml
 
 # defaults and paths
 DEFAULT_DLCK = "/opt/daos/bin/dlck"
+DEFAULT_POOL_UUID = "00000000-1111-2222-3333-444444444444"
 TESTS_DIR = Path(__file__).resolve().parent
 TEMPLATE_CONFIG = TESTS_DIR / "fault_injection_dlck.yaml"
 TEMPLATE_DIR = TESTS_DIR / "fault_templates"
 BUILD_DIR = Path(json.loads((TESTS_DIR.parents[3] / ".build_vars.json").read_text())["BUILD_DIR"])
+NVME_FAULTS = ["DLCK_FAULT_POOL_OPEN_BIO", "DLCK_FAULT_POOL_NVME_HEALTH"]
 
 
 # usage and arguments
-USAGE = """Run dlck with one fault from fault_injection_dlck.yaml enabled and compare the results \
+USAGE = f"""Run dlck with one fault from fault_injection_dlck.yaml enabled and compare the results \
 against the template.
 
 FAULT is a fault name (e.g. DLCK_FAULT_GETGRNAM) or its id (e.g. 131329).
@@ -35,12 +37,29 @@ Template placeholders:
   {{UUID}}      any UUID (e.g. the pool UUID)
   {{STORAGE}}   storage path (e.g. /dev/shm/daos or /mnt/daos)
   {{LOG_DIR}}   dlck temporary log directory
+
+MD-on-PMem mode:
+  In this mode, a pool is automatically created and populated using `dlck_test_helper`. \
+Most templates are optimized for this mode, but some faults cannot be tested in it.
+
+MD-on-SSD mode:
+  Some faults can be tested only in this mode: {', '.join(NVME_FAULTS)}. Sadly, pool in this mode \
+cannot be created automatically. So, you have to create a DAOS setup in the MD-on-SSD mode and \
+create a pool manually. Having that you can test these faults as shown below. \
+Note most of the templates are optimized for the MD-on-PMem mode so running faults other than list \
+below in the MD-on-SSD mode may report false negatives.
+
+{Path(__file__).name} --storage <STORAGE> --nvme <NVME_DEVICE> --pool_uuid <POOL_UUID> \
+{' '.join(NVME_FAULTS)}
 """  # noqa: E501 line too long
 PARSER = argparse.ArgumentParser(description=USAGE,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
 PARSER.add_argument("--dlck", default=str(DEFAULT_DLCK), help="path to the dlck binary")
 PARSER.add_argument("--storage", default="/mnt/daos", help="dlck --storage argument")
-PARSER.add_argument("--nvme", default=None, help="dlck --nvme argument")
+PARSER.add_argument("--pool_uuid", default=DEFAULT_POOL_UUID, help="Pool UUID")
+PARSER.add_argument("--nvme", default=None, help="dlck --nvme argument. "
+                    "dlck_test_helper cannot create a pool in the MD-on-SSD mode "
+                    "so the pool must be created manually.")
 PARSER.add_argument("--update", action="store_true",
                     help="store the results of this run as the template")
 PARSER.add_argument("faults", nargs="*", metavar="FAULT",
@@ -56,8 +75,6 @@ class FaultCatalog:
         "DLCK_MOCK_NO_DAOS_SERVER_GROUP",
         "DLCK_FAULT_GETGROUPS",
         "DLCK_FAULT_GETGRNAM"]
-
-    NVME_FAULTS = ["DLCK_FAULT_POOL_OPEN_BIO", "DLCK_FAULT_POOL_NVME_HEALTH"]
 
     DISABLED_FAULTS = [
         "DAOS_FAULT_DAE_ALLOC"  # DAOS-19969
@@ -98,14 +115,14 @@ class DlckTestHelperRunner:
     """Runs dlck_test_helper under sudo."""
 
     DLCK_TEST_HELPER = BUILD_DIR / "src/utils/dlck/tests/dlck_test_helper"
-    POOL_UUID = "00000000-1111-2222-3333-444444444444"
 
-    def __init__(self, storage):
+    def __init__(self, storage, pool_uuid):
         self._storage = storage
+        self._pool_uuid = pool_uuid
 
     def init(self):
         """Run dlck_test_helper"""
-        cmd = ["sudo", "-E", str(self.DLCK_TEST_HELPER), "--file", self.POOL_UUID,
+        cmd = ["sudo", "-E", str(self.DLCK_TEST_HELPER), "--file", self._pool_uuid,
                "--storage", self._storage, "--create_pools", "--verbose", "--targets", "1"]
         env = dict(os.environ, DLCK_NO_NVME="1")
         proc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -115,7 +132,7 @@ class DlckTestHelperRunner:
                              f"{proc.stderr}\n\n{proc.stdout}")
         print(proc.stdout)
         # Change permissions of the VOS file to be read-only.
-        vos_file = Path(self._storage) / self.POOL_UUID / "vos-0"
+        vos_file = Path(self._storage) / self._pool_uuid / "vos-0"
         subprocess.run(["sudo", "chmod", "440", str(vos_file)], check=True)
 
     def fini(self):
@@ -138,11 +155,13 @@ class DlckRunner:
 
     def run(self, config):
         """Run dlck with the fault config; return the exit code and stdout."""
-        env = dict(os.environ, DLCK_NO_NVME="1", D_FI_CONFIG=str(config))
+        env = dict(os.environ, D_FI_CONFIG=str(config))
         cmd = ["sudo", "-E", str(self._dlck), "--file", self._file_arg,
                "--storage", self._storage, "--targets", "1"]
         if self._nvme is not None:
             cmd += ["--nvme", self._nvme]
+        else:
+            env["DLCK_NO_NVME"] = "1"
         proc = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, check=False)
         return proc.returncode, proc.stdout, proc.stderr
@@ -286,7 +305,7 @@ class FaultInjectionTest:
         if name in FaultCatalog.UNSUPPORTED_FAULTS:
             print(f"fault: {name} is not supported by this script")
             return self.ReturnCode.NOT_SUPPORTED
-        if name in FaultCatalog.NVME_FAULTS and not self._runner.has_nvme():
+        if name in NVME_FAULTS and not self._runner.has_nvme():
             print(f"fault: {name} requires NVMe but no NVMe device is specified")
             return self.ReturnCode.NVME_REQUIRED
         if name in FaultCatalog.DISABLED_FAULTS:
@@ -351,8 +370,8 @@ def main():
     """Main entry point for the fault injection test script."""
     args = PARSER.parse_args()
     catalog = FaultCatalog(TEMPLATE_CONFIG)
-    helper = DlckTestHelperRunner(args.storage)
-    runner = DlckRunner(Path(args.dlck).resolve(), helper.POOL_UUID, args.storage)
+    helper = DlckTestHelperRunner(args.storage, args.pool_uuid) if not args.nvme else None
+    runner = DlckRunner(Path(args.dlck).resolve(), args.pool_uuid, args.storage, args.nvme)
     test = FaultInjectionTest(catalog, runner, TEMPLATE_DIR, args.update)
 
     # select faults specified by the user if provided
@@ -364,13 +383,17 @@ def main():
     # run selected faults
     results = {}
     try:
-        print("Create and populate a pool with standard data:")
-        helper.init()
+        if helper:
+            print("Create and populate a pool with standard data:")
+            helper.init()
+        else:
+            print("Skipping pool creation and population as the MD-on-SSD mode is used.")
         print("Run fault tests:")
         for fault in selected:
             results[fault[1]] = test.run_fault(fault)
     finally:
-        helper.fini()
+        if helper:
+            helper.fini()
 
     # report the results
     if len(results) == 0:
