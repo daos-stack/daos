@@ -3865,6 +3865,36 @@ func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
 	}
 }
 
+// TestServer_MgmtSvc_eraseReplicas_systemName verifies that eraseReplicas() explicitly
+// sets the system name on the forwarded request, rather than relying on svc.rpcClient's
+// configured default, so the peer resolves the request against the correct system even
+// if that default is ever left unset.
+func TestServer_MgmtSvc_eraseReplicas_systemName(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(t, log)
+	mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+		UnaryResponseSet: []*control.UnaryResponse{
+			control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{}),
+			control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{}),
+		},
+	})
+	svc.rpcClient = mi
+
+	if err := svc.eraseReplicas(test.Context(t), []string{test.MockHostAddr(1).String()}); err != nil {
+		t.Fatal(err)
+	}
+
+	test.AssertEqual(t, 2, len(mi.SentReqs), "number of requests sent")
+	qReq, ok := mi.SentReqs[0].(*control.SystemQueryReq)
+	test.AssertTrue(t, ok, "first request should be a system query")
+	eReq, ok := mi.SentReqs[1].(*control.SystemEraseReq)
+	test.AssertTrue(t, ok, "second request should be a system erase")
+	test.AssertEqual(t, svc.sysdb.SystemName(), qReq.Sys, "system name in the pre-check query")
+	test.AssertEqual(t, svc.sysdb.SystemName(), eReq.Sys, "system name in the erase request")
+}
+
 func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 
