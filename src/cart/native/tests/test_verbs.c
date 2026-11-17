@@ -16,9 +16,9 @@ static struct ibv_context context;
 static struct ibv_pd      pd;
 static struct ibv_cq      cq;
 static struct ibv_qp      qp = {.qp_num = 7};
-static struct ibv_wc      completions[32];
+static struct ibv_wc      completions[256];
 static unsigned           head, tail;
-static uint64_t           accepted[32];
+static uint64_t           accepted[256];
 static unsigned           num_accepted;
 static int                post_error, poll_error;
 static unsigned           last_send_flags;
@@ -545,6 +545,39 @@ test_inline_send(void)
 	assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
 }
 
+static void
+test_cq_burst(void)
+{
+	const struct crt_native_ops *ops = &crt_native_verbs_ops;
+	struct crt_native_config cfg = {.device = "mock0", .port = 1, .gid_index = -1, .depth = 64};
+	struct crt_native_group *group;
+	struct crt_native_ep    *ep;
+	struct crt_native_address       address;
+	struct crt_native_mr           *mr;
+	struct crt_native_remote_memory remote;
+	struct crt_native_completion    out[64];
+	unsigned                        count;
+	char                            buffer[64];
+	head = tail = num_accepted = 0;
+	assert(ops->group_create(&cfg, 1, &group) == 0);
+	cfg.group = group;
+	assert(ops->open(&cfg, &ep) == 0 && ops->address(ep, &address) == 0);
+	assert(ops->connect(ep, &address) == 0);
+	assert(ops->register_memory(ep, buffer, sizeof(buffer), 0, &mr, &remote) == 0);
+	for (unsigned i = 0; i < 64; i++) {
+		assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, 8, NULL, 0, buffer) == 0);
+		completions[tail++] =
+		    (struct ibv_wc){.wr_id = accepted[i], .status = IBV_WC_SUCCESS};
+	}
+	num_accepted    = 0;
+	unsigned before = poll_calls;
+	assert(ops->group_progress(group) == 0);
+	assert(poll_calls - before == 3);
+	assert(ops->progress(ep, out, 64, &count) == 0 && count == 64);
+	assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
+	assert(ops->group_destroy(group) == 0);
+}
+
 int
 main(void)
 {
@@ -555,6 +588,7 @@ main(void)
 	test_shared_cq();
 	test_read_credits();
 	test_inline_send();
+	test_cq_burst();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }

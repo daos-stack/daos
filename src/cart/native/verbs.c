@@ -33,6 +33,9 @@ struct crt_native_group {
 	struct crt_native_ep **endpoints;
 	unsigned               capacity, count, next_slot, depth;
 	char                  *device;
+	unsigned               poll_batches;
+	uint64_t               polls, completions;
+	bool                   stats;
 	int                    error;
 };
 
@@ -641,6 +644,9 @@ verbs_group_destroy(struct crt_native_group *g)
 		if (rc)
 			return rc;
 	}
+	if (g->stats)
+		fprintf(stderr, "doca+rc CQ stats: polls=%" PRIu64 " cqes=%" PRIu64 "\n", g->polls,
+			g->completions);
 	free(g->endpoints);
 	free(g->device);
 	free(g);
@@ -658,6 +664,10 @@ verbs_group_create(const struct crt_native_config *cfg, unsigned capacity,
 	struct crt_native_group *g = calloc(1, sizeof(*g));
 	if (!g)
 		return ENOMEM;
+	g->poll_batches = cfg->cq_poll_batches ? cfg->cq_poll_batches : 4;
+	if (g->poll_batches > 16)
+		g->poll_batches = 16;
+	g->stats     = cfg->stats;
 	g->capacity  = capacity;
 	g->depth     = cfg->depth;
 	g->device    = malloc(strlen(cfg->device) + 1);
@@ -703,25 +713,32 @@ verbs_group_progress(struct crt_native_group *g)
 	if (!g)
 		return EINVAL;
 	/* Keep draining flush CQEs after an error; registrations stay pinned. */
-	/* One bounded CQ poll for the whole context, including control and bulk. */
-	int count = ibv_poll_cq(g->cq, 32, batch);
-	if (count < 0)
-		return g->error = EIO;
-	for (int i = 0; i < count; i++) {
-		unsigned              slot  = batch[i].wr_id >> 32;
-		unsigned              index = (uint32_t)batch[i].wr_id;
-		struct crt_native_ep *ep    = slot < g->capacity ? g->endpoints[slot] : NULL;
-		if (!ep || index >= ep->config.depth || !ep->operations[index].active ||
-		    ep->pending_count == ep->config.depth) {
-			g->error = EPROTO;
-			continue;
+	/* Drain bounded CQ bursts without starving CaRT handler dispatch. */
+	for (unsigned round = 0; round < g->poll_batches; round++) {
+		g->polls++;
+		int count = ibv_poll_cq(g->cq, 32, batch);
+		if (count < 0)
+			return g->error = EIO;
+		g->completions += count;
+		for (int i = 0; i < count; i++) {
+			unsigned              slot  = batch[i].wr_id >> 32;
+			unsigned              index = (uint32_t)batch[i].wr_id;
+			struct crt_native_ep *ep = slot < g->capacity ? g->endpoints[slot] : NULL;
+			if (!ep || index >= ep->config.depth || !ep->operations[index].active ||
+			    ep->pending_count == ep->config.depth) {
+				g->error = EPROTO;
+				continue;
+			}
+			ep->stats.cqes++;
+			bool empty     = ep->pending_count == 0;
+			batch[i].wr_id = index;
+			ep->pending[(ep->pending_head + ep->pending_count++) % ep->config.depth] =
+			    batch[i];
+			if (empty)
+				verbs_wake(ep);
 		}
-		ep->stats.cqes++;
-		bool empty     = ep->pending_count == 0;
-		batch[i].wr_id = index;
-		ep->pending[(ep->pending_head + ep->pending_count++) % ep->config.depth] = batch[i];
-		if (empty)
-			verbs_wake(ep);
+		if (count < 32)
+			break;
 	}
 	return g->error;
 }

@@ -464,7 +464,7 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 		c->device = strdup(device);
 	if (rc == 0 && c->device == NULL)
 		rc = -DER_INVAL;
-	long port, gid, receives, frames, peers, read_depth, inline_size, stats;
+	long port, gid, receives, frames, peers, read_depth, inline_size, stats, cq_batches;
 	if (!rc)
 		rc = setting("CRT_NATIVE_PORT", 1, 1, 255, &port);
 	if (!rc)
@@ -481,6 +481,8 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 		rc = setting("CRT_NATIVE_INLINE_SIZE", 256, 0, 4096, &inline_size);
 	if (!rc)
 		rc = setting("CRT_NATIVE_STATS", 0, 0, 1, &stats);
+	if (!rc)
+		rc = setting("CRT_NATIVE_CQ_BATCHES", 4, 1, 16, &cq_batches);
 	struct crt_na_config *na = crt_provider_get_na_config(primary, CRT_PROV_DOCA_RC);
 	if (!rc && na->noc_auth_key && na->noc_auth_key[0]) {
 		D_ERROR("doca+rc does not implement fabric auth keys\n");
@@ -497,7 +499,8 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 						      .depth           = receives * 4,
 						      .rdma_read_depth = read_depth,
 						      .inline_size     = inline_size,
-						      .stats           = stats};
+						      .stats           = stats,
+						      .cq_poll_batches = cq_batches};
 		struct crt_native_limits limits    = {.frame_size = frames, .receives = receives};
 		struct crt_native_net_callbacks cb = {.ready    = ready,
 						      .request  = received,
