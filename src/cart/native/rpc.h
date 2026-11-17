@@ -96,6 +96,9 @@ crt_native_rpc_reply(struct crt_native_rpc *, struct crt_native_token, uint32_t 
 int
 crt_native_rpc_reply_encoded(struct crt_native_rpc *, struct crt_native_token, uint32_t status,
 			     crt_native_encoder_t, void *encoder_arg);
+/* Owner-only readiness hint; no frame or buffer ownership is transferred. */
+bool
+crt_native_rpc_has_queued_tx(const struct crt_native_rpc *);
 int
 crt_native_rpc_next_tx(struct crt_native_rpc *, struct crt_native_tx *);
 int

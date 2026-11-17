@@ -192,7 +192,7 @@ static int
 post_batch(struct crt_native_channel *c, const struct crt_native_post *posts, unsigned count,
 	   unsigned *accepted)
 {
-	if (c->ops->post_batch)
+	if (count > 1 && c->ops->post_batch)
 		return c->ops->post_batch(c->ep, posts, count, accepted);
 	*accepted = 0;
 	while (*accepted < count) {
@@ -429,30 +429,72 @@ free_tx(struct crt_native_channel *c, struct channel_io *io)
 	c->tx_free_head       = io->index;
 }
 
+static struct channel_io *
+stage_tx(struct crt_native_channel *c, const struct crt_native_tx *tx)
+{
+	unsigned           slot = c->tx_free_head;
+	struct channel_io *io   = &c->tx[slot];
+	c->tx_free_head         = c->tx_next[slot];
+	io->token               = tx->token;
+	io->size                = tx->length;
+	io->offset              = (const uint8_t *)tx->data - c->tx_buffer;
+	io->state               = HELD;
+	return io;
+}
+
+static void
+queue_tx(struct crt_native_channel *c, struct channel_io *io)
+{
+	c->tx_next[io->index] = c->count;
+	if (c->tx_pending_tail != c->count)
+		c->tx_next[c->tx_pending_tail] = io->index;
+	else
+		c->tx_pending_head = io->index;
+	c->tx_pending_tail = io->index;
+}
+
 static int
 send_queued(struct crt_native_channel *c)
 {
-	for (unsigned budget = 0; budget < CRT_NATIVE_BATCH && c->tx_free_head != c->count;
-	     budget++) {
+	unsigned staged_count = 0;
+	if (c->tx_pending_head == c->count && c->tx_free_head != c->count) {
+		struct crt_native_tx tx;
+		int                  rc = crt_native_rpc_next_tx(c->rpc, &tx);
+		if (rc == EAGAIN)
+			return 0;
+		if (rc)
+			return rc;
+		struct channel_io *io = stage_tx(c, &tx);
+		if (!crt_native_rpc_has_queued_tx(c->rpc) || c->tx_free_head == c->count) {
+			rc = crt_native_rpc_tx_status(c->rpc, io->token);
+			if (rc) {
+				int result = crt_native_rpc_tx_complete(c->rpc, io->token, rc);
+				free_tx(c, io);
+				return result;
+			}
+			rc = c->ops->post(c->ep, CRT_NATIVE_SEND, c->tx_mr, io->offset, io->size,
+					  NULL, 0, io);
+			if (!rc) {
+				io->state = POSTED;
+				c->outstanding++;
+				return 0;
+			}
+			/* An unaccepted single frame becomes a normal queued retry. */
+			queue_tx(c, io);
+			return rc == EAGAIN ? 0 : rc;
+		}
+		queue_tx(c, io);
+		staged_count = 1;
+	}
+	for (unsigned budget = staged_count;
+	     budget < CRT_NATIVE_BATCH && c->tx_free_head != c->count; budget++) {
 		struct crt_native_tx tx;
 		int                  rc = crt_native_rpc_next_tx(c->rpc, &tx);
 		if (rc == EAGAIN)
 			break;
 		if (rc)
 			return rc;
-		unsigned           slot = c->tx_free_head;
-		struct channel_io *io   = &c->tx[slot];
-		c->tx_free_head         = c->tx_next[slot];
-		io->token               = tx.token;
-		io->size                = tx.length;
-		io->offset              = (const uint8_t *)tx.data - c->tx_buffer;
-		io->state               = HELD;
-		c->tx_next[slot]        = c->count;
-		if (c->tx_pending_tail != c->count)
-			c->tx_next[c->tx_pending_tail] = slot;
-		else
-			c->tx_pending_head = slot;
-		c->tx_pending_tail = slot;
+		queue_tx(c, stage_tx(c, &tx));
 	}
 	struct crt_native_post posts[CRT_NATIVE_BATCH];
 	unsigned               count = 0, accepted;

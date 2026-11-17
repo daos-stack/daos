@@ -73,6 +73,14 @@ struct crt_native_stats {
 	uint64_t send_posts, recv_posts, read_posts, write_posts;
 	uint64_t send_batches, recv_batches, signaled_sends, inline_sends;
 	uint64_t cq_polls, cqes, logical_completions;
+	uint64_t single_posts, batch_posts, direct_completions, queued_completions;
+	/* SEND sizes are complete wire frames; histogram collection is opt-in.
+	 * Buckets are disjoint: each le bucket starts above the previous limit.
+	 */
+	uint64_t send_bytes, send_min, send_max;
+	uint64_t send_le64, send_le128, send_le256, send_le512;
+	uint64_t send_le1024, send_le4096, send_gt4096;
+	unsigned inline_requested, inline_limit;
 };
 
 struct crt_native_config {

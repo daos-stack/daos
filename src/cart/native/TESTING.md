@@ -159,3 +159,40 @@ inline size 0 versus 256, CQ batches 1 versus 4, and READ depth 1 versus 16. App
 these variables through engine `env_vars` and the client shell. Upgrade and
 restart all native peers together after the wire-format change; do not reformat
 storage. No real-HCA throughput gain is implied by the portable regression suite.
+
+## Single-request paths and frame-size statistics
+
+Single work requests bypass linked-list posting scratch and selective-signaling
+bookkeeping. A one-entry batch, or a batch with only one admission slot left,
+uses the same scalar path. A lone channel SEND also bypasses temporary batch
+queueing; backpressure retains the unposted frame in the normal retry queue.
+
+Successful ordinary CQEs are delivered directly. Only marker expansion and
+error handling use the logical-completion queue. Unconsumed raw CQEs remain
+owned by the endpoint across small caller output buffers, preserving ordering
+and registration lifetime when markers and ordinary completions are mixed.
+
+`CRT_NATIVE_STATS=1` adds `inline_requested` and `inline_limit` (the actual QP
+capacity), accepted-operation path counts `single_posts`/`batch_posts`, and
+`direct_completions`/`queued_completions`. The latter two sum to `logical`.
+
+SEND-size collection is enabled only with statistics, so disabled instrumentation
+avoids histogram/min/max updates. Sizes include the entire native/CaRT frame and
+any attached RELEASE footer. `send_bytes`, `send_min` and `send_max` accompany
+these disjoint buckets:
+
+| Counter | SEND length in bytes |
+| --- | --- |
+| `send_le64` | 1–64 |
+| `send_le128` | 65–128 |
+| `send_le256` | 129–256 |
+| `send_le512` | 257–512 |
+| `send_le1024` | 513–1024 |
+| `send_le4096` | 1025–4096 |
+| `send_gt4096` | 4097 and above |
+
+Use the negotiated capacity and size distribution together to explain inline
+usage. A software-eager 4-KiB payload can exceed both 4 KiB on the wire and the
+hardware inline limit. For performance comparisons, keep all existing tuning
+settings unchanged, collect statistics in a separate diagnostic run, and compare
+both throughput and latency against the same job count and queue depth.

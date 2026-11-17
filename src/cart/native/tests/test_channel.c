@@ -324,7 +324,9 @@ test_early_reply_ownership(void)
 		result.channel = ca;
 		assert(crt_native_channel_start(ca) == 0 && crt_native_channel_start(cb) == 0);
 		assert(crt_native_channel_call(ca, 17, "hello", 5, early_done, &result, &id) == 0);
+		unsigned before_batches = batch_calls;
 		assert(crt_native_channel_progress(ca, &completed) == 0);
+		assert(batch_calls == before_batches); /* Single SEND bypasses batch staging. */
 		struct queued send = a->cq[a->cq_head++ % QUEUE];
 		assert(send.completion.opcode == CRT_NATIVE_SEND);
 		assert(crt_native_channel_progress(cb, &completed) == 0);

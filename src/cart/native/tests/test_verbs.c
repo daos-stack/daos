@@ -688,6 +688,143 @@ test_selective_signaling(void)
 		}
 }
 
+static void
+test_single_fast_paths(void)
+{
+	static const size_t sizes[] = {64, 128, 256, 512, 1024, 4096, 4097};
+	for (unsigned grouped = 0; grouped < 2; grouped++) {
+		const struct crt_native_ops    *ops   = &crt_native_verbs_ops;
+		struct crt_native_config        cfg   = {.device      = "mock0",
+							 .port        = 1,
+							 .gid_index   = -1,
+							 .depth       = 8,
+							 .inline_size = 256,
+							 .stats       = true};
+		struct crt_native_group        *group = NULL;
+		struct crt_native_ep           *ep;
+		struct crt_native_mr           *mr;
+		struct crt_native_address       address;
+		struct crt_native_remote_memory remote;
+		struct crt_native_completion    out;
+		struct crt_native_post          posts[3];
+		struct crt_native_stats         stats;
+		unsigned                        accepted_count, count;
+		uint64_t                        bytes  = 8;
+		char                           *buffer = malloc(8192);
+		assert(buffer);
+		head = tail = num_accepted = 0;
+		if (grouped) {
+			assert(ops->group_create(&cfg, 1, &group) == 0);
+			cfg.group = group;
+		}
+		assert(ops->open(&cfg, &ep) == 0 && ops->address(ep, &address) == 0);
+		assert(ops->connect(ep, &address) == 0);
+		assert(ops->register_memory(ep, buffer, 8192, 0, &mr, &remote) == 0);
+		for (unsigned i = 0; i < 7; i++) {
+			posts[0] = (struct crt_native_post){.opcode = CRT_NATIVE_SEND,
+							    .mr     = mr,
+							    .length = sizes[i],
+							    .cookie = &buffer[i]};
+			/* Alternate the public scalar and one-entry batch APIs. */
+			if (i % 2)
+				assert(ops->post_batch(ep, posts, 1, &accepted_count) == 0 &&
+				       accepted_count == 1);
+			else
+				assert(ops->post(ep, CRT_NATIVE_SEND, mr, 0, sizes[i], NULL, 0,
+						 &buffer[i]) == 0);
+			bytes += sizes[i];
+		}
+		for (unsigned i = 0; i < 3; i++)
+			posts[i] = (struct crt_native_post){.opcode = CRT_NATIVE_SEND,
+							    .mr     = mr,
+							    .length = 8,
+							    .cookie = &buffer[7 + i]};
+		/* A larger batch with one slot left still uses the scalar path. */
+		assert(ops->post_batch(ep, posts, 3, &accepted_count) == EAGAIN &&
+		       accepted_count == 1);
+		for (unsigned i = 0; i < num_accepted; i++)
+			completions[tail++] =
+			    (struct ibv_wc){.wr_id = accepted[i], .status = IBV_WC_SUCCESS};
+		num_accepted = 0;
+		if (grouped)
+			assert(ops->group_progress(group) == 0);
+		for (unsigned i = 0; i < 8; i++) {
+			assert(ops->deregister_memory(mr) == EBUSY);
+			assert(ops->progress(ep, &out, 1, &count) == 0 && count == 1);
+			assert(out.cookie == &buffer[i] && out.error == 0);
+		}
+		ops->get_stats(ep, &stats);
+		assert(stats.single_posts == 8 && stats.batch_posts == 0);
+		assert(stats.direct_completions == 8 && stats.queued_completions == 0);
+		assert(stats.inline_requested == 256 && stats.inline_limit == 128 &&
+		       stats.inline_sends == 3);
+		assert(stats.send_bytes == bytes && stats.send_min == 8 && stats.send_max == 4097);
+		assert(stats.send_le64 == 2 && stats.send_le128 == 1 && stats.send_le256 == 1);
+		assert(stats.send_le512 == 1 && stats.send_le1024 == 1 && stats.send_le4096 == 1 &&
+		       stats.send_gt4096 == 1);
+		assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
+		if (grouped)
+			assert(ops->group_destroy(group) == 0);
+		free(buffer);
+	}
+}
+
+static void
+test_mixed_direct_and_markers(void)
+{
+	for (unsigned grouped = 0; grouped < 2; grouped++) {
+		const struct crt_native_ops *ops = &crt_native_verbs_ops;
+		struct crt_native_config     cfg = {
+			.device = "mock0", .port = 1, .gid_index = -1, .depth = 8};
+		struct crt_native_group        *group = NULL;
+		struct crt_native_ep           *ep;
+		struct crt_native_mr           *mr;
+		struct crt_native_address       address;
+		struct crt_native_remote_memory remote;
+		struct crt_native_completion    out;
+		struct crt_native_post          posts[3];
+		struct crt_native_stats         stats;
+		unsigned                        accepted_count, count;
+		char                            buffer[64];
+		head = tail = num_accepted = 0;
+		if (grouped) {
+			assert(ops->group_create(&cfg, 1, &group) == 0);
+			cfg.group = group;
+		}
+		assert(ops->open(&cfg, &ep) == 0 && ops->address(ep, &address) == 0);
+		assert(ops->connect(ep, &address) == 0);
+		assert(ops->register_memory(ep, buffer, sizeof(buffer), 0, &mr, &remote) == 0);
+		for (unsigned i = 0; i < 3; i++)
+			posts[i] = (struct crt_native_post){
+			    .opcode = CRT_NATIVE_SEND, .mr = mr, .length = 8, .cookie = &buffer[i]};
+		assert(ops->post_batch(ep, posts, 3, &accepted_count) == 0 && accepted_count == 3);
+		assert(ops->post(ep, CRT_NATIVE_RECV, mr, 0, 32, NULL, 0, &buffer[3]) == 0);
+		completions[tail++] =
+		    (struct ibv_wc){.wr_id = accepted[2], .status = IBV_WC_SUCCESS};
+		completions[tail++] =
+		    (struct ibv_wc){.wr_id = accepted[3], .status = IBV_WC_SUCCESS, .byte_len = 17};
+		num_accepted = 0;
+		if (grouped)
+			assert(ops->group_progress(group) == 0);
+		/* A marker fills the caller's tiny output buffer. The following raw
+		 * receive CQE must remain pending until all earlier SENDs retire.
+		 */
+		for (unsigned i = 0; i < 4; i++) {
+			assert(ops->deregister_memory(mr) == EBUSY);
+			assert(ops->progress(ep, &out, 1, &count) == 0 && count == 1);
+			assert(out.cookie == &buffer[i] && out.error == 0);
+			assert(out.bytes == (i == 3 ? 17 : 8));
+		}
+		ops->get_stats(ep, &stats);
+		assert(stats.single_posts == 1 && stats.batch_posts == 3);
+		assert(stats.direct_completions == 1 && stats.queued_completions == 3);
+		assert(stats.send_min == 0 && stats.send_max == 0); /* Histogram is opt-in. */
+		assert(ops->deregister_memory(mr) == 0 && ops->close(ep) == 0);
+		if (grouped)
+			assert(ops->group_destroy(group) == 0);
+	}
+}
+
 int
 main(void)
 {
@@ -701,6 +838,8 @@ main(void)
 	test_cq_burst();
 	test_linked_posting();
 	test_selective_signaling();
+	test_single_fast_paths();
+	test_mixed_direct_and_markers();
 	puts("native verbs ownership, backpressure, completion and cleanup tests passed");
 	return 0;
 }

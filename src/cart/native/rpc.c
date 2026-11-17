@@ -504,6 +504,14 @@ complete_releases(struct crt_native_rpc *rpc, struct entry *e, int error)
 	return 0;
 }
 
+bool
+crt_native_rpc_has_queued_tx(const struct crt_native_rpc *rpc)
+{
+	return rpc && !rpc->failed &&
+	       (rpc->request_head != rpc->depth || rpc->reply_head != rpc->depth ||
+		rpc->control_head != rpc->depth);
+}
+
 int
 crt_native_rpc_next_tx(struct crt_native_rpc *rpc, struct crt_native_tx *tx)
 {

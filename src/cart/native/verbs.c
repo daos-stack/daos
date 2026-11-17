@@ -124,11 +124,23 @@ verbs_close(struct crt_native_ep *ep)
 			"doca+rc stats: send=%" PRIu64 " recv=%" PRIu64 " read=%" PRIu64
 			" write=%" PRIu64 " inline=%" PRIu64 " signaled=%" PRIu64 " cqes=%" PRIu64
 			" logical=%" PRIu64 " send_batches=%" PRIu64 " recv_batches=%" PRIu64
-			" read_limit=%u\n",
+			" read_limit=%u inline_requested=%u inline_limit=%u"
+			" single_posts=%" PRIu64 " batch_posts=%" PRIu64
+			" direct_completions=%" PRIu64 " queued_completions=%" PRIu64
+			" send_bytes=%" PRIu64 " send_min=%" PRIu64 " send_max=%" PRIu64
+			" send_le64=%" PRIu64 " send_le128=%" PRIu64 " send_le256=%" PRIu64
+			" send_le512=%" PRIu64 " send_le1024=%" PRIu64 " send_le4096=%" PRIu64
+			" send_gt4096=%" PRIu64 "\n",
 			ep->stats.send_posts, ep->stats.recv_posts, ep->stats.read_posts,
 			ep->stats.write_posts, ep->stats.inline_sends, ep->stats.signaled_sends,
 			ep->stats.cqes, ep->stats.logical_completions, ep->stats.send_batches,
-			ep->stats.recv_batches, ep->read_limit);
+			ep->stats.recv_batches, ep->read_limit, ep->config.inline_size,
+			ep->inline_limit, ep->stats.single_posts, ep->stats.batch_posts,
+			ep->stats.direct_completions, ep->stats.queued_completions,
+			ep->stats.send_bytes, ep->stats.send_min, ep->stats.send_max,
+			ep->stats.send_le64, ep->stats.send_le128, ep->stats.send_le256,
+			ep->stats.send_le512, ep->stats.send_le1024, ep->stats.send_le4096,
+			ep->stats.send_gt4096);
 	free(ep->pending);
 	free(ep->ready);
 	free(ep->batch);
@@ -161,10 +173,12 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 	}
 	ep->config     = *cfg;
 	stage          = "allocate operation records";
+	ep->pending    = calloc(cfg->depth, sizeof(*ep->pending));
 	ep->ready      = calloc(cfg->depth, sizeof(*ep->ready));
 	ep->batch      = calloc(1, sizeof(*ep->batch));
 	ep->operations = calloc(cfg->depth, sizeof(*ep->operations));
-	if (ep->operations == NULL || ep->batch == NULL || ep->ready == NULL) {
+	if (ep->operations == NULL || ep->batch == NULL || ep->ready == NULL ||
+	    ep->pending == NULL) {
 		rc = ENOMEM;
 		goto fail;
 	}
@@ -188,11 +202,6 @@ verbs_open(const struct crt_native_config *cfg, struct crt_native_ep **output)
 		g->count++;
 		ep->context = g->context;
 		ep->cq      = g->cq;
-		ep->pending = calloc(cfg->depth, sizeof(*ep->pending));
-		if (!ep->pending) {
-			rc = ENOMEM;
-			goto fail;
-		}
 	} else {
 		stage   = "ibv_get_device_list";
 		errno   = 0;
@@ -458,6 +467,114 @@ validate_post(struct crt_native_ep *ep, const struct crt_native_post *p)
 	return 0;
 }
 
+static void
+record_send_size(struct crt_native_ep *ep, size_t size)
+{
+	if (!ep->config.stats)
+		return;
+	struct crt_native_stats *s = &ep->stats;
+	s->send_bytes += size;
+	if (!s->send_min || size < s->send_min)
+		s->send_min = size;
+	if (size > s->send_max)
+		s->send_max = size;
+	if (size <= 64)
+		s->send_le64++;
+	else if (size <= 128)
+		s->send_le128++;
+	else if (size <= 256)
+		s->send_le256++;
+	else if (size <= 512)
+		s->send_le512++;
+	else if (size <= 1024)
+		s->send_le1024++;
+	else if (size <= 4096)
+		s->send_le4096++;
+	else
+		s->send_gt4096++;
+}
+
+/* The dominant one-WR case does not touch linked-list posting scratch or the
+ * selective-signaling ledger. It still owns every accepted buffer until CQE.
+ */
+static int
+verbs_post_one(struct crt_native_ep *ep, const struct crt_native_post *p)
+{
+	if (!ep || !p)
+		return EINVAL;
+	if (ep->closing)
+		return ESHUTDOWN;
+	int rc = validate_post(ep, p);
+	if (rc)
+		return rc;
+	unsigned slot = ep->free_head;
+	if (slot == ep->config.depth ||
+	    (p->opcode == CRT_NATIVE_READ && ep->reads == ep->read_limit)) {
+		if (ep->config.wake)
+			ep->config.wake(ep->config.wake_arg);
+		return EAGAIN;
+	}
+	struct ibv_sge sge   = {.addr   = (uintptr_t)p->mr->mr->addr + p->offset,
+				.length = p->length,
+				.lkey   = p->mr->mr->lkey};
+	uint64_t       id    = (uint64_t)ep->group_slot << 32 | slot;
+	unsigned       flags = IBV_SEND_SIGNALED;
+	if (p->opcode == CRT_NATIVE_RECV) {
+		struct ibv_recv_wr wr = {.wr_id = id, .sg_list = &sge, .num_sge = 1}, *bad = &wr;
+		ep->stats.recv_batches++;
+		rc = ibv_post_recv(ep->qp, &wr, &bad);
+	} else {
+		struct ibv_send_wr wr   = {.wr_id      = id,
+					   .sg_list    = &sge,
+					   .num_sge    = 1,
+					   .send_flags = IBV_SEND_SIGNALED,
+					   .opcode     = p->opcode == CRT_NATIVE_SEND ? IBV_WR_SEND
+							 : p->opcode == CRT_NATIVE_READ
+							     ? IBV_WR_RDMA_READ
+							     : IBV_WR_RDMA_WRITE},
+				   *bad = &wr;
+		if (p->opcode == CRT_NATIVE_SEND && p->length <= ep->inline_limit)
+			wr.send_flags |= IBV_SEND_INLINE;
+		if (p->opcode != CRT_NATIVE_SEND) {
+			wr.wr.rdma.remote_addr = p->remote->address + p->remote_offset;
+			wr.wr.rdma.rkey        = p->remote->key;
+		}
+		flags = wr.send_flags;
+		ep->stats.send_batches++;
+		rc = ibv_post_send(ep->qp, &wr, &bad);
+	}
+	if (rc) {
+		if (rc == EAGAIN && ep->config.wake)
+			ep->config.wake(ep->config.wake_arg);
+		return rc;
+	}
+	ep->free_head        = ep->operations[slot].next_free;
+	ep->operations[slot] = (struct operation){.mr         = p->mr,
+						  .cookie     = p->cookie,
+						  .opcode     = p->opcode,
+						  .length     = p->length,
+						  .active     = true,
+						  .chain_head = ep->config.depth,
+						  .chain_next = ep->config.depth};
+	p->mr->references++;
+	ep->outstanding++;
+	ep->stats.single_posts++;
+	if (p->opcode == CRT_NATIVE_SEND) {
+		ep->stats.send_posts++;
+		ep->stats.signaled_sends++;
+		if (flags & IBV_SEND_INLINE)
+			ep->stats.inline_sends++;
+		record_send_size(ep, p->length);
+	} else if (p->opcode == CRT_NATIVE_RECV)
+		ep->stats.recv_posts++;
+	else if (p->opcode == CRT_NATIVE_READ) {
+		ep->stats.read_posts++;
+		ep->reads++;
+	} else
+		ep->stats.write_posts++;
+	return 0;
+}
+
 static int
 verbs_post_batch(struct crt_native_ep *ep, const struct crt_native_post *posts, unsigned count,
 		 unsigned *accepted)
@@ -469,12 +586,25 @@ verbs_post_batch(struct crt_native_ep *ep, const struct crt_native_post *posts, 
 		return EINVAL;
 	if (ep->closing)
 		return ESHUTDOWN;
+	if (count == 1) {
+		int rc    = verbs_post_one(ep, posts);
+		*accepted = rc ? 0 : 1;
+		return rc;
+	}
 	for (unsigned i = 0; i < count; i++) {
 		int rc = validate_post(ep, &posts[i]);
 		if (rc)
 			return rc;
 		if (posts[i].opcode != posts[0].opcode)
 			return EINVAL;
+	}
+	unsigned available = ep->config.depth - ep->outstanding;
+	if (posts[0].opcode == CRT_NATIVE_READ && ep->read_limit - ep->reads < available)
+		available = ep->read_limit - ep->reads;
+	if (available == 1) {
+		int rc    = verbs_post_one(ep, posts);
+		*accepted = rc ? 0 : 1;
+		return rc ? rc : EAGAIN;
 	}
 	struct post_scratch *b    = ep->batch;
 	unsigned             slot = ep->free_head, prepared = 0;
@@ -553,8 +683,10 @@ verbs_post_batch(struct crt_native_ep *ep, const struct crt_native_post *posts, 
 									 .chain_next = ep->config.depth};
 		p->mr->references++;
 		ep->outstanding++;
+		ep->stats.batch_posts++;
 		if (p->opcode == CRT_NATIVE_SEND) {
 			ep->stats.send_posts++;
+			record_send_size(ep, p->length);
 			if (b->sends[i].send_flags & IBV_SEND_SIGNALED)
 				ep->stats.signaled_sends++;
 			if (b->sends[i].send_flags & IBV_SEND_INLINE)
@@ -602,8 +734,7 @@ verbs_post(struct crt_native_ep *ep, enum crt_native_opcode opcode, struct crt_n
 				    .remote        = remote,
 				    .remote_offset = remote_offset,
 				    .cookie        = cookie};
-	unsigned               accepted;
-	return verbs_post_batch(ep, &p, 1, &accepted);
+	return verbs_post_one(ep, &p);
 }
 
 static int
@@ -674,11 +805,27 @@ queue_completion(struct crt_native_ep *ep, struct ibv_wc wc)
 	return 0;
 }
 
+static void
+retire_completion(struct crt_native_ep *ep, unsigned slot, int error, size_t bytes,
+		  struct crt_native_completion *out)
+{
+	struct operation *op = &ep->operations[slot];
+	*out                 = (struct crt_native_completion){
+			    .cookie = op->cookie, .opcode = op->opcode, .error = error, .bytes = bytes};
+	if (op->opcode == CRT_NATIVE_READ)
+		ep->reads--;
+	op->mr->references--;
+	op->active    = false;
+	op->next_free = ep->free_head;
+	ep->free_head = slot;
+	ep->outstanding--;
+	ep->stats.logical_completions++;
+}
+
 static int
 verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, unsigned capacity,
 	       unsigned *count)
 {
-	struct ibv_wc batch[32];
 	if (!count)
 		return EINVAL;
 	*count = 0;
@@ -686,54 +833,52 @@ verbs_progress(struct crt_native_ep *ep, struct crt_native_completion *output, u
 		return EINVAL;
 	int error = 0;
 	while (*count < capacity) {
-		while (ep->ready_count && *count < capacity) {
+		if (ep->ready_count) {
 			unsigned slot  = ep->ready[ep->ready_head];
 			ep->ready_head = (ep->ready_head + 1) % ep->config.depth;
 			ep->ready_count--;
 			struct operation *op = &ep->operations[slot];
-			output[(*count)++] =
-			    (struct crt_native_completion){.cookie = op->cookie,
-							   .opcode = op->opcode,
-							   .error  = op->completion_error,
-							   .bytes  = op->completion_bytes};
-			if (op->opcode == CRT_NATIVE_READ)
-				ep->reads--;
-			op->mr->references--;
-			op->active    = false;
-			op->next_free = ep->free_head;
-			ep->free_head = slot;
-			ep->outstanding--;
-			ep->stats.logical_completions++;
+			retire_completion(ep, slot, op->completion_error, op->completion_bytes,
+					  &output[(*count)++]);
+			ep->stats.queued_completions++;
+			continue;
 		}
-		if (*count == capacity)
-			break;
-		int received;
-		if (ep->config.group) {
-			received = ep->pending_count < 32 ? ep->pending_count : 32;
-			for (int i = 0; i < received; i++) {
-				batch[i]         = ep->pending[ep->pending_head];
-				ep->pending_head = (ep->pending_head + 1) % ep->config.depth;
-			}
-			ep->pending_count -= received;
-		} else {
+		if (!ep->pending_count) {
+			if (ep->config.group)
+				break;
+			unsigned budget = ep->config.depth < 32 ? ep->config.depth : 32;
 			ep->stats.cq_polls++;
-			received = ibv_poll_cq(ep->cq, 32, batch);
-			if (received > 0)
-				ep->stats.cqes += received;
-		}
-		if (received < 0) {
-			verbs_close_begin(ep);
-			error = EIO;
-			break;
-		}
-		if (!received)
-			break;
-		for (int i = 0; i < received; i++) {
-			int rc = queue_completion(ep, batch[i]);
-			if (rc) {
-				error = rc;
+			int received = ibv_poll_cq(ep->cq, (int)budget, ep->pending);
+			if (received < 0) {
 				verbs_close_begin(ep);
+				error = EIO;
+				break;
 			}
+			if (!received)
+				break;
+			ep->stats.cqes += received;
+			ep->pending_head  = 0;
+			ep->pending_count = received;
+		}
+		struct ibv_wc wc = ep->pending[ep->pending_head];
+		ep->pending_head = (ep->pending_head + 1) % ep->config.depth;
+		ep->pending_count--;
+		if (wc.wr_id < ep->config.depth) {
+			struct operation *op = &ep->operations[wc.wr_id];
+			if (wc.status == IBV_WC_SUCCESS && op->active && !op->ready &&
+			    (op->chain_head == ep->config.depth || op->chain_head == wc.wr_id)) {
+				size_t bytes =
+				    op->opcode == CRT_NATIVE_RECV ? wc.byte_len : op->length;
+				retire_completion(ep, (unsigned)wc.wr_id, 0, bytes,
+						  &output[(*count)++]);
+				ep->stats.direct_completions++;
+				continue;
+			}
+		}
+		int rc = queue_completion(ep, wc);
+		if (rc) {
+			error = rc;
+			verbs_close_begin(ep);
 		}
 	}
 	if ((ep->pending_count || ep->ready_count) && ep->config.wake)
@@ -878,8 +1023,11 @@ verbs_group_progress(struct crt_native_group *g)
 static void
 verbs_get_stats(struct crt_native_ep *ep, struct crt_native_stats *out)
 {
-	if (ep && out)
-		*out = ep->stats;
+	if (ep && out) {
+		*out                  = ep->stats;
+		out->inline_requested = ep->config.inline_size;
+		out->inline_limit     = ep->inline_limit;
+	}
 }
 
 const struct crt_native_ops crt_native_verbs_ops = {
