@@ -143,6 +143,18 @@ run_test()
         -R"${DYN}" -M"${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
+        echo "B+tree query test..."
+        eval "${VCMD}" "$BTR" \
+        --start-test "'btree query ${test_conf_pre} ${test_conf}'" \
+        -R"${DYN}" -M"${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -u "1:Everybody" \
+        -q1 \
+        -u "2:More" \
+        -q2 \
+        -d "1" \
+        -q1 \
+        -D
+
     else
         echo "B+tree performance test..."
         eval "${VCMD}" "$BTR" \
