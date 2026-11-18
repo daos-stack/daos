@@ -22,5 +22,5 @@ Check pool:
 Check pool: ok.
 Check container:
 	uuid: {{UUID}}
-- Container does not exist.
+- error: Container does not exist.
 error: Check container: DER_INVAL(-1003): 'Invalid parameters'

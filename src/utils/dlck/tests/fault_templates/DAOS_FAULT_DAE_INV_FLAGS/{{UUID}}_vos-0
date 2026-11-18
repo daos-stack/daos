@@ -43,6 +43,6 @@ Check container:
 -- DTX blob (off=0x514650)... 
 --- Magic... ok.
 --- 7 active entries:
----- [0] invalid flags (0x20)
+---- error: [0] invalid flags (0x20)
 - error: Active DTX blob list: DER_IO(-2001): 'I / O error'
 error: Check container: DER_IO(-2001): 'I / O error'
