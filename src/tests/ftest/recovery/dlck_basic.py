@@ -10,7 +10,7 @@ import yaml
 from dlck_utils import TestDlck
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
-from run_utils import run_remote
+from run_utils import command_as_user, run_remote
 
 
 class DlckBasicTest(TestDlck):
@@ -34,6 +34,41 @@ class DlckBasicTest(TestDlck):
             return [f"{fault_name}: no expected error found in dlck output: {output}"]
         return []
 
+    def cleanup_dpdk(self):
+        """Cleanup DPDK temporary files on the remote hosts."""
+        cmd = 'rm -rf /tmp/dpdk*'
+        command_root = command_as_user(command=cmd, user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+        if not result.passed:
+            self.fail(f"{command_root} failed on {result.failed_hosts}")
+
+    def mount_dlck_tmpfs(self, tmpfs_mounts):
+        """Mount 256G of memory-backed tmpfs for testing purposes on the remote hosts.
+
+        Args:
+            tmpfs_mounts (str): The mount point of the tmpfs to mount.
+        """
+        cmd = f'sudo bash -c "mkdir -p {tmpfs_mounts} && ' \
+              f'mount -t tmpfs -o rw,uid=daos_server,' \
+              f'gid=daos_server,mode=0775,size=256G tmpfs {tmpfs_mounts}"'
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
+        if not result.passed:
+            self.fail(f"{cmd} failed on {result.failed_hosts}")
+
+    def unmount_dlck_tmpfs(self, tmpfs_mounts):
+        """Unmount the memory-backed tmpfs used for testing on the remote hosts.
+
+        Args:
+            tmpfs_mounts (str): The mount point of the tmpfs to unmount.
+        """
+        cmd = f'umount {tmpfs_mounts}'
+        command_root = command_as_user(command=cmd, user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+        self.log.info("Unmounted dlck tmpfs on remote hosts")
+        if not result.passed:
+            self.fail(f"{command_root} failed on {result.failed_hosts}")
+        return []
+
     def test_dlck_basic(self):
         """Basic Test: Run 'dlck' command
 
@@ -49,28 +84,21 @@ class DlckBasicTest(TestDlck):
         dlck.pool_uuid.value = pool.uuid
         dlck.log_dir.value = self.test_env.log_dir
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
-        if self.server_managers[0].manager.job.using_control_metadata:
-            dlck.nvme.value = os.path.join(
-                self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
-                "daos_nvme.conf")
+        tmpfs_mounts = "/mnt/dlck_test"
 
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
 
         if self.server_managers[0].manager.job.using_control_metadata:
+            self.log_step("Setup Memory-backed tmpfs for dlck")
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
-            # Mount 256G of memory-backed tmpfs for testing purposes
-            cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
-                  'mount -t tmpfs -o rw,uid=daos_server,' \
-                  'gid=daos_server,mode=0775,size=256G tmpfs /mnt/dlck_test"'
-            run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
-            # Display the tmpfs mount
-            run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
-            run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
-            dlck.storage.value = "/mnt/dlck_test"
-            dlck.run_user = 'root'
+            self.cleanup_dpdk()
+            self.mount_dlck_tmpfs(tmpfs_mounts=tmpfs_mounts)
+            # Make sure to clean the mounts even if the test hits an error.
+            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mounts=tmpfs_mounts)
+            dlck.storage.value = tmpfs_mounts
 
         self.log_step("Run dlck command to check the health of the pool and storage")
         dlck.timeout = 180
@@ -99,6 +127,7 @@ class DlckBasicTest(TestDlck):
         self.log.info("Fault injection file: %s", fault_inject_file)
         self.log.info("Faults: %s", fault_list)
         self.log.info("Faults dict: %s", faults_dict)
+        tmpfs_mounts = "/mnt/dlck_test"
         dmg = self.get_dmg_command()
         pool = self.get_pool()
         dlck = self.get_dlck_command()
@@ -112,19 +141,15 @@ class DlckBasicTest(TestDlck):
         dmg.system_stop()
 
         if self.server_managers[0].manager.job.using_control_metadata:
+            self.log_step("Setup Memory-backed tmpfs for dlck")
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
-            # Mount 256G of memory-backed tmpfs for testing purposes
-            cmd = 'sudo bash -c "mkdir -p /mnt/dlck_test && ' \
-                  'mount -t tmpfs -o rw,uid=daos_server,' \
-                  'gid=daos_server,mode=0775,size=256G tmpfs /mnt/dlck_test"'
-            run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
-            # Display the tmpfs mount
-            run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
-            run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
-            dlck.storage.value = "/mnt/dlck_test"
-            dlck.run_user = 'root'
+            self.cleanup_dpdk()
+            self.mount_dlck_tmpfs(tmpfs_mounts=tmpfs_mounts)
+            # Make sure to clean the mounts even if the test hits an error.
+            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mounts=tmpfs_mounts)
+            dlck.storage.value = tmpfs_mounts
 
         for test_fault in fault_list:
             if test_fault == "DAOS_FAULT_POOL_OPEN_BIO" and \
@@ -147,13 +172,6 @@ class DlckBasicTest(TestDlck):
             dlck.timeout = 180
             result = dlck.run()
             errors.extend(self.check_dlck_result(result, test_fault))
-
-        # umount /mnt/dlck_test and remove /mnt/dlck_test
-        cmd = 'sudo bash -c "umount /mnt/dlck_test && rm -rf /mnt/dlck_test"'
-        run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
-        # Display the tmpfs mount
-        run_remote(log=self.log, hosts=self.hostlist_servers, command="mount")
-        run_remote(log=self.log, hosts=self.hostlist_servers, command="df -h")
 
         self.log_step("Perform dmg system start after running dlck command")
         dmg.system_start()
