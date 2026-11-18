@@ -113,7 +113,8 @@ daos_eq_lib_reset_after_fork(void)
 
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
-	crt_info          = daos_crt_init_opt_get(false, 1);
+	/* Do not impose limit and let CART set default if not set through env */
+	crt_info          = daos_crt_init_opt_get(false, 0);
 	rc                = dc_mgmt_net_cfg_init(NULL, crt_info);
 	if (rc == 0)
 		rc = daos_eq_lib_init(crt_info);

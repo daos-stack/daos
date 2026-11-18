@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2023-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -114,6 +114,13 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid, struct ds_cont_child **
 
 d_rank_t
 dss_self_rank(void)
+{
+	assert_true(false);
+	return -1;
+}
+
+daos_epoch_t
+dss_get_start_epoch(void)
 {
 	assert_true(false);
 	return -1;

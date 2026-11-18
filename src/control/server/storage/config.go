@@ -849,8 +849,8 @@ func (br *BdevBusRange) ToHotplugRange() *BdevHotplugRange {
 	}
 
 	hr := &BdevHotplugRange{}
-	hr.LowAddress.Bus = br.LowAddress.Bus
-	hr.HighAddress.Bus = br.HighAddress.Bus
+	hr.Begin = br.LowAddress.Bus
+	hr.End = br.HighAddress.Bus
 	return hr
 }
 
@@ -877,10 +877,12 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 
 // BdevHotplugRange represents a single PCI domain + bus-ID-range hotplug filter entry (one
 // element of bdev_hotplug_range). Domain and bus-ID are both mandatory. Domain is always a
-// single value; bus-ID is a single value or an inclusive range.
+// single value; bus-ID is a single value or an inclusive range (Begin==End for a single value).
+// Field names match the engine-side hotplug_filter_entry struct (bio_config.c).
 type BdevHotplugRange struct {
-	LowAddress  hardware.PCIAddress
-	HighAddress hardware.PCIAddress
+	Domain uint16
+	Begin  uint8
+	End    uint8
 }
 
 // NewBdevHotplugRange parses a single "<domain>:<bus-id>" entry. domain is a single PCI domain;
@@ -905,10 +907,9 @@ func NewBdevHotplugRange(entryStr string) (*BdevHotplugRange, error) {
 	}
 
 	hr := &BdevHotplugRange{}
-	hr.LowAddress.Domain = uint16(dom)
-	hr.HighAddress.Domain = uint16(dom)
-	hr.LowAddress.Bus = uint8(busLo)
-	hr.HighAddress.Bus = uint8(busHi)
+	hr.Domain = uint16(dom)
+	hr.Begin = uint8(busLo)
+	hr.End = uint8(busHi)
 
 	return hr, nil
 }
@@ -927,12 +928,12 @@ func (hr *BdevHotplugRange) String() string {
 		return ""
 	}
 
-	busStr := fmt.Sprintf("%02x", hr.LowAddress.Bus)
-	if hr.LowAddress.Bus != hr.HighAddress.Bus {
-		busStr = fmt.Sprintf("%02x-%02x", hr.LowAddress.Bus, hr.HighAddress.Bus)
+	busStr := fmt.Sprintf("%02x", hr.Begin)
+	if hr.Begin != hr.End {
+		busStr = fmt.Sprintf("%02x-%02x", hr.Begin, hr.End)
 	}
 
-	return fmt.Sprintf("%04x:%s", hr.LowAddress.Domain, busStr)
+	return fmt.Sprintf("%04x:%s", hr.Domain, busStr)
 }
 
 // BdevHotplugRanges is a list of PCI domain+bus-ID hotplug filter entries (bdev_hotplug_range).
