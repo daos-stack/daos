@@ -1106,8 +1106,8 @@ cont_close_complete(tse_task_t *task, void *data)
 			DP_CONT(pool->dp_pool, cont->dc_uuid),
 			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
 		rc = 0;
-	} else if (rc == -DER_NONEXIST) {
-		/* The container cannot be found on the server. */
+	} else if (rc == -DER_NONEXIST || rc == -DER_CONT_DESTROYING) {
+		/* The container cannot be found or is being destroyed on the server. */
 		D_DEBUG(DB_MD, DF_CONT": already destroyed: hdl="DF_UUID"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid),
 			DP_UUID(cont->dc_cont_hdl));
