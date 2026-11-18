@@ -1766,9 +1766,22 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 
 	if (rma) {
+		bool singv_race = false;
+
+		if (obj_rpc_is_fetch(rpc) && iods_nr > 0 && iods[0].iod_type == DAOS_IOD_SINGLE &&
+		    DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE)) {
+			singv_race = true;
+			/* let the shards with other record size transfer first */
+			if (iods[0].iod_size == daos_fail_value_get())
+				dss_sleep(500);
+		}
+
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
 				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL);
+		/* reply after all shards' data landed in the client buffer */
+		if (rc == 0 && singv_race)
+			dss_sleep(1000);
 		if (rc == 0) {
 			bio_iod_flush(biod);
 

@@ -901,6 +901,15 @@ enum {
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
 #define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
 #define DAOS_OBJ_EC_AGG_LEADER_DIFF	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x83)
+/**
+ * This fault makes the shard fetch replies of an EC single value race: a shard
+ * holding a record of fail_value bytes delays its bulk transfer, and every
+ * shard delays its reply after the bulk transfer. A shard holding a stale cell
+ * of an overwritten record is then handled by the client after the data of the
+ * newer record landed in the shared fetch buffer, but before the reply that
+ * exposes the record size conflict.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x84)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
