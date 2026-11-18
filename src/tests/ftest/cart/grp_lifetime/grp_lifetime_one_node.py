@@ -1,5 +1,5 @@
 '''
-  Copyright 2026 Gluesys Inc. and Jihyeon Gim
+  (C) Copyright 2026 Gluesys Inc.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from cart_utils import CartTest
