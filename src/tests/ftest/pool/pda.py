@@ -63,7 +63,7 @@ class PoolPDAProperty(TestWithServers):
         self.pool = self.get_pool(namespace="/run/pool_1/*")
 
         # create container with default
-        self.add_container(self.pool, create=True)
+        self.container = self.get_container(self.pool, create=True)
         ec_pda = self.pool.get_property("ec_pda")
         rp_pda = self.pool.get_property("rp_pda")
 
@@ -76,7 +76,7 @@ class PoolPDAProperty(TestWithServers):
         self.container.destroy()
 
         ec_pda, rp_pda = self.params.get("pda_properties", '/run/container_1/*')
-        self.add_container(self.pool, namespace="/run/container_1/*", create=False)
+        self.container = self.get_container(self.pool, namespace="/run/container_1/*", create=False)
         self.container.properties.update("ec_pda:{},rp_pda:{}".format(ec_pda, rp_pda))
 
         # Create the container

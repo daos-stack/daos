@@ -82,7 +82,7 @@ class AgentFailure(IorTestBase):
         """
         # 1. Create a pool and a container.
         self.pool = self.get_pool()
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # 2. Run IOR.
         ior_results = {}
@@ -175,7 +175,7 @@ class AgentFailure(IorTestBase):
         """
         # 1. Create a pool and a container.
         self.pool = self.get_pool()
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # Use the last two agent hosts, since the first is likely the test runner node
         agent_hosts = self.agent_managers[0].hosts

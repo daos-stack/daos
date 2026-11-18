@@ -1701,9 +1701,9 @@ rebuild_task_get_min_version(struct pool_map *map, struct pool_target_id_list *t
  * Other return value indicates an error.
  */
 static int
-rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
-		       daos_rebuild_opc_t rebuild_op,
-		       struct pool_target_id_list *tgts, uint64_t delay_sec)
+rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver, daos_rebuild_opc_t rebuild_op,
+		       daos_epoch_t reclaim_eph, struct pool_target_id_list *tgts,
+		       uint64_t delay_sec)
 {
 	struct rebuild_task *task;
 	struct rebuild_task *merge_pre_task = NULL;
@@ -1786,6 +1786,7 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 
 	merge_task->dst_schedule_time = max(merge_task->dst_schedule_time,
 					    daos_gettime_coarse() + delay_sec);
+	merge_task->dst_reclaim_eph   = max(merge_task->dst_reclaim_eph, reclaim_eph);
 	merge_task->dst_reclaim_ver = rebuild_task_get_min_version(pool->sp_map, tgts);
 	D_PRINT("%s [%s] ("DF_UUID" ver=%u/%u) id %u\n",
 		RB_OP_STR(rebuild_op), merge_task->dst_schedule_time == -1 ?
@@ -2656,7 +2657,8 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver, daos_epoch_t reclaim
 	if (tgts != NULL && tgts->pti_number > 0 &&
 	    rebuild_op != RB_OP_RECLAIM && rebuild_op != RB_OP_FAIL_RECLAIM) {
 		/* Check if the pool already in the queue list */
-		rc = rebuild_try_merge_tgts(pool, map_ver, rebuild_op, tgts, delay_sec);
+		rc =
+		    rebuild_try_merge_tgts(pool, map_ver, rebuild_op, reclaim_eph, tgts, delay_sec);
 		if (rc)
 			return rc == 1 ? 0 : rc;
 	}
@@ -3071,8 +3073,6 @@ rebuild_tgt_status_check_ult(void *arg)
 			DL_ERROR(rc == 0 ? status.status : rc, DF_RB " failed", DP_RB_RPT(rpt));
 			if (status.status == 0)
 				status.status = rc;
-			if (rpt->rt_errno == 0)
-				rpt->rt_errno = status.status;
 		}
 
 		memset(&iv, 0, sizeof(iv));

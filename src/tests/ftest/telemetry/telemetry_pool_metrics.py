@@ -140,7 +140,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         # create pool and container
         self.pool = self.get_pool(connect=False)
         self.pool.set_property("reclaim", "disabled")
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # collect first set of pool metric data before read/write
         metric_names = [

@@ -21,7 +21,6 @@ pool:
   size: 2G
 
 container:
-  control_method: daos
   type: POSIX
 
 ior: &ior_base

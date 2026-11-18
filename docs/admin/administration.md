@@ -1210,7 +1210,7 @@ the system (this can be checked with `dmg system query -v`).
 
 After extending the system, the cache of the `daos_agent` service of the client
 nodes needs to be refreshed.  For detailed information, please refer to the
-[1][System Deployment documentation].
+[System Deployment](deployment.md#refresh-agent-cache) documentation.
 
 ### Adding or removing Management Service (MS) replicas
 
@@ -1225,8 +1225,8 @@ An administrator may add or remove hosts from the MS replica list.
 
 To verify that the updated MS replicas came up correctly:
 
-1. Use the `dmg system query` command to check that all expected ranks have come up in the Joined state.
-   The command should not time out.
+1. Use the `dmg system query` command to check that all expected ranks have
+   come up in the Joined state.  The command should not time out.
 2. Use the `dmg system leader-query` to ensure a leader election has completed.
 
 !!! warning
@@ -1237,53 +1237,7 @@ To verify that the updated MS replicas came up correctly:
 
 ## Software Upgrade
 
-The DAOS v2.0 wire protocol and persistent layout is not compatible with
-previous DAOS versions and would require a reformat and all client and server
-nodes to be upgraded to a 2.x version.
+For information on upgrading the DAOS software version, please refer to
+[Upgrading DAOS to Version 2.8](../release/upgrading.md) and
+[DAOS Version Interoperability](../release/version_interop.md).
 
-!!! warning
-    Attempts to start DAOS v2.0 over a system formatted with a previous DAOS
-    version will trigger a RAS event and cause all the engines to abort.
-    Similarly, a 2.0 DAOS client or engine will refuse to communicate with a
-    peer that runs an incompatible version.
-
-DAOS v2.0 will maintain interoperability for both the wire protocol and
-persistent layout with any future v2.x versions. That being said, it is
-required that all engines in the same system run the same DAOS version.
-
-!!! warning
-    Rolling upgrade is not supporting at this time.
-
-DAOS v2.2 client connections to pools which were created by DAOS v2.4
-will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
-server. To upgrade all pools to latest format after software upgrade, run
-`dmg pool upgrade <pool>`
-
-### Interoperability Matrix
-
-The following table is intended to visually depict the interoperability
-policies for all major components in a DAOS system.
-
-
-||Server<br>(daos\_server)|Engine<br>(daos\_engine)|Agent<br>(daos\_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
-|:---|:---:|:---:|:---:|:---:|:---:|
-|Server|x.y.z|x.y.z|x.(y±1)|n/a|x.y|
-|Engine|x.y.z|x.y.z|n/a|x.(y±1)|n/a|
-|Agent|x.(y±1)|n/a|n/a|x.y.z|n/a|
-|Client|n/a|x.(y±1)|x.y.z|n/a|n/a|
-|Admin|x.y|n/a|n/a|n/a|n/a|
-
-Key:
-
-* x.y.z: Major.Minor.Patch must be equal
-* x.y: Major.Minor must be equal
-* x.(y±1): Major must be equal, Minor must be equal or -1/+1 release version
-* n/a: Components do not communicate
-
-Examples:
-
-* daos\_server 2.6.0 is only compatible with daos\_engine 2.6.0
-* daos\_agent 2.8.0 is compatible with daos\_server 2.6.0 (2.7 is a development version)
-* dmg 2.6.1 is compatible with daos\_server 2.6.0
-
-[1]: <deployment.md#refresh-agent-cache>(Refresh DAOS Agent Cache)

@@ -13,12 +13,12 @@ from getpass import getuser
 
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
-from fio_test_base import FioBase
+from fio_utils import TestFio
 from ior_test_base import IorTestBase
 from run_utils import run_remote
 
 
-class ParallelIo(FioBase, IorTestBase):
+class ParallelIo(TestFio, IorTestBase):
     """Base Parallel IO test class.
 
     :avocado: recursive
@@ -140,7 +140,7 @@ class ParallelIo(FioBase, IorTestBase):
         start_dfuse(self, dfuse, self.pool[0])
 
         # create multiple containers
-        self.add_container_qty(self.cont_count, self.pool[0])
+        self.container = [self.get_container(self.pool[0]) for _ in range(self.cont_count)]
 
         # check if all the created containers can be accessed and perform
         # io on each container using fio in parallel
@@ -153,8 +153,9 @@ class ParallelIo(FioBase, IorTestBase):
                 self.fail("Error running '{}' on the following hosts: {}".format(
                     cmd, result.failed_hosts))
             # run fio on all containers
-            self.fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, cont.uuid))
-            thread = threading.Thread(target=self.execute_fio)
+            fio_cmd = self.get_fio_command()
+            fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, cont.uuid))
+            thread = threading.Thread(target=fio_cmd.run)
             threads.append(thread)
             thread.start()
 
@@ -171,8 +172,9 @@ class ParallelIo(FioBase, IorTestBase):
 
         # try accessing destroyed container, it should fail
         try:
-            self.fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, container_to_destroy))
-            self.execute_fio()
+            fio_cmd = self.get_fio_command()
+            fio_cmd.update_directory(os.path.join(dfuse.mount_dir.value, container_to_destroy))
+            fio_cmd.run()
             self.fail(f"Fio was able to access destroyed container: {self.container[0]}")
         except CommandFailure:
             self.log.info("fio failed as expected")
@@ -234,8 +236,9 @@ class ParallelIo(FioBase, IorTestBase):
         # different times and get appended in the self.container variable in
         # unordered manner, causing problems during the write process.
         self.log_step("Create 10 containers for each pool.")
+        self.container = []
         for _, pool in enumerate(self.pool):
-            self.add_container_qty(self.cont_count, pool)
+            self.container.extend([self.get_container(pool) for _ in range(self.cont_count)])
 
         # Try to access each dfuse mounted container using ls. Once it is
         # accessed successfully, go ahead and perform io on that location

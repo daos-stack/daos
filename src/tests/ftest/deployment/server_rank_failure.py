@@ -135,7 +135,7 @@ class ServerRankFailure(IorTestBase):
         """
         # 1. Create a pool and a container.
         self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
-        self.add_container(pool=self.pool)
+        self.container = self.get_container(self.pool)
 
         # 2. Run IOR with given object class and let it run through step 7.
         ior_results = {}
@@ -307,7 +307,7 @@ class ServerRankFailure(IorTestBase):
         # 3. Create a container without redundancy factor.
         self.container = []
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # 4. Run IOR with oclass SX.
         ior_results = {}
@@ -341,7 +341,7 @@ class ServerRankFailure(IorTestBase):
 
         # 8. Create a new container on the pool and run IOR.
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # Run IOR and verify that it works.
         job_num = 2

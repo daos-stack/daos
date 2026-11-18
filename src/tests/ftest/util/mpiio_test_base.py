@@ -47,7 +47,7 @@ class MpiioTests(TestWithServers):
         self.pool = self.get_pool(connect=False)
 
         # create container
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
         # Pass pool and container information to the commands
         env = EnvironmentVariables()

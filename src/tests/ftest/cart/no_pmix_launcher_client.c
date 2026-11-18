@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2018-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -206,6 +206,9 @@ int main(int argc, char **argv)
 		DBG_PRINT("RPC response received from rank=%d\n", rank);
 	}
 
+	g_do_shutdown = true;
+	pthread_join(progress_thread, NULL);
+
 	D_FREE(rank_list->rl_ranks);
 	D_FREE(rank_list);
 
@@ -214,9 +217,6 @@ int main(int argc, char **argv)
 		D_ERROR("crt_group_view_destroy() failed; rc=%d\n", rc);
 		assert(0);
 	}
-
-	g_do_shutdown = true;
-	pthread_join(progress_thread, NULL);
 
 	sem_destroy(&sem);
 

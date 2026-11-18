@@ -185,7 +185,7 @@ class NetworkFailureTest(IorTestBase):
         self.container = []
         self.pool = self.get_pool(namespace="/run/pool_size_ratio_80/*")
         self.container.append(
-            self.get_container(pool=self.pool, namespace=container_namespace))
+            self.get_container(self.pool, namespace=container_namespace))
 
         # 2. Take down network interface of one of the engines. Use the first host.
         self.log_step("Take down network interface of one of the engines.")
@@ -250,7 +250,7 @@ class NetworkFailureTest(IorTestBase):
         # 6. To further verify the system, create another container.
         self.log_step("Create another container.")
         self.container.append(
-            self.get_container(pool=self.pool, namespace=container_namespace))
+            self.get_container(self.pool, namespace=container_namespace))
 
         # 7. Run IOR to the new container. Should work.
         self.log_step("Expect IOR to pass on the new container.")
@@ -369,7 +369,7 @@ class NetworkFailureTest(IorTestBase):
         self.log_step("Create a container without redundancy factor.")
         self.container = []
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # 4. Take down the interface where the pool isn't created.
         self.log_step("Take down the interface where the pool isn't created.")
@@ -401,7 +401,7 @@ class NetworkFailureTest(IorTestBase):
         # 8. Create a new container on the pool and run IOR.
         self.log_step("Create a new container on the pool")
         self.container.append(
-            self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
+            self.get_container(self.pool, namespace="/run/container_wo_rf/*"))
 
         # Run IOR.
         self.log_step("Run IOR on the new pool/container.")

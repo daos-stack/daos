@@ -1,18 +1,18 @@
 '''
   (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import os
 
 from dfuse_utils import get_dfuse, start_dfuse
-from fio_test_base import FioBase
+from fio_utils import TestFio
 from general_utils import get_remote_file_size
 from run_utils import run_remote
 
 
-class Ecodtruncate(FioBase):
+class Ecodtruncate(TestFio):
     # pylint: disable=protected-access
     """Test class Description: Runs Fio with EC object type over POSIX and
         verify truncate file does not corrupt the data.
@@ -48,16 +48,17 @@ class Ecodtruncate(FioBase):
         container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
         dfuse = get_dfuse(self, self.hostlist_clients)
         start_dfuse(self, dfuse, pool, container)
-        self.fio_cmd.update_directory(dfuse.mount_dir.value)
-        self.execute_fio()
+        fio_cmd = self.get_fio_command()
+        fio_cmd.update_directory(dfuse.mount_dir.value)
+        fio_cmd.run()
 
         # Get the fuse file name.
         testfile = "{}.0.0".format(os.path.join(dfuse.mount_dir.value, fname[0]))
-        original_fs = int(self.fio_cmd._jobs['test'].size.value)
+        original_fs = int(fio_cmd._jobs['test'].size.value)
 
         # Read and verify the original data.
-        self.fio_cmd._jobs['test'].rw = 'read'
-        self.fio_cmd.run()
+        fio_cmd._jobs['test'].rw = 'read'
+        fio_cmd.run()
 
         # Get the file stats and confirm size
         file_size = get_remote_file_size(self.hostlist_clients[0], testfile)
@@ -75,7 +76,7 @@ class Ecodtruncate(FioBase):
         self.assertEqual(truncate_size, file_size)
 
         # Read and verify the data after truncate.
-        self.fio_cmd.run()
+        fio_cmd.run()
 
         # Truncate the original file and shrink to original size.
         result = run_remote(
@@ -89,4 +90,4 @@ class Ecodtruncate(FioBase):
             original_fs, file_size, "file size after truncase is not equal to original")
 
         # Read and verify the data after truncate.
-        self.fio_cmd.run()
+        fio_cmd.run()

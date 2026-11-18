@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -70,7 +70,7 @@ class NvmePoolExclude(OSAUtils):
         thread_queue = Queue()
         for val in range(0, num_pool):
             self.pool = pool[val]
-            self.add_container(self.pool)
+            self.container = self.get_container(self.pool)
             self.cont_list.append(self.container)
             rf = ''.join(self.container.properties.value.split(":"))
             rf_num = int(re.search(r"rd_fac([0-9]+)", rf).group(1))

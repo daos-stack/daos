@@ -18,6 +18,5 @@ pool:
   size: 128MiB
 container:
   type: POSIX
-  control_method: daos
 dfuse:
   disable_caching: true

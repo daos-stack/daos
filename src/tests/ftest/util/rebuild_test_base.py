@@ -53,7 +53,7 @@ class RebuildTestBase(TestWithServers):
 
     def setup_test_container(self):
         """Define a TestContainer object."""
-        self.add_container(self.pool, create=False)
+        self.container = self.get_container(self.pool, create=False)
 
     def setup_pool_verify(self):
         """Set up pool verification initial expected values."""

@@ -180,7 +180,7 @@ systemctl --no-reload disable --now daos_server.service >& /dev/null || :
 EOF
   EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_server")
 
-  if [[ "${DISTRO:-el8}" =~ suse ]]; then
+  if [[ "${DISTRO:-el9}" =~ suse ]]; then
     cat << EOF  > "${tmp}/post_uninstall_server"
 #!/bin/bash
 ldconfig
@@ -318,7 +318,7 @@ EOF
 chmod +x "${tmp}/pre_uninstall_client"
 EXTRA_OPTS+=("--before-remove" "${tmp}/pre_uninstall_client")
 
-if [[ "${DISTRO:-el8}" =~ suse ]]; then
+if [[ "${DISTRO:-el9}" =~ suse ]]; then
   cat << EOF  > "${tmp}/post_uninstall_client"
 #!/bin/bash
 set -x
@@ -393,7 +393,7 @@ fi
 EXTERNAL_DEPENDS+=("${capstone_lib}")
 EXTERNAL_DEPENDS+=("pciutils")
 EXTERNAL_DEPENDS+=("${ndctl_dev}")
-if [[ "${DISTRO:-el8}" =~ el ]]; then
+if [[ "${DISTRO:-el9}" =~ el ]]; then
   EXTERNAL_DEPENDS+=("daxctl-devel")
 fi
 DEPENDS=( "daos-client = ${VERSION}-${RELEASE}" "daos-admin = ${VERSION}-${RELEASE}")
@@ -448,7 +448,8 @@ DEPENDS+=("${openmpi_lib}")
 list_files files "${SL_PREFIX}/lib64/libdpar_mpi.so"
 clean_bin "${files[@]}"
 append_install_list "${files[@]}"
-# Don't do autoreq, we know we need OpenMPI so add it explicitly
+# OpenMPI on EL provides qualified libmpi capabilities that do not satisfy
+# FPM's unqualified automatic Requires; the package dependency is explicit.
 build_package "daos-client-tests-openmpi" "noautoreq"
 
 #shim packages
@@ -467,10 +468,7 @@ DEPENDS+=("romio-tests")
 DEPENDS+=("python3-mpi4py-tests >= 3.1.6")
 build_package "daos-tests"
 
-build_package "daos-client-tests-mpich"
-
 DEPENDS=("daos-tests = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-client-tests-openmpi = ${VERSION}-${RELEASE}")
-DEPENDS+=("daos-client-tests-mpich = ${VERSION}-${RELEASE}")
 DEPENDS+=("daos-serialize = ${VERSION}-${RELEASE}")
 build_package "daos-tests-internal"

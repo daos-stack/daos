@@ -58,7 +58,7 @@ class RbldNoCapacity(TestWithServers):
 
         # Create a pool and container
         self.pool = self.get_pool()
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         self.container.open()
 
         # make sure pool looks good before we start

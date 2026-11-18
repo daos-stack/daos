@@ -36,7 +36,7 @@ class DaosSnapshotTest(TestWithServers):
     def prepare_pool_container(self):
         """Create a pool and a container and prepare for the test cases."""
         self.pool = self.get_pool(connect=False)
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
 
     def create_verify_snapshots(self, count):
         """Create and list to verify that the snapshots are created.

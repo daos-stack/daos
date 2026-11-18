@@ -23,7 +23,6 @@ pool:
   svcn: 1
 container:
   type: POSIX
-  control_method: daos
 client_processes:
   np: 6
 test_repo:

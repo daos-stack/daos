@@ -1,3 +1,7 @@
+* Mon Aug 24 2026 Tomasz Gromadzki <tomasz.gromadzki@hpe.com> - 26.01-3
+- Rebuild to force update of defective packages.
+- Restore missing auto-generated runtime dependencies.
+
 * Fri May 22 2026 Signed-off-by: Jeff Olivier <jeffolivier@google.com> - 26.01-2
 - Fix daos_spdk_nvme_perf binary in rpm
 - Adjust how we exclude packages to make it generic and not hardcoded

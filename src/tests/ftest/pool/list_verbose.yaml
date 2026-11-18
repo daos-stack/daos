@@ -32,7 +32,6 @@ pool_scm_only:
   target_list: [0]
 
 container:
-  control_method: daos
   type: POSIX
   oclass: S1
 

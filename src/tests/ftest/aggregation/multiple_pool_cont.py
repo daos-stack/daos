@@ -83,6 +83,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         job_manager = get_job_manager(self, subprocess=False, timeout=self.get_remaining_time())
         # Create requested pools
         self.pool = [self.get_pool(connect=False) for _ in range(total_pools)]
+        self.container = []
         start_time = time.time()
         while int(finish_time - start_time) < int(total_runtime):
             # Since the transfer size is 1M, the objects will be inserted
@@ -95,7 +96,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                 # Disable the aggregation
                 pool.set_property("reclaim", "disabled")
                 # Create the containers requested per pool
-                self.add_container_qty(total_containers_per_pool, pool)
+                self.container.extend(
+                    self.get_container(pool) for _ in range(total_containers_per_pool))
 
             # Run ior on each container sequentially
             for idx in [1, 2]:

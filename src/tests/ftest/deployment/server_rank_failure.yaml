@@ -39,11 +39,9 @@ pool_size_value:
 
 container:
   type: POSIX
-  control_method: daos
   properties: rd_fac:2
 container_wo_rf:
   type: POSIX
-  control_method: daos
 
 ior: &ior_base
   client_processes:
