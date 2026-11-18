@@ -175,7 +175,7 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
 
 #define CK_PRINTF_ERR(ck, fmt, ...)                                                                \
 	do {                                                                                       \
-		CK_PRINTF(ck, fmt, ##__VA_ARGS__);                                                 \
+		CK_PRINTF(ck, CHECKER_ERROR_INFIX fmt, ##__VA_ARGS__);                             \
 		CK_ERR_NUM_INC(ck);                                                                \
 	} while (0)
 

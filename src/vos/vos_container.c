@@ -414,9 +414,8 @@ vos_cont_open_ex(daos_handle_t poh, uuid_t co_uuid, struct checker *ck, daos_han
 			CK_APPENDFL_ERR(ck, "mismatch (" DF_UUIDF " != " DF_UUIDF ")",
 					DP_UUID(args.ca_cont_df->cd_id), DP_UUID(co_uuid));
 			D_GOTO(exit, rc = -DER_ID_MISMATCH);
-		} else {
-			CK_APPENDL_OK(ck);
 		}
+		CK_APPENDL_OK(ck);
 
 		const bool error_on_non_zero_padding =
 		    (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR);
