@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#ifndef __DLCK_UT_STDIO_MOCK_H__
-#define __DLCK_UT_STDIO_MOCK_H__
+#ifndef __UT_STDIO_MOCK_H__
+#define __UT_STDIO_MOCK_H__
 
 #include <stdio.h>
 
@@ -17,7 +17,7 @@
 		}                                                                                  \
 		will_return(__wrap_vfprintf, CHECK_OUTPUT);                                        \
 		will_return(__wrap_vfprintf, RC);                                                  \
-		if ((int)RC < 0) {                                                                 \
+		if ((RC) < 0) {                                                                    \
 			will_return(__wrap_vfprintf, ERRNO);                                       \
 		}                                                                                  \
 	} while (0)
@@ -29,4 +29,4 @@
 		will_return(__wrap_d_asprintf2, RC);                                               \
 	} while (0)
 
-#endif /* __DLCK_UT_STDIO_MOCK_H__ */
+#endif /* __UT_STDIO_MOCK_H__ */

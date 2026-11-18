@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "dlck_ut_stdio_mock.h"
+#include "ut_stdio_mock.h"
 
 char *
 __wrap_d_asprintf2(int *rc, const char *fmt, ...)

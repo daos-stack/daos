@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#ifndef __DLCK_CHECKER_UT_MOCK_H__
-#define __DLCK_CHECKER_UT_MOCK_H__
+#ifndef __UT_DLCK_CHECKER_MOCK_H__
+#define __UT_DLCK_CHECKER_MOCK_H__
 
 #include <uuid/uuid.h>
 
@@ -17,4 +17,4 @@ extern char                       Mock_log_file[];
 extern uuid_t                     Mock_pool_uuid;
 extern FILE *const                Mock_file_stream;
 
-#endif /* __DLCK_CHECKER_UT_MOCK_H__ */
+#endif /* __UT_DLCK_CHECKER_MOCK_H__ */

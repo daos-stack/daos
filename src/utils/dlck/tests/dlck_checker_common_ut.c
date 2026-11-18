@@ -15,7 +15,7 @@
 #include <daos/checker.h>
 
 #include "dlck_ut.h"
-#include "dlck_ut_checker_mock.h"
+#include "ut_checker_mock.h"
 
 #define FMT  "worker %d: %s"
 #define ARG0 42
@@ -37,7 +37,7 @@ test_ck_common_vprintf_returns_callback_error(void **state)
 {
 	struct checker *ck = *state;
 
-	EXPECT_MOCK_CK_VPRINTF(ck, FMT, false, "", -DER_IO);
+	EXPECT_MOCK_CK_VPRINTF(ck, FMT, false, NULL, -DER_IO);
 	assert_int_equal(ck_common_printf(ck, FMT, ARG0, ARG1), -DER_IO);
 }
 

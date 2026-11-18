@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "dlck_ut_checker_mock.h"
+#include "ut_checker_mock.h"
 
 int
 mock_ck_vprintf(struct checker *ck, const char *fmt, va_list args)

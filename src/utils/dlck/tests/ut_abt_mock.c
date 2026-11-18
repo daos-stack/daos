@@ -10,7 +10,7 @@
 
 #include <abt.h>
 
-#include "dlck_ut_abt_mock.h"
+#include "ut_abt_mock.h"
 
 const ABT_mutex Mock_mutex_handle = (ABT_mutex)0x1234;
 

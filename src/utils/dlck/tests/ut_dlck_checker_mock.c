@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#include "dlck_checker_ut_mock.h"
+#include "ut_dlck_checker_mock.h"
 
 struct dlck_checker_main   Dcm;
 struct dlck_checker_worker Dcw;

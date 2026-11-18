@@ -3,11 +3,10 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#ifndef __DLCK_UT_CHECKER_MOCK_H__
-#define __DLCK_UT_CHECKER_MOCK_H__
+#ifndef __UT_CHECKER_MOCK_H__
+#define __UT_CHECKER_MOCK_H__
 
 #include <stdarg.h>
-#include <stdbool.h>
 
 #include <daos/checker.h>
 
@@ -25,4 +24,4 @@ mock_ck_vprintf(struct checker *ck, const char *fmt, va_list args);
 		will_return(mock_ck_vprintf, RC);                                                  \
 	} while (0)
 
-#endif /* __DLCK_UT_CHECKER_MOCK_H__ */
+#endif /* __UT_CHECKER_MOCK_H__ */

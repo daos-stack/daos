@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#ifndef __DLCK_UT_MEM_MOCK_H__
-#define __DLCK_UT_MEM_MOCK_H__
+#ifndef __UT_MEM_MOCK_H__
+#define __UT_MEM_MOCK_H__
 
 #define EXPECT_D_CALLOC(NMEMB, SIZE, PTR)                                                          \
 	do {                                                                                       \
@@ -13,4 +13,4 @@
 		will_return(__wrap_d_calloc, PTR);                                                 \
 	} while (0)
 
-#endif /* __DLCK_UT_MEM_MOCK_H__ */
+#endif /* __UT_MEM_MOCK_H__ */

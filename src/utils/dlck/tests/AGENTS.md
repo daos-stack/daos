@@ -39,7 +39,7 @@
 - Shared per-area files provide memory, stdio, ABT mutex and checker callback mocks. Each test
   binary compiles only the mock areas it needs and enables only its required linker wraps.
 - Tests include the headers for the mock areas they use directly; do not rely on
-  `dlck_checker_ut_mock.h` to re-export per-area mock headers.
+  `ut_dlck_checker_mock.h` to include the required header for you.
 - CMocka tests control the behavior of mocks by populating their respective queues with values.
   All of these values have to be later consumed by the mocks. CMocka queues are maintained per
   mock.

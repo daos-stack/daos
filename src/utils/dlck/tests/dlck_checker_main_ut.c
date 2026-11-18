@@ -24,11 +24,11 @@
 #include <daos/checker.h>
 
 #include "../dlck_checker.h"
-#include "dlck_checker_ut_mock.h"
 #include "dlck_ut.h"
-#include "dlck_ut_abt_mock.h"
-#include "dlck_ut_mem_mock.h"
-#include "dlck_ut_stdio_mock.h"
+#include "ut_dlck_checker_mock.h"
+#include "ut_abt_mock.h"
+#include "ut_mem_mock.h"
+#include "ut_stdio_mock.h"
 
 static struct checker main_checker_state;
 

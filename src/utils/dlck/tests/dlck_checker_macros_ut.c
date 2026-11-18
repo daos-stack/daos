@@ -20,9 +20,9 @@
 #include <daos/debug.h>
 #include <daos/checker.h>
 
-#include "dlck_checker_ut_mock.h"
 #include "dlck_ut.h"
-#include "dlck_ut_stdio_mock.h"
+#include "ut_dlck_checker_mock.h"
+#include "ut_stdio_mock.h"
 
 #define INITIAL_WARNINGS 7
 
@@ -73,7 +73,7 @@ teardown(void **state)
 }
 
 #define EXPECT_CHECKER_VFPRINTF(FMT, OUTPUT)                                                       \
-	EXPECT_VFPRINTF(Mock_file_stream, FMT, true, OUTPUT, strlen(OUTPUT), 0)
+	EXPECT_VFPRINTF(Mock_file_stream, FMT, true, OUTPUT, (int)strlen(OUTPUT), 0)
 
 /* CK_PRINTF: a format without arguments is printed after ck_prefix. */
 static void
