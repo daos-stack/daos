@@ -10,6 +10,8 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <stdbool.h>
+
 #include <daos_errno.h>
 #include <daos/debug.h>
 #include <daos/checker.h>

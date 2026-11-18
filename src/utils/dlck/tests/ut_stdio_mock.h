@@ -6,8 +6,6 @@
 #ifndef __UT_STDIO_MOCK_H__
 #define __UT_STDIO_MOCK_H__
 
-#include <stdio.h>
-
 #define EXPECT_VFPRINTF(STREAM, FMT, CHECK_OUTPUT, OUTPUT, RC, ERRNO)                              \
 	do {                                                                                       \
 		expect_value(__wrap_vfprintf, stream, STREAM);                                     \

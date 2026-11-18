@@ -10,6 +10,8 @@
 
 #include <string.h>
 
+#include "ut_mem_mock.h"
+
 void *
 __wrap_d_calloc(size_t nmemb, size_t size)
 {

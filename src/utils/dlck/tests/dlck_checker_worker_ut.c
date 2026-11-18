@@ -12,18 +12,15 @@
 
 #include <errno.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <string.h>
-
-#include <abt.h>
 
 #include <daos/debug.h>
 #include <daos/checker.h>
 #include <daos/common.h>
 
 #include "../dlck_checker.h"
-#include "ut_dlck_checker_mock.h"
 #include "dlck_ut.h"
+#include "ut_dlck_checker_mock.h"
 #include "ut_mem_mock.h"
 #include "ut_stdio_mock.h"
 
@@ -35,8 +32,8 @@ static struct checker worker_checker_state;
 static int
 setup(void **state)
 {
-	*state                     = &worker_checker_state;
-	mock_worker_fclose_rc      = 0;
+	*state                = &worker_checker_state;
+	mock_worker_fclose_rc = 0;
 	return 0;
 }
 

@@ -11,12 +11,8 @@
 #include <cmocka.h>
 
 #include <errno.h>
-#include <limits.h>
-#include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <uuid/uuid.h>
 
 #include <abt.h>
 
@@ -25,8 +21,8 @@
 
 #include "../dlck_checker.h"
 #include "dlck_ut.h"
-#include "ut_dlck_checker_mock.h"
 #include "ut_abt_mock.h"
+#include "ut_dlck_checker_mock.h"
 #include "ut_mem_mock.h"
 #include "ut_stdio_mock.h"
 

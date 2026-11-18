@@ -6,6 +6,7 @@
 #ifndef __UT_DLCK_CHECKER_MOCK_H__
 #define __UT_DLCK_CHECKER_MOCK_H__
 
+#include <stdio.h>
 #include <uuid/uuid.h>
 
 #include "../dlck_checker.h"

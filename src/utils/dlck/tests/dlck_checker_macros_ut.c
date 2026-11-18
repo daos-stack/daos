@@ -15,8 +15,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <abt.h>
-
 #include <daos/debug.h>
 #include <daos/checker.h>
 
@@ -57,7 +55,7 @@ setup(void **state)
 	    .ck_vprintf             = checker_vprintf,
 	    .ck_status.warnings_num = INITIAL_WARNINGS,
 	};
-	*state                     = &Checker;
+	*state = &Checker;
 	return 0;
 }
 
