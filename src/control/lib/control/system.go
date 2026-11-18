@@ -697,8 +697,11 @@ func (resp *SystemEraseResp) Errors() error {
 
 // checkSystemErase queries system to interrogate membership before deciding
 // whether a system erase is appropriate.
-func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker) error {
-	resp, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{FailOnUnavailable: true})
+func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker, sys string) error {
+	// Forward the raw system name unmodified for SystemQuery to resolve.
+	queryReq := &SystemQueryReq{FailOnUnavailable: true}
+	queryReq.SetSystem(sys)
+	resp, err := SystemQuery(ctx, rpcClient, queryReq)
 	if err != nil {
 		// If the AP hasn't been started, it will respond as if it
 		// is not a replica.
@@ -737,7 +740,8 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	if err := checkSystemErase(ctx, rpcClient); err != nil {
+	// Forward the same raw system name used for the query below.
+	if err := checkSystemErase(ctx, rpcClient, req.Sys); err != nil {
 		return nil, err
 	}
 
