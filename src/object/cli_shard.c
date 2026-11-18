@@ -714,7 +714,10 @@ rw_cb_csum_verify_defer(tse_task_t *task, const struct rw_cb_args *rw_args)
 	struct obj_auxi_args *obj_auxi   = shard_args->auxi.obj_auxi;
 	struct obj_reasb_req *reasb_req  = shard_args->reasb_req;
 	struct obj_rw_in     *orw        = crt_req_get(rw_args->rpc);
+	struct obj_rw_out    *orwo       = crt_reply_get(rw_args->rpc);
 	daos_iod_t           *iods       = orw->orw_iod_array.oia_iods;
+	uint64_t             *sizes      = orwo->orw_iod_sizes.ca_arrays;
+	uint64_t              one_tgt_max;
 	uint32_t              shard;
 	int                   i;
 
@@ -733,9 +736,25 @@ rw_cb_csum_verify_defer(tse_task_t *task, const struct rw_cb_args *rw_args)
 	    is_ec_parity_shard(obj_auxi->obj, orw->orw_dkey_hash, orw->orw_oid.id_shard))
 		return false;
 
+	/* the largest record stored on one data shard, the only kind that leaves stale cells */
+	one_tgt_max = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(reasb_req->orr_oca));
+
 	for (i = 0; i < orw->orw_nr; i++) {
-		if (iods[i].iod_type == DAOS_IOD_SINGLE && reasb_req->orr_singv_los[i].cs_even_dist)
-			return true;
+		if (iods[i].iod_type != DAOS_IOD_SINGLE ||
+		    !reasb_req->orr_singv_los[i].cs_even_dist)
+			continue;
+
+		/* this shard holds nothing for the record */
+		if (sizes[i] == 0)
+			continue;
+
+		/* The cells of this shard's record start beyond the end of any record stored
+		 * on one data shard, so a newer record cannot land on top of them.
+		 */
+		if (obj_ec_singv_cell_bytes(sizes[i], reasb_req->orr_oca) >= one_tgt_max)
+			continue;
+
+		return true;
 	}
 
 	return false;
