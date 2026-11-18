@@ -68,14 +68,14 @@ class DlckBasicTest(TestDlck):
             self.fail(f"{command_root} failed on {result.failed_hosts}")
 
     def mount_dlck_tmpfs(self, tmpfs_mounts):
-        """Mount 256G of memory-backed tmpfs for testing purposes on the remote hosts.
+        """Mount 124G of memory-backed tmpfs for testing purposes on the remote hosts.
 
         Args:
             tmpfs_mounts (str): The mount point of the tmpfs to mount.
         """
         cmd = f'sudo bash -c "mkdir -p {tmpfs_mounts} && ' \
               f'mount -t tmpfs -o rw,uid=daos_server,' \
-              f'gid=daos_server,mode=0775,size=256G,huge=always tmpfs {tmpfs_mounts}"'
+              f'gid=daos_server,mode=0775,size=124G,huge=always tmpfs {tmpfs_mounts}"'
         result = run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
         if not result.passed:
             self.fail(f"{cmd} failed on {result.failed_hosts}")
