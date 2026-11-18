@@ -3560,9 +3560,9 @@ static const struct CMUnitTest wal_MB_tests[] = {
     {"WAL41: nemb unused test", nemb_unused, setup_mb_io, teardown_mb_io},
     {"WAL42: nemb spill test", nemb_spill_test, setup_mb_io, teardown_mb_io},
     {"WAL43: P2 fill single", p2_fill_single, setup_mb_io_v2, teardown_mb_io},
-    {"WAL44: bkt_cnt == bkt_max blocks soemb spill, falls to NEMB", wal_no_soemb_spill_test,
+    {"WAL44: bkt_cnt eq bkt_max blocks soemb spill, falls to NEMB", wal_no_soemb_spill_test,
      setup_mb_io, teardown_mb_io},
-    {"WAL45: soemb spill (bkt_cnt < bkt_max) and promotion order by emb utilization",
+    {"WAL45: soemb spill (bkt_cnt lt bkt_max) and promotion order by emb utilization",
      wal_soemb_spill_order_test, setup_mb_io, teardown_mb_io},
 };
 
