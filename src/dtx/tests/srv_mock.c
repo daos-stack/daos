@@ -125,3 +125,10 @@ dss_get_start_epoch(void)
 	assert_true(false);
 	return -1;
 }
+
+int
+ds_pool_map_refresh_sync(struct ds_pool *pool)
+{
+	assert_true(false);
+	return -1;
+}
