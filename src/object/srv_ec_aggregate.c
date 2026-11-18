@@ -120,8 +120,13 @@ struct ec_agg_entry {
 	struct pl_obj_layout	*ae_obj_layout;
 	struct daos_shard_loc    ae_peer_pshards[OBJ_EC_MAX_P];
 	uint32_t		 ae_grp_idx;
-	uint32_t		ae_is_leader:1,
-				ae_process_partial:1;
+	uint32_t                 ae_is_leader : 1, ae_process_partial : 1;
+	/* The two flags below cache, for the current akey, the result of the scan for updates
+	 * newer than this round of aggregation, see agg_stripe_has_newer(). They are reset for
+	 * every akey by agg_akey().
+	 */
+	uint32_t                 ae_newer_checked : 1; /* akey scanned already */
+	uint32_t                 ae_no_newer      : 1; /* akey has nothing newer than the round */
 };
 
 /* Parameters used to drive iterate all.
@@ -132,6 +137,10 @@ struct ec_agg_param {
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	daos_epoch_t		 ap_filter_eph;	 /* Aggregatable filter epoch */
 	daos_epoch_t		 ap_min_unagg_eph; /* minimum unaggregate epoch */
+	/* HLC when this aggregation was set up, i.e. not older than any rebuild finished before
+	 * the engine started, see agg_stripe_has_newer().
+	 */
+	daos_epoch_t             ap_start_eph;
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
@@ -1930,6 +1939,159 @@ out:
 	return rc;
 }
 
+/* vos_iterate() callback of agg_newer_scan(): one extent is enough, stop the iteration */
+static int
+agg_stripe_newer_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	*(bool *)cb_arg = true;
+	return 1;
+}
+
+/*
+ * Scan @recx of the current akey (the whole akey if rx_nr is 0) for any extent, visible or not,
+ * with an epoch higher than the upper bound of this round of aggregation. An update which is
+ * still in-flight is counted as well.
+ *
+ * This is a standalone iteration: the iterator driving the aggregation is limited to the epoch
+ * range of the round and cannot see those extents.
+ */
+static int
+agg_newer_scan(struct ec_agg_param *agg_param, struct ec_agg_entry *entry, daos_recx_t *recx,
+	       bool *newer)
+{
+	vos_iter_param_t        iter_param = {0};
+	struct vos_iter_anchors anchors    = {0};
+	int                     rc;
+
+	iter_param.ip_hdl        = agg_param->ap_cont_handle;
+	iter_param.ip_oid        = entry->ae_oid;
+	iter_param.ip_dkey       = entry->ae_dkey;
+	iter_param.ip_akey       = entry->ae_akey;
+	iter_param.ip_epr.epr_lo = agg_param->ap_epr.epr_hi + 1;
+	iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	iter_param.ip_epc_expr   = VOS_IT_EPC_RE;
+	iter_param.ip_recx       = *recx;
+	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors, agg_stripe_newer_cb, NULL,
+			 newer, NULL);
+	if (rc == -DER_INPROGRESS)
+		*newer = true;
+	else if (rc < 0 && rc != -DER_NONEXIST)
+		return rc;
+
+	return 0;
+}
+
+/*
+ * Check whether the current stripe has any update (partial or full stripe) newer than the upper
+ * bound of this round of aggregation, in which case its parity must not be generated now.
+ *
+ * Parity generated at epoch E requires every data shard to still hold its part of the stripe as
+ * it was at E. Normally that is guaranteed because VOS aggregation is capped by the EC
+ * aggregation boundary, but rebuild only migrates the visible extents: if part of the stripe was
+ * overwritten at T (> E) and the data shard of that part was rebuilt after T, that shard only
+ * holds the data at T. Generating the parity at E afterwards, from the old replicas still kept
+ * on the parity shard, would make any later degraded fetch or rebuild based on that parity read
+ * nothing at E from the rebuilt shard: wrong data is reconstructed silently, or the migration
+ * fails with -DER_DATA_LOSS.
+ *
+ * The check is not needed, and not done, in the cases below. Skipping it matters: a skipped
+ * stripe holds back the EC aggregation boundary, which caps VOS aggregation of the container.
+ */
+static int
+agg_stripe_has_newer(struct ec_agg_param *agg_param, struct ec_agg_entry *entry, bool *newer)
+{
+	daos_recx_t recx = {0};
+	int         i;
+	int         rc;
+
+	*newer = false;
+	/* nothing can be newer, and epr_hi + 1 would overflow */
+	if (agg_param->ap_epr.epr_hi >= DAOS_EPOCH_MAX - 1)
+		return 0;
+
+	/* 1. The round reaches the stable epoch of the last rebuild.
+	 *
+	 * Rebuild only drops the versions which were covered at its stable epoch: updates newer
+	 * than that epoch are applied to the rebuilt shard directly, and updates at or below it
+	 * are rejected once it is known (see check_update_rebuild_race()). Such a round sees all
+	 * the updates that covered the dropped versions, so the parity it generates matches the
+	 * data shards even if the stripe is updated again later. Without this, a stripe
+	 * overwritten more often than the aggregation gap would never be aggregated.
+	 *
+	 * ds_pool::sp_rebuild_epoch is not set for the rebuilds finished before this engine
+	 * (re)started, the time when the aggregation was set up covers them.
+	 */
+	if (agg_param->ap_epr.epr_hi >=
+	    max(agg_param->ap_pool_info.api_pool->sp_rebuild_epoch, agg_param->ap_start_eph))
+		return 0;
+
+	/* 2. The round is bounded by a snapshot epoch.
+	 *
+	 * Rebuild migrates the view of every snapshot, so the content of the stripe at a
+	 * snapshot epoch is always preserved on the data shards.
+	 */
+	for (i = 0; i < agg_param->ap_cont->sc_snapshots_nr; i++) {
+		if (agg_param->ap_cont->sc_snapshots[i] == agg_param->ap_epr.epr_hi)
+			return 0;
+	}
+
+	/* 3. The akey has nothing newer than the round at all, which is the common case: scan
+	 * the whole akey once, so that its stripes do not need to be scanned one by one.
+	 */
+	if (!entry->ae_newer_checked) {
+		rc = agg_newer_scan(agg_param, entry, &recx, newer);
+		if (rc != 0)
+			return rc;
+		entry->ae_newer_checked = 1;
+		entry->ae_no_newer      = !*newer;
+		*newer                  = false;
+	}
+	if (entry->ae_no_newer)
+		return 0;
+
+	/* The akey has something newer, check this stripe. A partial update is kept as replica
+	 * extent on the parity shard, a full stripe update only as parity extent, so scan both
+	 * the replica range and the parity range of the stripe.
+	 */
+	recx.rx_nr  = ec_age2ss(entry);
+	recx.rx_idx = entry->ae_cur_stripe.as_stripenum * ec_age2ss(entry);
+	rc          = agg_newer_scan(agg_param, entry, &recx, newer);
+	if (rc != 0 || *newer)
+		return rc;
+
+	recx.rx_nr  = ec_age2cs(entry);
+	recx.rx_idx = PARITY_INDICATOR | (entry->ae_cur_stripe.as_stripenum * ec_age2cs(entry));
+	return agg_newer_scan(agg_param, entry, &recx, newer);
+}
+
+/*
+ * Called by the parity leader right before it generates or updates the parity of the current
+ * stripe, to decide whether the stripe has to be skipped in this round because of a newer update,
+ * see agg_stripe_has_newer().
+ *
+ * A skipped stripe is left untouched: no parity is written and no replica is removed. Its lowest
+ * epoch is recorded in ap_min_unagg_eph, so that the EC aggregation epoch (and the boundary
+ * derived from it) does not pass its replicas and a later round aggregates it at its latest
+ * content.
+ */
+static int
+agg_stripe_skip_newer(struct ec_agg_param *agg_param, struct ec_agg_entry *entry, bool *skip)
+{
+	int rc;
+
+	rc = agg_stripe_has_newer(agg_param, entry, skip);
+	if (rc != 0 || !*skip)
+		return rc;
+
+	D_DEBUG(DB_EPC, DF_UOID " stripe %lu has update newer than " DF_X64 ", skip\n",
+		DP_UOID(entry->ae_oid), entry->ae_cur_stripe.as_stripenum,
+		agg_param->ap_epr.epr_hi);
+	agg_param->ap_min_unagg_eph =
+	    min(agg_param->ap_min_unagg_eph, entry->ae_cur_stripe.as_lo_epoch);
+	return 0;
+}
+
 /* Process the prior stripe. Invoked when the iterator has moved to the first
  * extent in the subsequent.
  */
@@ -1940,6 +2102,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	struct vos_iter_anchors	anchors = { 0 };
 	bool			update_vos = true;
 	bool			write_parity = true;
+	bool                    skip         = false;
 	int			rc = 0;
 
 	/* avoid race between EC aggregation and rebuild scanner */
@@ -1997,7 +2160,12 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	 */
 	if (ec_age_stripe_full(entry, ec_age_with_parity(entry))) {
 		if (entry->ae_is_leader) {
-			rc = agg_encode_local_parity(entry);
+			/* no parity below a newer update of the stripe */
+			rc = agg_stripe_skip_newer(agg_param, entry, &skip);
+			if (rc == 0 && !skip)
+				rc = agg_encode_local_parity(entry);
+			else
+				update_vos = false;
 		} else {
 			update_vos = false;
 			agg_param->ap_min_unagg_eph = min(agg_param->ap_min_unagg_eph,
@@ -2016,6 +2184,15 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 		update_vos = false;
 		agg_param->ap_min_unagg_eph = min(agg_param->ap_min_unagg_eph,
 						  entry->ae_cur_stripe.as_lo_epoch);
+		goto out;
+	}
+
+	/* The parity is going to be updated for the newer partial replicas or holes: same as
+	 * above, not below a newer update of the stripe.
+	 */
+	rc = agg_stripe_skip_newer(agg_param, entry, &skip);
+	if (rc != 0 || skip) {
+		update_vos = false;
 		goto out;
 	}
 
@@ -2361,6 +2538,8 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 	agg_entry->ae_akey = entry->ie_key;
 	agg_entry->ae_thdl = ih;
+	agg_entry->ae_newer_checked = 0;
+	agg_entry->ae_no_newer      = 0;
 
 	return 0;
 }
@@ -2713,6 +2892,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	info->api_pool = cont->sc_pool->spc_pool;
 
 	agg_param->ap_cont              = cont;
+	agg_param->ap_start_eph         = d_hlc_get();
 	agg_param->ap_cont_handle	= cont->sc_hdl;
 	agg_param->ap_yield_func	= agg_rate_ctl;
 	agg_param->ap_yield_arg		= param;

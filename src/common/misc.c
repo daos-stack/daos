@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -315,7 +315,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 		   daos_size_t buf_len_req, uint8_t **p_buf, size_t *p_buf_len)
 {
 	daos_size_t buf_len = 0;
-	daos_size_t len;
+	daos_size_t len     = 0;
 
 	if (p_buf_len != NULL)
 		*p_buf_len = 0;

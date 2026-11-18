@@ -297,8 +297,6 @@ int dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_
 int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
 			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list,
 			 uint32_t intent);
-int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
-			  uint64_t dkey_hash, daos_epoch_t epoch, int *tgt_array, int *err);
 
 /* dtx_coll.c */
 void dtx_coll_prep_ult(void *arg);
@@ -308,6 +306,11 @@ int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid,
 int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
 			uint32_t version, uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap,
 			int **p_results);
+
+/* dtx_resync.c */
+int dtx_handle_resync_pending(struct ds_cont_child *cont, d_list_t *head, uint32_t seq,
+			      struct sched_request *sr);
+
 /* clang-format on */
 
 enum dtx_status_handle_result {
