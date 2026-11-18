@@ -2455,7 +2455,7 @@ vos_dtx_refresh_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_membership
 		}
 	}
 
-	rc = umem_tx_begin(umm, NULL);
+	rc = vos_cache_tx_begin(vos_cont2pool(cont));
 	if (rc != 0)
 		goto out;
 
@@ -2834,7 +2834,7 @@ dtx_commit_pin(struct vos_container *cont, struct dtx_id dtis[], int count, int 
 		}
 	}
 
-	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl);
+	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl, true);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin buckets.");
 out:
@@ -2928,7 +2928,7 @@ dtx_abort_pin(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		goto out;
 	}
 
-	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl);
+	rc = vos_bkt_array_pin(vos_cont2pool(cont), &bkts, pin_hdl, true);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin buckets.");
 out:
@@ -4083,7 +4083,7 @@ vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist)
 	 * will be accessed during DTX commit.
 	 */
 	if (persistent) {
-		rc = umem_tx_begin(umm, NULL);
+		rc = vos_cache_tx_begin(vos_cont2pool(cont));
 		if (rc != 0)
 			goto out;
 

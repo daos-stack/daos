@@ -458,11 +458,6 @@ lw_tx_begin(dav_obj_t *pop)
 	int			 rc;
 	uint64_t		 wal_id;
 
-	rc = umem_cache_reserve(pop->do_store);
-	if (rc) {
-		D_ERROR("umem_cache_reserve failed, " DF_RC "\n", DP_RC(rc));
-		return daos_der2errno(rc);
-	}
 	rc = dav_wal_tx_reserve(pop, &wal_id);
 	if (rc) {
 		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
@@ -525,13 +520,6 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 		struct umem_wal_tx *utx = NULL;
 
 		DAV_DBG("");
-		err = umem_cache_reserve(pop->do_store);
-		if (err) {
-			D_ERROR("umem_cache_reserve failed, " DF_RC "\n", DP_RC(err));
-			err = daos_der2errno(err);
-			goto err_abort;
-		}
-
 		err = dav_wal_tx_reserve(pop, &wal_id);
 		if (err) {
 			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));

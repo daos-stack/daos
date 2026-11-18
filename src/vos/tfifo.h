@@ -18,9 +18,9 @@ tfifo_destroy(struct tfifo_queue *tq);
 struct tfifo_queue *
 tfifo_create(unsigned int tiers);
 
-/* Wakeup next waiter in TFIFO queue */
+/* Wakeup waiter who is waiting for resource */
 void
-tfifo_wakeup_next(struct tfifo_queue *tq);
+tfifo_wakeup(struct tfifo_queue *tq);
 
 /* Enter TFIFO queue */
 void
