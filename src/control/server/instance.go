@@ -180,6 +180,9 @@ func (ei *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
 	engineSock := ei.getDrpcSocket()
+	if engineSock == "" {
+		return nil // the engine never reported a socket
+	}
 
 	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
