@@ -75,7 +75,7 @@ class DlckBasicTest(TestDlck):
         """
         cmd = f'sudo bash -c "mkdir -p {tmpfs_mounts} && ' \
               f'mount -t tmpfs -o rw,uid=daos_server,' \
-              f'gid=daos_server,mode=0775,size=256G tmpfs {tmpfs_mounts}"'
+              f'gid=daos_server,mode=0775,size=256G,huge=always tmpfs {tmpfs_mounts}"'
         result = run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
         if not result.passed:
             self.fail(f"{cmd} failed on {result.failed_hosts}")
