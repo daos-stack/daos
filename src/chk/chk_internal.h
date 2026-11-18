@@ -24,6 +24,8 @@
 #include <daos_srv/daos_chk.h>
 #include <daos_srv/daos_engine.h>
 
+#include <cart/rpc_gen_macros.h>
+
 #include "chk.pb-c.h"
 
 /*

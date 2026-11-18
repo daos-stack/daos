@@ -207,7 +207,8 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_job, rc);
 
-	crt_info = daos_crt_init_opt_get(false, 1);
+	/* Do not impose limit and let CART set default if not set through env */
+	crt_info = daos_crt_init_opt_get(false, 0);
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)

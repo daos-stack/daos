@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +12,7 @@
 #include <pthread.h>
 #include <cart/api.h>
 #include <cart/types.h>
+#include <cart/rpc_gen_macros.h>
 #include <gurt/common.h>
 
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
