@@ -387,6 +387,8 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		return 0;
 
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
+	if (!param->ap_vos_agg && DAOS_FAIL_CHECK(DAOS_CONT_EC_AGG_EPOCH_MAX))
+		epoch_max = min(epoch_max, daos_fail_value_get());
 
 	if (epoch_min >= epoch_max) {
 		D_DEBUG(DB_EPC, "epoch min "DF_X64" >= max "DF_X64"\n", epoch_min, epoch_max);
