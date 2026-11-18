@@ -2730,7 +2730,7 @@ chk_engine_query_one(void *args)
 	if (rc <= 0)
 		goto out;
 
-	rc = vos_pool_open(path, shard->cqps_uuid, VOS_POF_FOR_CHECK_QUERY, &poh);
+	rc = vos_pool_open(path, shard->cqps_uuid, VOS_POF_FOR_CHECK, &poh);
 	if (rc != 0) {
 		D_ERROR("Failed to open vos pool "DF_UUIDF" on target %u/%d: "DF_RC"\n",
 			DP_UUID(shard->cqps_uuid), dss_self_rank(), tid, DP_RC(rc));

@@ -346,8 +346,7 @@ func TestStorage_BdevBusRange_ToHotplugRange(t *testing.T) {
 			}
 
 			hr := br.ToHotplugRange()
-			test.AssertEqual(t, uint16(0x00), hr.LowAddress.Domain, "bad low domain")
-			test.AssertEqual(t, uint16(0x00), hr.HighAddress.Domain, "bad high domain")
+			test.AssertEqual(t, uint16(0x00), hr.Domain, "bad domain")
 			test.AssertEqual(t, tc.expStr, hr.String(), "bad string representation")
 		})
 	}
@@ -404,10 +403,9 @@ func TestStorage_NewBdevHotplugRange(t *testing.T) {
 				return
 			}
 
-			test.AssertEqual(t, tc.expDom, hr.LowAddress.Domain, "bad low domain")
-			test.AssertEqual(t, tc.expDom, hr.HighAddress.Domain, "bad high domain")
-			test.AssertEqual(t, tc.expBusLo, hr.LowAddress.Bus, "bad low bus-id")
-			test.AssertEqual(t, tc.expBusHi, hr.HighAddress.Bus, "bad high bus-id")
+			test.AssertEqual(t, tc.expDom, hr.Domain, "bad domain")
+			test.AssertEqual(t, tc.expBusLo, hr.Begin, "bad low bus-id")
+			test.AssertEqual(t, tc.expBusHi, hr.End, "bad high bus-id")
 		})
 	}
 }

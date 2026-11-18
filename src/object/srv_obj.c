@@ -2803,7 +2803,7 @@ obj_handle_resend(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t *
 	else
 		e = 0;
 
-	rc = dtx_handle_resend(cont->sc_hdl, dti, &e, &ver);
+	rc = dtx_handle_resend(cont->sc_hdl, dti, leader != NULL, &e, &ver);
 
 	/* Do nothing if 'committed' or 'committable'. */
 	if (rc == -DER_ALREADY)
@@ -3140,9 +3140,10 @@ check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t op
 	if (unlikely(epoch > pool->sp_rebuild_epoch)) {
 		now = daos_gettime_coarse();
 		if (now - cont->sc_rebuild_delay_ts > 30) {
-			D_WARN("Delay rebuild ops %u with epoch " DF_X64
-			       " because of old rebuild epoch " DF_X64 " on current target.\n",
-			       opc, epoch, cont->sc_rebuild_delay_ts);
+			D_WARN(DF_CONT " delay rebuild ops %u with epoch " DF_X64
+				       " because of old rebuild epoch " DF_X64 " on the target.\n",
+			       DP_CONT(pool->sp_uuid, cont->sc_uuid), opc, epoch,
+			       cont->sc_rebuild_delay_ts);
 			cont->sc_rebuild_delay_ts = now;
 		}
 
@@ -3158,8 +3159,10 @@ check_read_rebuild_fense(struct ds_cont_child *cont, uint64_t epoch, uint32_t op
 
 	now = daos_gettime_coarse();
 	if (now - cont->sc_rebuild_delay_ts > 30) {
-		D_WARN("Local stable epoch " DF_X64 " fense for rebuild " DF_X64 ", retry %u.\n",
-		       cont->sc_local_stable_epoch, pool->sp_rebuild_epoch, opc);
+		D_WARN(DF_CONT "'s local stable epoch " DF_X64
+			       " fense for rebuild ops %u, epoch " DF_X64 ", to be retried\n",
+		       DP_CONT(pool->sp_uuid, cont->sc_uuid), cont->sc_local_stable_epoch, opc,
+		       pool->sp_rebuild_epoch);
 		cont->sc_rebuild_delay_ts = now;
 	}
 
