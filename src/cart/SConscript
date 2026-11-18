@@ -85,7 +85,7 @@ def scons():
             raise RuntimeError('CART_NATIVE_RC requires libibverbs development headers and '
                                'library')
         denv.AppendUnique(LIBS=['ibverbs'])
-        sources.extend(['native/verbs.c', 'native/wire.c', 'native/bootstrap.c',
+        sources.extend(['native/device.c', 'native/verbs.c', 'native/wire.c', 'native/bootstrap.c',
                         'native/rpc.c', 'native/channel.c', 'native/net.c'])
 
     cart_targets = denv.SharedObject(sources)

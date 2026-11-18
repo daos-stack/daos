@@ -157,6 +157,10 @@
 #
 #include_fabric_ifaces: ["eth0"]
 
+## For native doca+rc, clients resolve the local HCA, port and IPv4 RoCE GID
+## from the interface/domain selected by this agent. No CRT_NATIVE_* device,
+## port or GID environment overrides are required.
+##
 ## Manually define the fabric interfaces and domains to be used by the agent,
 ## organized by NUMA node.
 ## If not defined, the agent will automatically detect all fabric interfaces and

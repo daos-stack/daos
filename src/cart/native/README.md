@@ -6,7 +6,11 @@ it does not use DOCA SDK objects or GPU submission yet. Private backend operatio
 keep future DOCA/GPUNetIO implementations separate from the RPC protocol.
 
 See [TESTING.md](TESTING.md) for build, YAML selection and two-process CaRT tests.
-See [IMPLEMENTATION.md](IMPLEMENTATION.md) for implementation status.
+See [IMPLEMENTATION.md](IMPLEMENTATION.md) for implementation status. The native
+provider resolves the local HCA, active port and IPv4 RoCE GID from the server
+fabric interface or the client interface/domain supplied by the agent. The
+`CRT_NATIVE_DEVICE`, `CRT_NATIVE_PORT` and `CRT_NATIVE_GID_INDEX` overrides are
+optional; automatic selection prefers RoCEv2 and rejects ambiguous mappings.
 
 ## Architecture
 

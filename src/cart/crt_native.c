@@ -8,6 +8,7 @@
 #include "native/cart_bulk.h"
 
 #ifdef CRT_HAVE_NATIVE_RC
+#include "native/device.h"
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <infiniband/verbs.h>
@@ -450,26 +451,44 @@ crt_native_ctx_init(struct crt_hg_context *hg, int index, bool primary, int ifac
 	const char *iface_name = crt_provider_iface_str_get(primary, CRT_PROV_DOCA_RC, iface);
 	const char *stage      = "configuration";
 	int         rc         = interface_ip(iface_name, ip);
-	const char *device     = getenv("CRT_NATIVE_DEVICE");
-	if (device == NULL)
-		device = crt_provider_domain_str_get(primary, CRT_PROV_DOCA_RC, iface);
-	if (device == NULL) {
-		int                 count;
-		struct ibv_device **devices = ibv_get_device_list(&count);
-		if (devices && count == 1)
-			c->device = strdup(ibv_get_device_name(devices[0]));
-		if (devices)
-			ibv_free_device_list(devices);
-	} else
-		c->device = strdup(device);
-	if (rc == 0 && c->device == NULL)
-		rc = -DER_INVAL;
-	long port, gid, receives, frames, peers, read_depth, inline_size, stats, cq_batches,
+	const char *domain     = crt_provider_domain_str_get(primary, CRT_PROV_DOCA_RC, iface);
+	long        port, gid, receives, frames, peers, read_depth, inline_size, stats, cq_batches,
 	    signal_interval;
 	if (!rc)
-		rc = setting("CRT_NATIVE_PORT", 1, 1, 255, &port);
+		rc = setting("CRT_NATIVE_PORT", 0, 0, 255, &port);
 	if (!rc)
-		rc = setting("CRT_NATIVE_GID_INDEX", -1, -1, 255, &gid);
+		rc = setting("CRT_NATIVE_GID_INDEX", -2, -2, 255, &gid);
+	if (!rc) {
+		stage                                      = "select local RDMA interface";
+		struct crt_native_device_options   options = {.interface = iface_name,
+							      .ipv4      = ip,
+							      .domain    = domain,
+							      .device = getenv("CRT_NATIVE_DEVICE"),
+							      .port   = port,
+							      .gid_index = gid};
+		struct crt_native_device_selection selected;
+		int selected_rc = crt_native_select_device(&options, &selected);
+		if (selected_rc) {
+			D_ERROR("doca+rc: %s for iface=%s IPv4=%s domain=%s device_override=%s "
+				"port=%ld gid_index=%ld: %s\n",
+				selected_rc == EADDRNOTAVAIL ? "ambiguous RDMA mapping"
+							     : "no usable RDMA mapping",
+				iface_name, ip, domain ? domain : "(auto)",
+				options.device ? options.device : "(auto)", port, gid,
+				strerror(selected_rc));
+			rc = from_errno(selected_rc);
+		} else {
+			c->device = strdup(selected.device);
+			rc        = c->device ? 0 : -DER_NOMEM;
+			port      = selected.port;
+			gid       = selected.gid_index;
+			D_INFO("doca+rc: context %d selected iface=%s device=%s port=%ld "
+			       "gid_index=%ld "
+			       "RoCEv2=%d\n",
+			       index, selected.interface, selected.device, port, gid,
+			       selected.roce_v2);
+		}
+	}
 	if (!rc)
 		rc = setting("CRT_NATIVE_RECEIVES", 64, 2, 8192, &receives);
 	if (!rc)

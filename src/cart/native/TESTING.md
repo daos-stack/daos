@@ -34,16 +34,13 @@ make -C src/cart/native smoke
 
 ## Real CaRT RPC and bulk test
 
-On both hosts, set the interface and HCA names appropriate to that host. Ensure
+On both hosts, set the fabric interface appropriate to that host. The HCA, port
+and local GID are discovered from it. Ensure
 the installed libraries and their dependencies are on your normal loader path.
 
 ```sh
 export D_PROVIDER=doca+rc
 export D_INTERFACE=ib0
-export CRT_NATIVE_DEVICE=mlx5_0
-export CRT_NATIVE_PORT=1
-# RoCE only: choose a valid index locally on EACH host.
-# export CRT_NATIVE_GID_INDEX=3
 export D_PORT=31416
 ```
 
@@ -76,13 +73,12 @@ provider: doca+rc
 engines:
   - fabric_iface: ib0
     fabric_iface_port: 31416
-    env_vars:
-      - CRT_NATIVE_DEVICE=mlx5_0
-      - CRT_NATIVE_PORT=1
-      # RoCE: add CRT_NATIVE_GID_INDEX=<local index>.
 ```
 
-For DAOS clients/agents, choose the same provider and their local interface/HCA.
+The agent supplies each client with its selected local fabric interface/domain.
+Shared CaRT initialization resolves these hints for both clients and engines;
+no `CRT_NATIVE_DEVICE`, `CRT_NATIVE_PORT` or `CRT_NATIVE_GID_INDEX` is required.
+Server HCA names and GID indices are not copied to clients: selection is local.
 Allow TCP bootstrap ports `fabric_iface_port + context_index` between peers.
 This is a trusted-fabric bootstrap without authentication/encryption; configured
 fabric authentication keys are rejected.
@@ -91,9 +87,9 @@ Native tuning variables, independently on each process:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `CRT_NATIVE_DEVICE` | domain setting, or sole HCA | Local verbs device |
-| `CRT_NATIVE_PORT` | 1 | HCA port |
-| `CRT_NATIVE_GID_INDEX` | -1 | Local GID index; required for RoCE |
+| `CRT_NATIVE_DEVICE` | automatic | Optional HCA override; otherwise use the agent/domain hint and interface mapping |
+| `CRT_NATIVE_PORT` | automatic (0) | Discover the active physical port for the selected interface |
+| `CRT_NATIVE_GID_INDEX` | automatic (-2) | Match the interface IPv4 address, prefer RoCEv2; -1 explicitly selects IB LID addressing |
 | `CRT_NATIVE_SIGNAL_INTERVAL` | 8 | SEND completion interval within each linked batch; 1 signals every SEND |
 | `CRT_NATIVE_CQ_BATCHES` | 4 | Maximum 32-CQE batches drained per progress call, 1–16 |
 | `CRT_NATIVE_INLINE_SIZE` | 256 | Requested hardware-inline SEND bytes; 0 disables; unsupported sizes fall back |
@@ -196,3 +192,25 @@ usage. A software-eager 4-KiB payload can exceed both 4 KiB on the wire and the
 hardware inline limit. For performance comparisons, keep all existing tuning
 settings unchanged, collect statistics in a separate diagnostic run, and compare
 both throughput and latency against the same job count and queue depth.
+
+## Automatic native fabric selection
+
+Discovery runs at initialization, using Linux `/sys/class/infiniband` metadata.
+It selects an active port associated with the configured netdev. On Ethernet it
+matches an IPv4-mapped GID to the exact local interface address and prefers the
+RoCEv2 entry over the RoCEv1 entry. Link-local and other-interface GIDs are not
+selected automatically. Native InfiniBand uses LID addressing by default.
+
+For example, `fabric_iface: eth1` on a host mapping eth1 to mlx5_2/1 with IPv4
+RoCEv2 GID 3 resolves that tuple without environment exports. HCA domain hints
+from the agent constrain discovery, including `device:port` domains. An explicit
+`CRT_NATIVE_DEVICE` takes precedence over the domain; an explicit port takes
+precedence over a domain suffix. Explicit GID indices remain available for
+experiments using a different local GID.
+
+Equally suitable device/port mappings fail with an ambiguity diagnostic rather
+than choosing an arbitrary HCA. The INFO log records the selected interface,
+HCA, port and GID. Existing overrides still win: remove old engine `env_vars`
+entries and unset old shell exports when testing automatic selection. Preserve
+all unrelated server/agent settings. No new agent YAML or attach-info protocol
+fields are needed; the existing interface/domain hints are sufficient.
