@@ -769,19 +769,21 @@ DFuse can mount a snapshot of a POSIX container instead of the live container. T
 file system as it was when the snapshot was taken, whatever is done to the container afterwards.
 
 Snapshots are created with the `daos` tool, see the
-[Snapshot & Rollback](container.md#snapshot-rollback) section, and mounted by name or by epoch:
+[Snapshot & Rollback](container.md#snapshot-rollback) section, and mounted by epoch:
 
 ```bash
-$ daos cont create-snap tank mycont --snap=before-upgrade
+$ daos cont create-snap tank mycont
 snapshot/epoch 262508437483290624 has been created
 
-$ dfuse -m /mnt/snap --pool=tank --container=mycont --snap=before-upgrade
 $ dfuse -m /mnt/snap --pool=tank --container=mycont --snap-epoch=262508437483290624
 ```
 
 The epoch can also be given in hexadecimal with a `0x` prefix. A snapshot is selected with either
 `--snap` or `--snap-epoch`, not both, and both a pool and a container must be given. DFuse refuses
 to mount a snapshot that does not exist.
+
+`--snap=<name>` mounts a snapshot by name, but DAOS does not support named snapshots yet, so the
+epoch has to be used for now.
 
 A snapshot is always mounted read-only, as if `--read-only` had been given, and any attempt to
 modify it fails. The live container can be mounted at the same time on another mount point.

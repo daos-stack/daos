@@ -62,16 +62,13 @@ class DfuseSnapshot(TestWithServers):
         result = self._run(f'md5sum {path}', env)
         return result.joined_stdout.split()[0]
 
-    def run_snapshot(self, il_lib=None, by_epoch=False):
+    def run_snapshot(self, il_lib=None):
         """Mount a snapshot with dfuse and verify what it shows.
 
         Args:
             il_lib (str, optional): interception library to use when accessing the snapshot,
                 libioil.so or libpil4dfs.so. Defaults to None, the access is through the kernel.
-            by_epoch (bool, optional): select the snapshot by epoch instead of by name.
-                Defaults to False.
         """
-        snap_name = 'dfuse_snap'
         env = ''
         report_env = ''
         engaged = None
@@ -100,13 +97,14 @@ class DfuseSnapshot(TestWithServers):
                   f'echo "deleted later" > {live_dir}/b.txt && '
                   f'sync')
         original = {
-                name: self._md5(f'{live_dir}/{name}')
-                for name in ('a.txt', 'dir/big.bin', 'b.txt')}
+            name: self._md5(f'{live_dir}/{name}')
+            for name in ('a.txt', 'dir/big.bin', 'b.txt')}
         original_listing = self._run(f'ls -R {live_dir} | sed "s|^{live_dir}|ROOT|"').joined_stdout
 
+        # DAOS does not support named snapshots yet (DER_NOSYS), the snapshot is selected by epoch
         self.log_step('Creating a snapshot')
-        container.create_snap(snap_name=snap_name)
-        self.log.info('Snapshot %s created at epoch %s', snap_name, container.epoch)
+        container.create_snap()
+        self.log.info('Snapshot created at epoch %s', container.epoch)
 
         self.log_step('Changing the live container after the snapshot')
         self._run(f'seq 1 10 > {live_dir}/a.txt && '
@@ -118,12 +116,9 @@ class DfuseSnapshot(TestWithServers):
         if modified_a == original['a.txt']:
             self.fail('The live a.txt was not modified')
 
-        self.log_step(f'Mounting the snapshot {"by epoch" if by_epoch else "by name"}')
+        self.log_step('Mounting the snapshot by epoch')
         snap = get_dfuse(self, self.hostlist_clients)
-        if by_epoch:
-            dfuse_params['snap_epoch'] = container.epoch
-        else:
-            dfuse_params['snap'] = snap_name
+        dfuse_params['snap_epoch'] = container.epoch
         start_dfuse(self, snap, pool, container, **dfuse_params)
         snap_dir = snap.mount_dir.value
 
@@ -172,11 +167,11 @@ class DfuseSnapshot(TestWithServers):
         self.log.info('Test passed')
 
     def test_dfuse_snapshot(self):
-        """Mount a snapshot by name.
+        """Mount a snapshot by epoch.
 
         Test Description:
             Create files, take a snapshot, change the files, mount the snapshot with
-            dfuse --snap and check that it shows the original content and is read-only.
+            dfuse --snap-epoch and check that it shows the original content and is read-only.
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
@@ -184,19 +179,6 @@ class DfuseSnapshot(TestWithServers):
         :avocado: tags=DfuseSnapshot,test_dfuse_snapshot
         """
         self.run_snapshot()
-
-    def test_dfuse_snapshot_epoch(self):
-        """Mount a snapshot by epoch.
-
-        Test Description:
-            Same as test_dfuse_snapshot but the snapshot is selected with --snap-epoch.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=dfs,dfuse
-        :avocado: tags=DfuseSnapshot,test_dfuse_snapshot_epoch
-        """
-        self.run_snapshot(by_epoch=True)
 
     def test_dfuse_snapshot_ioil(self):
         """Access a snapshot with the libioil interception library.

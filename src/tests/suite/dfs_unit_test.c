@@ -1443,11 +1443,10 @@ dfs_test_snap_mount(void **state)
 {
 	test_arg_t        *arg = *state;
 	daos_handle_t      coh;
-	dfs_t             *dfs, *dfs_name, *dfs_epoch, *dfs_glob;
+	dfs_t             *dfs, *dfs_epoch, *dfs_glob;
 	dfs_obj_t         *obj;
 	uuid_t             cuuid;
 	char               cuuid_str[37];
-	char               snap_name[] = "dfs_snap";
 	char               buf[16];
 	daos_epoch_t       snap_epoch, epoch;
 	daos_epoch_range_t epr;
@@ -1474,8 +1473,9 @@ dfs_test_snap_mount(void **state)
 	rc            = dfs_write(dfs, obj, &sgl, 0, NULL);
 	assert_int_equal(rc, 0);
 
+	/** named snapshots are not supported (DER_NOSYS), the snapshot is selected by epoch */
 	print_message("snapshot the container, then overwrite the file\n");
-	rc = daos_cont_create_snap(coh, &snap_epoch, snap_name, NULL);
+	rc = daos_cont_create_snap(coh, &snap_epoch, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	memcpy(buf, "modified", 8);
@@ -1490,14 +1490,6 @@ dfs_test_snap_mount(void **state)
 	assert_true(epoch == 0);
 	dfs_test_check_file(dfs, "file", "modified");
 
-	print_message("mount the snapshot by name\n");
-	rc = dfs_mount_snap(arg->pool.poh, coh, O_RDONLY, 0, snap_name, &dfs_name);
-	assert_int_equal(rc, 0);
-	rc = dfs_get_snap_epoch(dfs_name, &epoch);
-	assert_int_equal(rc, 0);
-	assert_true(epoch == snap_epoch);
-	dfs_test_check_file(dfs_name, "file", "original");
-
 	print_message("mount the snapshot by epoch\n");
 	rc = dfs_mount_snap(arg->pool.poh, coh, O_RDONLY, snap_epoch, NULL, &dfs_epoch);
 	assert_int_equal(rc, 0);
@@ -1511,20 +1503,20 @@ dfs_test_snap_mount(void **state)
 	assert_int_equal(rc, ENOENT);
 
 	print_message("the snapshot cannot be modified\n");
-	rc = dfs_open(dfs_name, NULL, "newfile", S_IFREG | S_IWUSR | S_IRUSR,
+	rc = dfs_open(dfs_epoch, NULL, "newfile", S_IFREG | S_IWUSR | S_IRUSR,
 		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
 	assert_int_not_equal(rc, 0);
-	rc = dfs_remove(dfs_name, NULL, "file", false, NULL);
+	rc = dfs_remove(dfs_epoch, NULL, "file", false, NULL);
 	assert_int_not_equal(rc, 0);
-	dfs_test_check_file(dfs_name, "file", "original");
+	dfs_test_check_file(dfs_epoch, "file", "original");
 
 	print_message("a global handle of the snapshot mount is still the snapshot\n");
-	rc = dfs_local2global(dfs_name, &ghdl);
+	rc = dfs_local2global(dfs_epoch, &ghdl);
 	assert_int_equal(rc, 0);
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
 	assert_non_null(ghdl.iov_buf);
 	ghdl.iov_len = ghdl.iov_buf_len;
-	rc           = dfs_local2global(dfs_name, &ghdl);
+	rc           = dfs_local2global(dfs_epoch, &ghdl);
 	assert_int_equal(rc, 0);
 	rc = dfs_global2local(arg->pool.poh, coh, 0, ghdl, &dfs_glob);
 	assert_int_equal(rc, 0);
@@ -1543,8 +1535,6 @@ dfs_test_snap_mount(void **state)
 	rc = dfs_umount(dfs_glob);
 	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs_epoch);
-	assert_int_equal(rc, 0);
-	rc = dfs_umount(dfs_name);
 	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
