@@ -1507,8 +1507,9 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		grp_idx = shard_idx / obj_get_grp_size(obj);
 		grp_start = grp_idx * obj_get_grp_size(obj);
 		if (req_tgts->ort_srv_disp) {
-			if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE &&
-			    DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER)) {
+			if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && !obj_auxi->io_retry &&
+			    (DAOS_FAIL_CHECK(DAOS_DTX_SPEC_LEADER) ||
+			     DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH))) {
 				leader_shard = 0;
 			} else if (flags & OBJ_TGT_FLAG_FW_LEADER_INFO &&
 				   obj_auxi->leader_tgt != UINT32_MAX) {

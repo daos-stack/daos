@@ -2845,6 +2845,8 @@ obj_handle_resend(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t *
 			return ORS_DONE;
 		if (rc1 < 0)
 			return rc1;
+
+		D_ASSERT(old_mbs != NULL);
 	}
 
 	if (leader != NULL) {
@@ -2854,6 +2856,15 @@ obj_handle_resend(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t *
 
 		if (dss_self_rank() != target->ta_comp.co_rank ||
 		    dss_get_module_info()->dmi_tgt_id != target->ta_comp.co_index) {
+			if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH)) {
+				uint64_t val = daos_fail_value_get();
+
+				if (val == 0)
+					D_GOTO(out, rc = -DER_IO);
+
+				daos_fail_value_set(val - 1);
+			}
+
 			*leader = target->ta_comp.co_id;
 			D_GOTO(out, rc = -DER_INPROGRESS);
 		}
@@ -2864,7 +2875,7 @@ obj_handle_resend(struct ds_cont_child *cont, struct dtx_id *dti, daos_epoch_t *
 		/* For 'prepared' DTX, if pool map has been changed, then DTX membership maybe
 		 * changed also. Let's refresh it if necessary.
 		 */
-		if (ver < pm_ver) {
+		if (mbs != NULL && ver < pm_ver) {
 			if (mbs->dm_data_size != old_mbs->dm_data_size ||
 			    memcmp(mbs, old_mbs, sizeof(*mbs) + mbs->dm_data_size) != 0) {
 				rc1 = vos_dtx_refresh_mbs(cont->sc_hdl, dti, mbs, pm_ver,
@@ -3505,9 +3516,16 @@ again:
 		break;
 	}
 
-	if (opc == DAOS_OBJ_RPC_UPDATE && !(orw->orw_flags & ORF_RESEND) &&
-	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
-		ioc.ioc_lost_reply = 1;
+	if (opc == DAOS_OBJ_RPC_UPDATE && !(orw->orw_flags & ORF_RESEND)) {
+		if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY)) {
+			ioc.ioc_lost_reply = 1;
+		} else if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH)) {
+			/* Wait 10 sec for being excluded by test logic. */
+			dss_sleep(10 * 1000);
+			ioc.ioc_lost_reply = 1;
+		}
+	}
+
 out:
 	if (unlikely(rc != 0 && need_abort)) {
 		struct dtx_entry	 dte;

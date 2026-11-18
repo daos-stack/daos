@@ -1190,8 +1190,21 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	/* For solo transaction, the validation has already been processed inside vos
 	 * when necessary. That is enough, do not need to revalid again.
 	 */
-	if (dth->dth_solo)
+	if (dth->dth_solo) {
+		/*
+		 * For very rare case, from client perspective, there is unique available
+		 * shard and curent dth is marked solo. But oringal DTX MBS contains more
+		 * participants. Let's commit it now instead of waiting for DTX resync to
+		 * handle it. If failed, then make client to retry sometime later.
+		 */
+		if (result == 0 && unlikely(dth->dth_prepared)) {
+			rc = vos_dtx_commit(cont->sc_hdl, &dth->dth_xid, 1, false, NULL);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				result = -DER_INPROGRESS;
+		}
+
 		goto out;
+	}
 
 	/* During waiting for bulk data transfer or other non-leaders, the DTX status maybe
 	 * changes by others (such as DTX resync or DTX refresh) by race. Let's check it
@@ -1245,6 +1258,10 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	D_ASSERT(dth->dth_mbs != NULL);
 
 cache:
+	/* For DAOS_DTX_LEADER_SWITCH case, neither mark committable nor batched commit. */
+	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH))
+		goto out;
+
 	if (dlh->dlh_coll) {
 		rc = dtx_cos_add(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, DCF_EXP_CMT | DCF_COLL);
@@ -2433,6 +2450,7 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 	struct daos_obj_md      md = {0};
 	int                     rc = 0;
 	int                     i;
+	bool                    skip;
 
 	D_ASSERT(mbs != NULL);
 
@@ -2446,9 +2464,16 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 	 * succeeded, and such old DTX should has been resynced at that time.
 	 */
 
-	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
-		if (dtx_leader_candidate(pool, mbs->dm_tgts[i].ddt_id, p_tgt))
+	for (i = 0, skip = true; i < mbs->dm_tgt_cnt; i++) {
+		if (dtx_leader_candidate(pool, mbs->dm_tgts[i].ddt_id, p_tgt)) {
+			/* Skip the first healthy target for test. */
+			if (skip && DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH) &&
+			    daos_fail_value_get() != 0) {
+				skip = false;
+				continue;
+			}
 			D_GOTO(out, rc = 0);
+		}
 	}
 
 	if (!(mbs->dm_flags & DMF_COLL_TARGET))
