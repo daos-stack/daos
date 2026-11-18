@@ -1684,6 +1684,110 @@ ec_singv_diff_size_fetch(void **state)
 	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 12 * 1024, 4000);
 }
 
+/* A stale cell of an overwritten EC single value must not fail the fetch.
+ *
+ * A 4103 bytes single value is overwritten by a 4095 bytes one, which is only
+ * stored on one data shard and the parity shards, so the other data shards keep
+ * a cell of the old record. A fetch with unknown size and a large buffer reads
+ * both kinds of shards to the same buffer, in normal and in degraded mode, so
+ * the newer record lands on top of the stale cells.
+ * DAOS_OBJ_EC_SINGV_FETCH_RACE orders the replies so the stale shards fail
+ * checksum verification before the size conflict is seen. The fetch must be
+ * done again with the replied size rather than fail, and must not report any
+ * checksum error to the servers.
+ */
+static void
+ec_singv_stale_shard_fetch(void **state)
+{
+	test_arg_t   *arg     = *state;
+	uint32_t      old_len = 4103;
+	uint32_t      new_len = 4095;
+	uint16_t      fail_shards[2];
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgl;
+	d_iov_t       sg_iov;
+	daos_iod_t    iod;
+	daos_size_t   size;
+	char         *buf;
+	char         *fetch_buf;
+	uint64_t      csum_report_nr;
+	int           i;
+	int           rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	rc  = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&iod.iod_name, "akey_singv_stale", strlen("akey_singv_stale"));
+	iod.iod_nr    = 1;
+	iod.iod_recxs = NULL;
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iov;
+
+	D_ALLOC(buf, old_len);
+	assert_non_null(buf);
+	dts_buf_render(buf, old_len);
+	d_iov_set(&sg_iov, buf, old_len);
+	iod.iod_size = old_len;
+	rc           = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	dts_buf_render(buf, new_len);
+	d_iov_set(&sg_iov, buf, new_len);
+	iod.iod_size = new_len;
+	rc           = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	size = new_len + 17 * 1024;
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+
+	for (i = 0; i < 2; i++) {
+		if (i == 1) {
+			fail_shards[0] = 0;
+			fail_shards[1] = 3;
+			daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
+			daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+		}
+		/* fail_value is the size of the record to be transferred later */
+		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					   DAOS_OBJ_EC_SINGV_FETCH_RACE | DAOS_FAIL_ALWAYS, new_len,
+					   NULL);
+		assert_rc_equal(rc, 0);
+
+		print_message("%s fetch with unknown size, stale shards replied first\n",
+			      i == 0 ? "normal" : "degraded");
+		csum_report_nr = dc_obj_csum_report_nr();
+		memset(fetch_buf, 0, size);
+		d_iov_set(&sg_iov, fetch_buf, size);
+		iod.iod_size = DAOS_REC_ANY;
+		rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		daos_fail_value_set(0);
+		daos_fail_loc_set(0);
+
+		assert_rc_equal(rc, 0);
+		assert_int_equal(iod.iod_size, new_len);
+		assert_memory_equal(buf, fetch_buf, new_len);
+		/* no data is corrupted, no checksum error should be reported to the servers */
+		assert_int_equal(dc_obj_csum_report_nr(), csum_report_nr);
+	}
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+	D_FREE(fetch_buf);
+}
+
 static void
 ec_cond_fetch(void **state)
 {
@@ -3594,6 +3698,8 @@ static const struct CMUnitTest ec_tests[] = {
     {"EC34: cont clone copy of a random workload", ec_clone_random, async_disable,
      test_case_teardown},
     {"EC35: cont clone copy under a snapshot", clone_epoch_skew, async_disable, test_case_teardown},
+    {"EC36: ec single-value stale shard fetch", ec_singv_stale_shard_fetch, async_disable,
+     test_case_teardown},
 };
 
 int
