@@ -66,8 +66,6 @@ RUN set -e; \
         echo "NO_PROXY=$DAOS_NO_PROXY" >> /etc/environment; \
     fi
 
-RUN ls -la
-
 # Setup local repo if available
 ARG INSTALL_SCRIPT_SUFFIX
 RUN --mount=type=bind,src=./utils/scripts/helpers/repo-helper-$INSTALL_SCRIPT_SUFFIX,target=/tmp/daos/repo-helper.sh \
