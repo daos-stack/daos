@@ -64,7 +64,7 @@ dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t 
 		goto exit;
 	}
 
-	rc = vos_pool_open(path, path_parts->vf_pool_uuid, flags, poh);
+	rc = vos_pool_open(path, path_parts->vf_pool_uuid, flags | VOS_POF_FOR_CHECK, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
