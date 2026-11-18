@@ -28,7 +28,7 @@ for origin in $(git remote); do
     while IFS= read -r base; do
         builtin_bases+=("$base")
     done < <(echo "master"
-             git branch -r | sed -ne "/^  $origin\\/release\\/\([3-9]\)/s/^  $origin\\///p")
+             git branch -r | sed -ne "/^  $origin\\/release\\/\([3-9]\|[1-9][0-9][0-9]*\)\.[0-9]/s/^  $origin\\///p")
     export ORIGIN="${origin}"
     export find_branches
     readarray -t branches <<< "$(find_branches)"
