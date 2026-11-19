@@ -14,7 +14,7 @@ server_config:
       storage: auto
 
 pool_common: &pool_common
-  properties: rd_fac:0,space_rb:0,reclaim:disabled
+  properties: space_rb:0,reclaim:disabled
 
 pool_qty_1:
   size: 50%

@@ -36,7 +36,7 @@ class EcodCellSize(IorTestBase):
         transfersize_blocksize = self.params.get("transfersize_blocksize", '/run/ior/*')
 
         for cell_size in pool_cell_sizes:
-            self.pool = self.get_pool(properties=f"rd_fac:0,space_rb:0,ec_cell_sz:{cell_size}")
+            self.pool = self.get_pool(properties=f"space_rb:0,ec_cell_sz:{cell_size}")
             for dfs_oclass in dfs_oclass_list:
                 self.ior_cmd.dfs_oclass.update(dfs_oclass)
                 for transfer_size, block_size in transfersize_blocksize:
