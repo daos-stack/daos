@@ -1526,17 +1526,18 @@ formatted again by running `dmg storage format`, followed by
 `dmg system initialize` to start the engines.
 
 By default, `dmg system erase` blocks after issuing the erase until every engine has restarted
-and reached the `AwaitFormat` state, or until 5 minutes have elapsed, whichever comes first. Pass
-`--no-wait` to return immediately after the erase RPC completes instead of waiting:
+and reached the `AwaitingFormat` state, or until 5 minutes have elapsed, whichever comes first.
+Pass `--no-wait` to return immediately after the erase RPC completes instead of waiting:
 
 ```bash
 $ dmg system erase --no-wait
 ```
 
 If the wait times out, `dmg system erase` reports an error advising the use of `--no-wait`, but
-the erase itself has still been issued; use `dmg storage format-status` or `dmg system query -v`
-to check engine state before retrying. Once engines report `AwaitFormat`, the system can be
-formatted again by running `dmg storage format`.
+the erase itself has still been issued; use `dmg storage format-status` to check engine state
+before retrying. Once `dmg storage format-status` reports `AwaitingFormat` for every engine (or
+`dmg system query -v` reports `AwaitFormat` for every rank), the system can be formatted again by
+running `dmg storage format`.
 
 !!! note
     Note that `dmg system erase` does not currently reset the SCM.
@@ -1603,8 +1604,11 @@ end state a successful `dmg system erase` would have produced.
    $ systemctl start daos_server
    ```
 
-   Each engine should come up reporting "SCM format required" (`AwaitFormat`
-   state). Confirm with `dmg system query -v`.
+   Each engine should come up reporting a format-required message in its log
+   ("SCM format required" for PMem, or "Metadata format required" for
+   MD-on-SSD), and reach the `AwaitFormat` state. Confirm with
+   `dmg system query -v` or `dmg storage format-status` (which reports this
+   same condition as `AwaitingFormat`).
 
 4. Once every rank reports `AwaitFormat`, reformat the system as normal:
 
