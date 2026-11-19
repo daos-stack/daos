@@ -264,9 +264,10 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
  *
  * \param coh	[IN]	Container open handle.
  * \param ver	[IN]	The version that DTX resync has been done.
+ * \param force	[IN]	Set resync version by force.
  */
 void
-vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver);
+vos_set_dtx_resync_version(daos_handle_t coh, uint32_t ver, bool force);
 
 /**
  * Set the DTX committable as committable.
