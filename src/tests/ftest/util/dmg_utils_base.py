@@ -789,6 +789,8 @@ class DmgCommandBase(YamlCommand):
                 self.verbose = FormattedParameter("--verbose", False)
                 self.force = FormattedParameter("--force", False)
                 self.start = FormattedParameter("--start", False)
+                self.replace = FormattedParameter("--replace", False)
+                self.rank = FormattedParameter("--rank={}", None)
 
         class QuerySubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage query command."""

@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -197,6 +198,43 @@ func TestServer_EngineInstance_awaitStart(t *testing.T) {
 			test.AssertEqual(t, tc.expState, ei.LocalState(), "")
 			test.AssertEqual(t, tc.expHold, held, "hold callback")
 		})
+	}
+}
+
+// TestServer_EngineInstance_awaitStart_concurrent exercises NotifyStartReady()
+// and abortStart() called concurrently (as would happen if a format --replace
+// release races a system stop/abort), verifying that the mutex-protected
+// startReady channel never panics or deadlocks under the race detector, and
+// that awaitStart() always observes a consistent outcome: either the engine
+// is released (nil) or sent back to format (errStartAborted).
+func TestServer_EngineInstance_awaitStart_concurrent(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	for i := 0; i < 20; i++ {
+		runner := engine.NewTestRunner(nil, engine.MockConfig())
+		ei := NewEngineInstance(log, nil, nil, runner, nil)
+		ei.waitStart.SetTrue()
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			ei.NotifyStartReady()
+		}()
+		go func() {
+			defer wg.Done()
+			ei.abortStart()
+		}()
+		wg.Wait()
+
+		ctx, cancel := context.WithTimeout(test.Context(t), 100*time.Millisecond)
+		err := ei.awaitStart(ctx)
+		cancel()
+
+		if err != nil && err != errStartAborted {
+			t.Fatalf("unexpected error from awaitStart(): %s", err)
+		}
 	}
 }
 

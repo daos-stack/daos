@@ -195,8 +195,8 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 	}
 	ei.log.Debugf("%s: needsScmFormat: %t", msgIdx, needsScmFormat)
 
-	// Always reformat ramdisk in MD-on-SSD mode if control metadata intact.
-	if ei.storage.ControlMetadataPathConfigured() && !needsMetaFormat {
+	// Always reformat ramdisk cache in MD-on-SSD mode
+	if ei.storage.ControlMetadataPathConfigured() {
 		if err := ei.storage.FormatScm(true); err != nil {
 			return errors.Wrapf(err, "%s: format ramdisk", msgIdx)
 		}
