@@ -751,7 +751,8 @@ struct rw_csum_verify_deferred {
  * reply deferred by rw_cb_csum_verify_defer(). It is registered after obj_comp_cb(), so it
  * is called before it, when all the shards replied. A failure is set as the result of the
  * shard task for obj_comp_cb() to handle it. If the replied record sizes conflict the
- * object fetch will be done again, and the reply is just dropped.
+ * object fetch will be done again, and the reply is just dropped. So is it if the object
+ * fetch failed without the size of the latest record being replied.
  */
 static int
 rw_csum_verify_deferred_cb(tse_task_t *obj_task, void *data)
@@ -761,6 +762,7 @@ rw_csum_verify_deferred_cb(tse_task_t *obj_task, void *data)
 	struct obj_reasb_req           *reasb_req = rw_args->shard_args->reasb_req;
 	struct obj_rw_in               *orw       = crt_req_get(rw_args->rpc);
 	bool                            conflict  = false;
+	bool                            unknown   = false;
 	int                             rc;
 	int                             i;
 
@@ -772,8 +774,12 @@ rw_csum_verify_deferred_cb(tse_task_t *obj_task, void *data)
 		struct shard_fetch_stat *fetch_stat = &reasb_req->orr_fetch_stat[i];
 
 		if (orw->orw_iod_array.oia_iods[i].iod_type != DAOS_IOD_SINGLE ||
-		    fetch_stat->sfs_size == 0 || fetch_stat->sfs_size_other == 0)
+		    !reasb_req->orr_singv_los[i].cs_even_dist || fetch_stat->sfs_size_other == 0)
 			continue;
+		if (fetch_stat->sfs_size == 0) {
+			unknown = true;
+			continue;
+		}
 		conflict = dc_shard_singv_size_conflict(
 		    reasb_req->orr_oca, fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 	}
@@ -781,6 +787,17 @@ rw_csum_verify_deferred_cb(tse_task_t *obj_task, void *data)
 	if (conflict) {
 		D_DEBUG(DB_CSUM, DF_UOID " skip csum verify of the stale singv shard\n",
 			DP_UOID(orw->orw_oid));
+		goto out;
+	}
+	/* No shard holding the latest record replied its size, as its fetch failed. Its data
+	 * can still have landed on top of the data of this shard, which cannot be told from
+	 * a corruption. The object fetch failed and returns no data, so drop the reply rather
+	 * than fail a healthy shard and report a checksum error for it.
+	 */
+	if (unknown && obj_task->dt_result != 0) {
+		D_DEBUG(DB_CSUM,
+			DF_UOID " skip csum verify, latest singv size is unknown, " DF_RC "\n",
+			DP_UOID(orw->orw_oid), DP_RC(obj_task->dt_result));
 		goto out;
 	}
 
