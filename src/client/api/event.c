@@ -1281,7 +1281,10 @@ daos_event_priv_get(daos_event_t **ev)
 
 	D_ASSERT(*ev == NULL);
 
-	/** fini resets only the caller's flag; other threads may hold a stale event */
+	/**
+	 * daos_fini() resets only the caller's flag; other threads may hold an event from before a
+	 * re-init. No call may overlap fini/init (DAOS-19955), so the unlocked check is enough.
+	 */
 	if (!ev_thpriv_is_init || ev_thpriv_gen != eq_gen) {
 		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
 		if (rc)

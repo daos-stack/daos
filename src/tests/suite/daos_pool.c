@@ -12,6 +12,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include <daos_security.h>
+#include <daos/metrics.h>
 #include "daos_test.h"
 #include "daos_iotest.h"
 
@@ -417,6 +418,105 @@ init_fini_conn(void **state)
 
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_rc_equal(rc, 0);
+}
+
+static void
+reinit_daos(test_arg_t *arg)
+{
+	int rc;
+
+	rc = daos_eq_destroy(arg->eq, 0);
+	assert_rc_equal(rc, 0);
+	rc = daos_fini();
+	assert_rc_equal(rc, 0);
+	rc = daos_init();
+	assert_rc_equal(rc, 0);
+	rc = daos_eq_create(&arg->eq);
+	assert_rc_equal(rc, 0);
+}
+
+struct reinit_worker_arg {
+	test_arg_t       *arg;
+	pthread_barrier_t barrier;
+	int               rc[2];
+};
+
+static int
+connect_disconnect(test_arg_t *arg)
+{
+	daos_handle_t poh;
+	int           rc;
+
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
+	if (rc)
+		return rc;
+	return daos_pool_disconnect(poh, NULL);
+}
+
+static void *
+reinit_worker(void *data)
+{
+	struct reinit_worker_arg *wa = data;
+
+	wa->rc[0] = connect_disconnect(wa->arg);
+	/* let the main thread run daos_fini()/daos_init(), then use the library again */
+	pthread_barrier_wait(&wa->barrier);
+	pthread_barrier_wait(&wa->barrier);
+	wa->rc[1] = connect_disconnect(wa->arg);
+	return NULL;
+}
+
+/** sync ops from a thread that outlives a daos_fini()/daos_init() cycle (DAOS-19955) */
+static void
+reinit_live_thread(void **state)
+{
+	test_arg_t              *arg = *state;
+	struct reinit_worker_arg wa  = {.arg = arg};
+	pthread_t                thread;
+	int                      rc;
+
+	par_barrier(PAR_COMM_WORLD);
+
+	rc = pthread_barrier_init(&wa.barrier, NULL, 2);
+	assert_int_equal(rc, 0);
+	rc = pthread_create(&thread, NULL, reinit_worker, &wa);
+	assert_int_equal(rc, 0);
+
+	pthread_barrier_wait(&wa.barrier);
+	reinit_daos(arg);
+	pthread_barrier_wait(&wa.barrier);
+
+	rc = pthread_join(thread, NULL);
+	assert_int_equal(rc, 0);
+	pthread_barrier_destroy(&wa.barrier);
+
+	assert_rc_equal(wa.rc[0], 0);
+	assert_rc_equal(wa.rc[1], 0);
+}
+
+/** same as above with client metrics enabled, which use per-thread storage */
+static void
+reinit_live_thread_metrics(void **state)
+{
+	test_arg_t *arg = *state;
+	char       *orig;
+	int         rc;
+
+	/* -DER_NONEXIST leaves orig NULL */
+	d_agetenv_str(&orig, DAOS_CLIENT_METRICS_ENABLE);
+	rc = d_setenv(DAOS_CLIENT_METRICS_ENABLE, "1", 1);
+	assert_int_equal(rc, 0);
+	reinit_daos(arg);
+
+	reinit_live_thread(state);
+
+	/* metrics stay enabled across init if the variable is just unset */
+	rc = d_setenv(DAOS_CLIENT_METRICS_ENABLE, orig != NULL ? orig : "0", 1);
+	assert_int_equal(rc, 0);
+	reinit_daos(arg);
+	if (orig == NULL)
+		d_unsetenv(DAOS_CLIENT_METRICS_ENABLE);
+	d_freeenv_str(&orig);
 }
 
 static bool
@@ -2417,6 +2517,10 @@ static const struct CMUnitTest pool_tests[] = {
      teardown_containers},
     {"POOL20: reconf interrupted by -DER_NOTLEADER", reconf_notleader_handling, NULL,
      test_case_teardown},
+    {"POOL21: sync ops from a thread that outlives daos re-init", reinit_live_thread, NULL,
+     test_case_teardown},
+    {"POOL22: sync ops from a thread that outlives daos re-init (metrics)",
+     reinit_live_thread_metrics, NULL, test_case_teardown},
 };
 
 int
