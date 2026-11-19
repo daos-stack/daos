@@ -1628,6 +1628,9 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	pool->vp_rdb = !!(flags & VOS_POF_RDB);
 	pool->vp_ext_chkpt = !!(flags & VOS_POF_EXTERNAL_CHKPT);
 
+	if (flags & VOS_POF_FOR_CHECK)
+		pool->vp_for_check = 1;
+
 	/*
 	 * Insert the pool into the uuid hash table before full opened, because subsequent
 	 * pool_open process maybe yield and other pool_lookup for the same UUID will find
@@ -1655,6 +1658,10 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	       void *metrics, struct vos_pool *pool, struct checker *ck, int ret)
 {
 	struct umem_attr *uma;
+	bool              fi_reenable;
+	const uint64_t    exp_fail_locs[] = {DAOS_FAULT_CONT_TREE_INV_CLASS,
+					     DAOS_FAULT_CONT_TREE_UNREG_CLASS,
+					     DAOS_FAULT_CONT_TREE_FEATURES, 0};
 	daos_handle_t     poh;
 	int               rc;
 
@@ -1691,10 +1698,12 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	}
 
 	if (IS_CHECKER(ck)) {
+		checker_fi_entry(exp_fail_locs, &fi_reenable);
 		CK_PRINTF(ck, CK_CONT_TREE_STR "...\n");
 		CK_INDENT(
 		    ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma, pool, ck));
 		CK_PRINTFL_RC(ck, rc, CK_CONT_TREE_STR);
+		checker_fi_exit(fi_reenable);
 		if (rc != DER_SUCCESS) {
 			goto out;
 		}
@@ -1811,11 +1820,20 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
-		if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
-		    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
+		if (!(flags & VOS_POF_FOR_CHECK) && ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
+
+		/*
+		 * Set vp_for_check only for the first opener with VOS_POF_FOR_CHECK flag. If the
+		 * pool has already been opened without such flag, then current VOS_POF_FOR_CHECK
+		 * will not set vp_for_check. Conversely, if the pool was formerly open with such
+		 * flag but now is double opened without such flag, then clear vp_for_check.
+		 */
+		if (!(flags & VOS_POF_FOR_CHECK))
+			pool->vp_for_check = 0;
+
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
 		checker_print_indent_dec(ck);
