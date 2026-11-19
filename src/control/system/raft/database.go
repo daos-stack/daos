@@ -630,10 +630,11 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
-		// Excluded and stopped members are omitted from the group map.
-		// A crashed member is excluded once swim marks it dead; a stopped
-		// member rejoins on dmg system start.
-		if srv.State&(system.ExcludedMemberFilter|system.MemberStateStopped) != 0 {
+		// Only members that have been auto-excluded or administratively
+		// excluded should be omitted from the group map. If a member
+		// is actually down, it will be marked dead by swim and moved
+		// into the excluded state eventually.
+		if srv.State&system.ExcludedMemberFilter != 0 {
 			continue
 		}
 		// Quick sanity-check: Don't include members that somehow have

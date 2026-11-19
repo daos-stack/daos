@@ -186,6 +186,15 @@ func (ei *EngineInstance) LocalState() system.MemberState {
 	}
 }
 
+// memberState is the state reported to the MS. A held engine reports Stopped so that
+// the MS keeps whatever state the admin last set for the rank.
+func (ei *EngineInstance) memberState() system.MemberState {
+	if state := ei.LocalState(); state != system.MemberStateAwaitStart {
+		return state
+	}
+	return system.MemberStateStopped
+}
+
 // setIndex sets the server index assigned by the harness.
 func (ei *EngineInstance) setIndex(idx uint32) {
 	ei.runner.GetConfig().Index = idx

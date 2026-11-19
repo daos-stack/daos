@@ -230,8 +230,11 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 	if exitErr == nil && !ei.stopRequested.Load() {
 		exitErr = errors.New("exited without a stop request")
 	}
+	// Don't overwrite an existing error, as we want to return the actual error to the admin.
 	ei.Lock()
-	ei._lastErr = exitErr
+	if ei._lastErr == nil {
+		ei._lastErr = exitErr
+	}
 	ei.Unlock()
 
 	details := []string{fmt.Sprintf("instance %d", engineIdx)}

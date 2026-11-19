@@ -431,6 +431,7 @@ func TestServer_EngineInstance_Run_exitBeforeReady(t *testing.T) {
 		got = nextExit(t, exits, "engine killed after the failed startup was never reaped")
 		test.AssertEqual(t, 4321, got.pid, "unexpected pid for the killed engine")
 		test.CmpErr(t, errors.New("killed"), got.err)
+		test.CmpErr(t, errors.New("join failed"), ei.lastErr())
 
 		reqCtx, reqCancel := context.WithTimeout(ctx, time.Second)
 		defer reqCancel()

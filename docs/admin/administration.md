@@ -985,15 +985,18 @@ The output table will indicate action and result.
 While the engines are stopped, the DAOS servers will continue to
 operate and listen on the management network.
 
-A stopped rank leaves the system group at once, so its pools exclude it
-under their self-heal policy just as they would a failed rank. To stop a
+A stopped rank stays stopped across a restart of its `daos_server`, so a
+planned outage of some or all storage nodes is `dmg system stop`, reboot or
+service the nodes, then `dmg system start` once every node is back. The
+engines come up together rather than as each node returns, which keeps the
+pool services on the early nodes from excluding the ranks on the late ones.
+
+The same holds for a subset of ranks: a rank stopped for maintenance on its
+node needs `dmg system start` once the node is back. Its pools still exclude
+it under their self-heal policy just as they would a failed rank, including a
+rank left stopped when the rest of a stopped system is started. To stop a
 rank without a pool exclusion, disable self-heal exclusion on its pools
 first.
-
-The same applies to a system that is stopped and then only partly started:
-the ranks still stopped are excluded from every pool as soon as the pool
-services come up. A staged restart must disable self-heal exclusion first or
-start every rank.
 
 !!! warning
     All engines monitor each other and pro-actively exclude unresponsive
@@ -1067,14 +1070,6 @@ $ dmg system extend -l ${new_storage_nodes} [--timeout=<duration>]
 ```
 
 The same operation for hosts added to a system that already has pools.
-
-The `restart_engines_on_boot` system property controls whether `daos_server`
-restarts joined ranks on boot. Set it to `false` for sites where a reboot is a
-maintenance step and engines should stay down until `dmg system start`:
-
-```bash
-$ dmg system set-prop restart_engines_on_boot:false
-```
 
 `dmg storage format --start` formats and starts the engines in one step, as
 earlier releases did; on hosts that are already formatted it starts the engines

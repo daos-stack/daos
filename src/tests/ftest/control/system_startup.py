@@ -69,19 +69,11 @@ class SystemStartupTest(TestWithServers):
             host (NodeSet): host to check
             seconds (int): seconds to keep checking
         """
-        for _ in range(seconds):
+        deadline = time.time() + seconds
+        while time.time() < deadline:
             if self.engine_running(host):
                 self.fail(f"An engine started on {host}")
             time.sleep(1)
-
-    def restore_restart_on_boot(self):
-        """Re-enable restart_engines_on_boot.
-
-        Returns:
-            list: no errors, as register_cleanup expects
-        """
-        self.get_dmg_command().system_set_prop("restart_engines_on_boot:true")
-        return []
 
     def verify_rank_state(self, rank, state, checks):
         """Fail unless the rank reaches the state within the number of checks.
@@ -159,27 +151,6 @@ class SystemStartupTest(TestWithServers):
         self.log_step(f"Rank {rank} stays stopped")
         self.verify_no_engine(host, 20)
         self.verify_rank_state(rank, "stopped", 1)
-        self.log_step(f"Start rank {rank}")
-        dmg.system_start(ranks=str(rank))
-        self.verify_rank_state(rank, "joined", 60)
-
-    def test_restart_engines_on_boot(self):
-        """No rank rejoins on restart while restart_engines_on_boot is false.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,system_startup
-        :avocado: tags=SystemStartupTest,test_restart_engines_on_boot
-        """
-        dmg = self.get_dmg_command()
-        host, rank = self.pick_rank()
-        self.log_step("Disable engine restart on boot")
-        self.register_cleanup(self.restore_restart_on_boot)
-        dmg.system_set_prop("restart_engines_on_boot:false")
-        self.log_step(f"Kill and restart daos_server on {host}")
-        self.restart_server(host)
-        self.log_step(f"Rank {rank} stays down")
-        self.verify_no_engine(host, 20)
         self.log_step(f"Start rank {rank}")
         dmg.system_start(ranks=str(rank))
         self.verify_rank_state(rank, "joined", 60)

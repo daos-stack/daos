@@ -1856,11 +1856,10 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 	notMember := "not a system member; awaiting dmg system initialize or extend"
 
 	for name, tc := range map[string]struct {
-		req       *mgmtpb.EnginePreflightReq
-		members   system.Members
-		noRestart bool
-		expResp   *mgmtpb.EnginePreflightResp
-		expErr    error
+		req     *mgmtpb.EnginePreflightReq
+		members system.Members
+		expResp *mgmtpb.EnginePreflightResp
+		expErr  error
 	}{
 		"nil req": {
 			req:    (*mgmtpb.EnginePreflightReq)(nil),
@@ -1898,32 +1897,6 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 				},
 			},
 		},
-		"restart on boot disabled": {
-			req: &mgmtpb.EnginePreflightReq{Engines: engines(0)},
-			members: system.Members{
-				mockMember(t, 0, 1, "joined"),
-			},
-			noRestart: true,
-			expResp: &mgmtpb.EnginePreflightResp{
-				Engines: []*mgmtpb.EnginePreflightResp_Engine{
-					hold(0, "restart_engines_on_boot is false; awaiting dmg system start"),
-				},
-			},
-		},
-		"restart on boot disabled speaks before the rank state": {
-			req: &mgmtpb.EnginePreflightReq{Engines: engines(1, uint32(ranklist.NilRank))},
-			members: system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "stopped"),
-			},
-			noRestart: true,
-			expResp: &mgmtpb.EnginePreflightResp{
-				Engines: []*mgmtpb.EnginePreflightResp_Engine{
-					hold(0, "restart_engines_on_boot is false; awaiting dmg system start"),
-					hold(1, notMember),
-				},
-			},
-		},
 		"excluded rank starts": {
 			req: &mgmtpb.EnginePreflightReq{Engines: engines(0)},
 			members: system.Members{
@@ -1956,13 +1929,6 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			if tc.noRestart {
-				if err := system.SetUserProperty(svc.sysdb, svc.systemProps,
-					daos.SystemPropertyRestartEnginesOnBoot.String(), "false"); err != nil {
-					t.Fatal(err)
-				}
-			}
-
 			gotResp, gotErr := svc.EnginePreflight(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -2013,12 +1979,19 @@ func TestServer_MgmtSvc_SystemInitialize(t *testing.T) {
 		hasPool    bool
 		joinLater  system.Members
 		mResps     []*control.HostResponse
+		ctxTimeout time.Duration
 		expResults []*sharedpb.RankResult
 		expErr     error
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemInitializeReq)(nil),
 			expErr: errors.New("nil request"),
+		},
+		"caller gives up": {
+			req:        &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.[1-2]"},
+			mResps:     []*control.HostResponse{mockStartEnginesResp(1, 0, 1), mockStartEnginesResp(2, 2, 3)},
+			ctxTimeout: 2 * instanceUpdateDelay,
+			expErr:     context.DeadlineExceeded,
 		},
 		"not system leader": {
 			req:    &mgmtpb.SystemInitializeReq{Sys: "quack"},
@@ -2163,7 +2136,13 @@ func TestServer_MgmtSvc_SystemInitialize(t *testing.T) {
 				}()
 			}
 
-			gotResp, gotErr := svc.SystemInitialize(test.Context(t), tc.req)
+			ctx := test.Context(t)
+			if tc.ctxTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
+				defer cancel()
+			}
+			gotResp, gotErr := svc.SystemInitialize(ctx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -4731,6 +4710,7 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 				svc := mgmtSystemTestSetup(t, l, system.Members{}, nil)
 				return svc
 			},
+			expErr: system.ErrEmptyGroupMap,
 		},
 		"map version already updated": {
 			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
