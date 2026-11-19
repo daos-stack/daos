@@ -1018,13 +1018,14 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 	return daos_recx_ep_add(recov_list, &recx_ep);
 }
 
-/* Fault injection for the fetch of EC single values, see DAOS_OBJ_EC_SINGV_FETCH_RACE and
- * DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL. Return true if the replies have to race, set \a late if
- * this shard has to transfer its data later than the others, and \a fail if it has to fail
- * the fetch after the transfer.
+/* Fault injection for the fetch of EC single values, see DAOS_OBJ_EC_SINGV_FETCH_RACE,
+ * DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL and DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY. Return true if
+ * the replies have to race, set \a late if this shard has to transfer its data later than
+ * the others, \a last if it has to reply later than the others, and \a fail if it has to
+ * fail the fetch after the transfer.
  */
 static bool
-obj_fetch_singv_race(daos_iod_t *iods, uint32_t iods_nr, bool *late, bool *fail)
+obj_fetch_singv_race(daos_iod_t *iods, uint32_t iods_nr, bool *late, bool *last, bool *fail)
 {
 	bool     singv = false;
 	bool     match = false;
@@ -1047,6 +1048,11 @@ obj_fetch_singv_race(daos_iod_t *iods, uint32_t iods_nr, bool *late, bool *fail)
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL)) {
 		*late = match;
 		*fail = match;
+		return true;
+	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY)) {
+		*late = !match;
+		*last = match;
 		return true;
 	}
 
@@ -1803,10 +1809,12 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	if (rma) {
 		bool singv_race = false;
 		bool singv_late = false;
+		bool singv_last = false;
 		bool singv_fail = false;
 
 		if (obj_rpc_is_fetch(rpc))
-			singv_race = obj_fetch_singv_race(iods, iods_nr, &singv_late, &singv_fail);
+			singv_race = obj_fetch_singv_race(iods, iods_nr, &singv_late, &singv_last,
+							  &singv_fail);
 		/* let the shards with other record size transfer first */
 		if (singv_late)
 			dss_sleep(500);
@@ -1816,7 +1824,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL);
 		/* reply after all shards' data landed in the client buffer */
 		if (rc == 0 && singv_race)
-			dss_sleep(1000);
+			dss_sleep(singv_last ? 2000 : 1000);
 		if (rc == 0 && singv_fail)
 			rc = -DER_TIMEDOUT;
 		if (rc == 0) {

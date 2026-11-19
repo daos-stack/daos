@@ -917,6 +917,14 @@ enum {
  * record size it holds.
  */
 #define DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL  (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x85)
+/**
+ * Reverse of DAOS_OBJ_EC_SINGV_FETCH_RACE for the reply order: the shard holding
+ * a record of fail_value bytes transfers its data first and replies last, the
+ * other shards transfer later and reply earlier. The data of the other shards
+ * is then on top of that record in the shared fetch buffer, and their replies
+ * are handled before the reply that tells its size.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x86)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
