@@ -157,6 +157,14 @@ tx_add_ptr(struct umem_instance *umm, void *ptr, size_t ptr_size)
 }
 
 static int
+tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size, uint64_t flags)
+{
+	void *ptr = umem_off2ptr(umm, umoff);
+
+	return tx_add_ptr(umm, ptr, size);
+}
+
+static int
 tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
 	assert_ptr_equal(umm, &mock_pool.vp_umm);
@@ -227,6 +235,7 @@ static umem_ops_t umm_ops = {.mo_tx_begin   = tx_begin,
 			     .mo_tx_commit  = tx_commit,
 			     .mo_tx_abort   = tx_abort,
 			     .mo_tx_add_ptr = tx_add_ptr,
+			     .mo_tx_xadd    = tx_xadd,
 			     .mo_tx_free    = tx_free};
 
 static int
