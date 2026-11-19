@@ -911,6 +911,13 @@ enum {
  * exposes the record size conflict.
  */
 #define DAOS_OBJ_EC_SINGV_FETCH_RACE       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x84)
+/**
+ * Same as DAOS_OBJ_EC_SINGV_FETCH_RACE, and the shard holding a record of
+ * fail_value bytes fails the fetch with -DER_TIMEDOUT after its bulk transfer:
+ * its data landed in the shared fetch buffer, but the client does not get the
+ * record size it holds.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL  (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x85)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
