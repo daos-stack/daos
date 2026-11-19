@@ -3836,12 +3836,8 @@ func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
-	mockAddr := func(a int32) *net.TCPAddr {
-		return test.MockHostAddr(a)
-	}
-
 	for name, tc := range map[string]struct {
-		peers     []*net.TCPAddr
+		peers     []string
 		uErr      error
 		expErrMsg string
 	}{
@@ -3849,7 +3845,7 @@ func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
 			peers: nil,
 		},
 		"peer erase request fails": {
-			peers:     []*net.TCPAddr{mockAddr(1)},
+			peers:     []string{"10.0.0.1:10001"},
 			uErr:      errors.New("mock rpc error"),
 			expErrMsg: "erase request to MS replica peer 10.0.0.1:10001 failed: System-Query command failed: mock rpc error",
 		},
@@ -3867,6 +3863,36 @@ func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
 			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 		})
 	}
+}
+
+// TestServer_MgmtSvc_eraseReplicas_systemName verifies that eraseReplicas() explicitly
+// sets the system name on the forwarded request, rather than relying on svc.rpcClient's
+// configured default, so the peer resolves the request against the correct system even
+// if that default is ever left unset.
+func TestServer_MgmtSvc_eraseReplicas_systemName(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(t, log)
+	mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+		UnaryResponseSet: []*control.UnaryResponse{
+			control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{}),
+			control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{}),
+		},
+	})
+	svc.rpcClient = mi
+
+	if err := svc.eraseReplicas(test.Context(t), []string{test.MockHostAddr(1).String()}); err != nil {
+		t.Fatal(err)
+	}
+
+	test.AssertEqual(t, 2, len(mi.SentReqs), "number of requests sent")
+	qReq, ok := mi.SentReqs[0].(*control.SystemQueryReq)
+	test.AssertTrue(t, ok, "first request should be a system query")
+	eReq, ok := mi.SentReqs[1].(*control.SystemEraseReq)
+	test.AssertTrue(t, ok, "second request should be a system erase")
+	test.AssertEqual(t, svc.sysdb.SystemName(), qReq.Sys, "system name in the pre-check query")
+	test.AssertEqual(t, svc.sysdb.SystemName(), eReq.Sys, "system name in the erase request")
 }
 
 func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {

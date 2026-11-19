@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,15 +102,8 @@ func (cmd *msStatusCmd) Execute([]string) error {
 	fmt.Fprintf(&buf, "%s DB status:\n", build.ManagementServiceName)
 	fmt.Fprintln(&buf, "  Control configuration:")
 	fmt.Fprintf(&buf, "    Local replica address: %s\n", repAddr)
-	peers := dbCfg.PeerReplicaAddrs()
-	if len(peers) > 0 {
-		peerStrs := func() (strs []string) {
-			for _, peer := range peers {
-				strs = append(strs, peer.String())
-			}
-			return
-		}()
-		fmt.Fprintf(&buf, "    Peer replica addresses: %s\n", strings.Join(peerStrs, ","))
+	if peers := dbCfg.PeerReplicas(); len(peers) > 0 {
+		fmt.Fprintf(&buf, "    Peer replica addresses: %s\n", strings.Join(peers, ","))
 	}
 	fmt.Fprintln(&buf, "  Raft configuration (servers):")
 	for _, srv := range raftCfg.Servers {

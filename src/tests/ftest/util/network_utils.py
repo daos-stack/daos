@@ -288,7 +288,7 @@ def get_hg_info(logger, hosts, filter_provider=None, filter_device=None, verbose
                 _class_protocols = []
                 if "_" in protocol:
                     _protocol = protocol.split("_")
-                    if _protocol[0] in ("dc", "rc", "ud") and _protocol[1] in ("mlx5"):
+                    if _protocol[0] in ("dc", "rc", "ud") and _protocol[1] in ("mlx5",):
                         # Add ucx synonyms, e.g. convert ud_mlx5 => ud_mlx5, ud_x, ud
                         for synonym in (f"_{_protocol[1]}", "_x", ""):
                             _class_protocols.append(f"{_class}+{_protocol[0]}{synonym}")
