@@ -4655,8 +4655,15 @@ setup_fd_0_1_2(void)
 					d_file_list[idx]->path, errno, strerror(errno));
 				D_GOTO(err, error_save);
 			}
-			/* using dup2() to make sure we get desired fd */
-			fd_new = dup2(fd_tmp, fd);
+			/* Use the libc dup2() to get the desired fd. The dup2() hook would call
+			 * close_dup_fd() on fd, which takes lock_fd_dup2ed for writing while it is
+			 * held for reading here, and the process never reaches exec().
+			 */
+			if (next_dup2 == NULL) {
+				next_dup2 = dlsym(RTLD_NEXT, "dup2");
+				D_ASSERT(next_dup2 != NULL);
+			}
+			fd_new = next_dup2(fd_tmp, fd);
 			if (fd_new < 0 || fd_new != fd) {
 				error_save = errno;
 				fprintf(stderr, "Error: dup2 failed. %d (%s)\n", errno,
@@ -4664,7 +4671,8 @@ setup_fd_0_1_2(void)
 				libc_close(fd_tmp);
 				D_GOTO(err, error_save);
 			}
-			libc_close(fd_tmp);
+			if (fd_tmp != fd)
+				libc_close(fd_tmp);
 			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
 				error_save = errno;
 				fprintf(stderr, "Error: lseek failed to set offset. %d (%s)\n",
@@ -6722,9 +6730,16 @@ dup2(int oldfd, int newfd)
 			errno = EBUSY;
 			return (-1);
 		}
-		rc = libc_close(fd_tmp);
-		if (rc != 0)
-			return -1;
+		/* If newfd was not open, it is the lowest free fd and the kernel gave it to us as
+		 * fd_tmp (dash closes the target before it opens the file: close(1); open(f);
+		 * dup2(f, 1)). next_dup2() is then a no-op and closing fd_tmp would close newfd,
+		 * leaving fd_dup2_list[] forwarding a free kernel fd that the next open() takes.
+		 */
+		if (fd_tmp != newfd) {
+			rc = libc_close(fd_tmp);
+			if (rc != 0)
+				return -1;
+		}
 		idx = allocate_dup2ed_fd(fd_kernel, fd_directed);
 		if (idx >= 0)
 			return fd_kernel;

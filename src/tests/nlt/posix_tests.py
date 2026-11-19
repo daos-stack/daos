@@ -2846,6 +2846,28 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
         self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
+    @needs_dfuse
+    def test_pil4dfs_redirect(self):
+        """Test shell redirections to dfuse with libpil4dfs.so
+
+        dash, /bin/sh on Debian and Ubuntu, closes the target fd before it opens the file, so
+        dup2() is asked for a newfd that is not open. "exec 1>&-" does the same in bash. An
+        external command then has its redirected stdout reopened before exec().
+        """
+        path = self.dfuse.dir
+
+        file1 = join(path, 'closed_stdout')
+        self.server.run_daos_client_cmd_pil4dfs(
+            ['bash', '-c', f'exec 1>&-; echo hello > {file1}'])
+        with open(file1, 'r') as fd:
+            assert fd.read() == 'hello\n', file1
+
+        file2 = join(path, 'external')
+        self.server.run_daos_client_cmd_pil4dfs(
+            ['bash', '-c', f'/bin/echo one > {file2}; /bin/echo two >> {file2}'])
+        with open(file2, 'r') as fd:
+            assert fd.read() == 'one\ntwo\n', file2
+
     @needs_dfuse_with_opt(caching_variants=[False], ro=True)
     def test_mount_ro(self):
         """Check that mounting read-only does not allow write access"""
