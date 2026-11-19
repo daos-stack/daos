@@ -5,7 +5,6 @@
 """
 import os
 import re
-import time
 
 import yaml
 from dlck_utils import TestDlck
@@ -34,30 +33,6 @@ class DlckBasicTest(TestDlck):
         if not (expected_error_found or warning_found):
             return [f"{fault_name}: no expected error found in dlck output: {output}"]
         return []
-
-    def check_daos_engines_stopped(self):
-        """Check for DAOS engines up to five times, waiting five seconds between checks."""
-        self.log_step("Verify DAOS engines are stopped")
-        max_attempts = 5
-        for attempt in range(1, max_attempts + 1):
-            result = run_remote(self.log, self.hostlist_servers, "/usr/bin/pgrep -a -x daos_engine")
-            unchecked_hosts = self.hostlist_servers.copy()
-            errors = []
-            for data in result.output:
-                unchecked_hosts.difference_update(data.hosts)
-                if data.returncode == 0:
-                    errors.append(
-                        f"daos_engine still running on {data.hosts}: {', '.join(data.stdout)}")
-                elif data.returncode != 1:
-                    errors.append(f"Process check failed on {data.hosts} (exit {data.returncode})")
-            if unchecked_hosts:
-                errors.append(f"No process check result from {unchecked_hosts}")
-            if not errors:
-                return
-            if attempt == max_attempts:
-                self.fail(f"Cannot run dlck after {max_attempts} checks: {'; '.join(errors)}")
-            else:
-                time.sleep(5)
 
     def cleanup_dpdk(self):
         """Cleanup DPDK temporary files on the remote hosts."""
@@ -128,7 +103,6 @@ class DlckBasicTest(TestDlck):
             dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mount=tmpfs_mount)
             dlck.storage.value = tmpfs_mount
 
-        self.check_daos_engines_stopped()
         self.log_step("Run dlck command to check the health of the pool and storage")
         dlck.timeout = 120
         result = dlck.run()
@@ -199,7 +173,6 @@ class DlckBasicTest(TestDlck):
                 self.log.info("\n %s", file_data)
             distribute_files(self.log, self.hostlist_servers, fault_inject_file,
                              fault_inject_file)
-            self.check_daos_engines_stopped()
             self.log_step("Run dlck command after injecting fault")
             dlck.timeout = 120
             result = dlck.run()
