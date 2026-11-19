@@ -2,7 +2,7 @@ hosts:
   test_servers: 1
   test_clients: 1
 
-timeout: 450
+timeout: 420
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -12,7 +12,7 @@ server_config:
       storage: auto
 
 pool:
-  size: 5%
+  size: 30%
 
 dlck_test_faults:
   fault_list:

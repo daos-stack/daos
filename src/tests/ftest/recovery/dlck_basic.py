@@ -67,26 +67,26 @@ class DlckBasicTest(TestDlck):
         if not result.passed:
             self.fail(f"{command_root} failed on {result.failed_hosts}")
 
-    def mount_dlck_tmpfs(self, tmpfs_mounts):
-        """Mount 124G of memory-backed tmpfs for testing purposes on the remote hosts.
+    def mount_dlck_tmpfs(self, tmpfs_mount):
+        """Mount 256G of memory-backed tmpfs for testing purposes on the remote hosts.
 
         Args:
             tmpfs_mounts (str): The mount point of the tmpfs to mount.
         """
-        cmd = f'sudo bash -c "mkdir -p {tmpfs_mounts} && ' \
+        cmd = f'sudo bash -c "mkdir -p {tmpfs_mount} && ' \
               f'mount -t tmpfs -o rw,uid=daos_server,' \
-              f'gid=daos_server,mode=0775,size=124G,huge=always tmpfs {tmpfs_mounts}"'
+              f'gid=daos_server,mode=0775,size=256G,huge=always tmpfs {tmpfs_mount}"'
         result = run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
         if not result.passed:
             self.fail(f"{cmd} failed on {result.failed_hosts}")
 
-    def unmount_dlck_tmpfs(self, tmpfs_mounts):
+    def unmount_dlck_tmpfs(self, tmpfs_mount):
         """Unmount the memory-backed tmpfs used for testing on the remote hosts.
 
         Args:
-            tmpfs_mounts (str): The mount point of the tmpfs to unmount.
+            tmpfs_mount (str): The mount point of the tmpfs to unmount.
         """
-        cmd = f'umount {tmpfs_mounts}'
+        cmd = f'umount {tmpfs_mount}'
         command_root = command_as_user(command=cmd, user="root")
         result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
         self.log.info("Unmounted dlck tmpfs on remote hosts")
@@ -95,7 +95,8 @@ class DlckBasicTest(TestDlck):
         return []
 
     def test_dlck_basic(self):
-        """Basic Test: Run 'dlck' command
+        """Basic Test: Run 'dlck' command to check
+        the health of the pool and storage.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
@@ -109,7 +110,7 @@ class DlckBasicTest(TestDlck):
         dlck.pool_uuid.value = pool.uuid
         dlck.log_dir.value = self.test_env.log_dir
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
-        tmpfs_mounts = "/mnt/dlck_test"
+        tmpfs_mount = "/mnt/dlck_test"
 
         self.log_step("Perform dmg system stop to run dlck command")
         dmg.system_stop()
@@ -120,14 +121,16 @@ class DlckBasicTest(TestDlck):
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
             self.cleanup_dpdk()
-            self.mount_dlck_tmpfs(tmpfs_mounts=tmpfs_mounts)
+            self.log.info("Setting DAOS_DMA_INIT_PCT=1 for dlck MDonSSD environment")
+            dlck.env["DAOS_DMA_INIT_PCT"] = "1"
+            self.mount_dlck_tmpfs(tmpfs_mount=tmpfs_mount)
             # Make sure to clean the mounts even if the test hits an error.
-            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mounts=tmpfs_mounts)
-            dlck.storage.value = tmpfs_mounts
+            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mount=tmpfs_mount)
+            dlck.storage.value = tmpfs_mount
 
         self.check_daos_engines_stopped()
         self.log_step("Run dlck command to check the health of the pool and storage")
-        dlck.timeout = 180
+        dlck.timeout = 120
         result = dlck.run()
 
         self.log_step("Perform dmg system start after running dlck command")
@@ -153,7 +156,7 @@ class DlckBasicTest(TestDlck):
         self.log.info("Fault injection file: %s", fault_inject_file)
         self.log.info("Faults: %s", fault_list)
         self.log.info("Faults dict: %s", faults_dict)
-        tmpfs_mounts = "/mnt/dlck_test"
+        tmpfs_mount = "/mnt/dlck_test"
         dmg = self.get_dmg_command()
         pool = self.get_pool()
         dlck = self.get_dlck_command()
@@ -172,10 +175,12 @@ class DlckBasicTest(TestDlck):
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
             self.cleanup_dpdk()
-            self.mount_dlck_tmpfs(tmpfs_mounts=tmpfs_mounts)
+            self.log.info("Setting DAOS_DMA_INIT_PCT=1 for dlck MDonSSD environment")
+            dlck.env["DAOS_DMA_INIT_PCT"] = "1"
+            self.mount_dlck_tmpfs(tmpfs_mount=tmpfs_mount)
             # Make sure to clean the mounts even if the test hits an error.
-            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mounts=tmpfs_mounts)
-            dlck.storage.value = tmpfs_mounts
+            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mount=tmpfs_mount)
+            dlck.storage.value = tmpfs_mount
 
         for test_fault in fault_list:
             if test_fault == "DAOS_FAULT_POOL_OPEN_BIO" and \
@@ -196,7 +201,7 @@ class DlckBasicTest(TestDlck):
                              fault_inject_file)
             self.check_daos_engines_stopped()
             self.log_step("Run dlck command after injecting fault")
-            dlck.timeout = 180
+            dlck.timeout = 120
             result = dlck.run()
             errors.extend(self.check_dlck_result(result, test_fault))
 
