@@ -1113,8 +1113,13 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 
 	if (flags & DTX_RELAY)
 		dlh->dlh_relay = 1;
-	if (flags & DTX_LEADER_DELAY)
+	if (flags & DTX_LEADER_DELAY) {
+		/* No healthy shard can execute conditional modification, make client to retry. */
+		if (unlikely(dlh->dlh_normal_sub_cnt == 0))
+			D_GOTO(out, rc = -DER_INPROGRESS);
+
 		dlh->dlh_leader_delay = 1;
+	}
 
 	dth = &dlh->dlh_handle;
 	rc = dtx_handle_init(dti, coh, epoch, dlh->dlh_relay ? false : true, sub_modification_cnt,

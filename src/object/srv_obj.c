@@ -3392,6 +3392,15 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_RESEND) {
 		d_tm_inc_counter(opm->opm_update_resent, 1);
 
+		/*
+		 * The resent DTX maybe required to restart because of lower layer modification
+		 * boundary restriction. If happened, former prepared DTX will be aborted, then
+		 * to avoid skipping set committable because of DAOS_DTX_LEADER_SWITCH, we will
+		 * mark SYNC flag to commit it synchronously.
+		 */
+		if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH))
+			dtx_flags |= DTX_SYNC;
+
 again:
 		rc = obj_handle_resend(ioc.ioc_coc, &orw->orw_dti, &orw->orw_epoch,
 				       orw->orw_map_ver, &flags, &leader, false, mbs);

@@ -5938,13 +5938,12 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 
 	shard_arg = container_of(shard_auxi, struct shard_rw_args, auxi);
 
-	if (daos_handle_is_inval(obj_auxi->th))
-		daos_dti_gen(&shard_arg->dti,
-			     obj_auxi->opc == DAOS_OBJ_RPC_FETCH ||
-			     srv_io_mode != DIM_DTX_FULL_ENABLED ||
-			     daos_obj_is_echo(obj->cob_md.omd_id));
-	else
+	if (daos_handle_is_valid(obj_auxi->th))
 		dc_tx_get_dti(obj_auxi->th, &shard_arg->dti);
+	else if (!obj_auxi->args_initialized)
+		daos_dti_gen(&shard_arg->dti, obj_auxi->opc == DAOS_OBJ_RPC_FETCH ||
+						  srv_io_mode != DIM_DTX_FULL_ENABLED ||
+						  daos_obj_is_echo(obj->cob_md.omd_id));
 
 	shard_arg->bulks = obj_auxi->bulks;
 	if (obj_auxi->req_reasbed) {
@@ -7748,11 +7747,10 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg = container_of(shard_auxi, struct shard_punch_args, pa_auxi);
 	shard_arg->pa_opc = obj_auxi->opc;
 
-	if (daos_handle_is_inval(obj_auxi->th))
-		daos_dti_gen(&shard_arg->pa_dti,
-			     srv_io_mode != DIM_DTX_FULL_ENABLED);
-	else
+	if (daos_handle_is_valid(obj_auxi->th))
 		dc_tx_get_dti(obj_auxi->th, &shard_arg->pa_dti);
+	else if (!obj_auxi->args_initialized)
+		daos_dti_gen(&shard_arg->pa_dti, srv_io_mode != DIM_DTX_FULL_ENABLED);
 
 	return 0;
 }
