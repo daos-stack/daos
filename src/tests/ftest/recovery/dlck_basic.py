@@ -8,6 +8,7 @@ import re
 import time
 
 import yaml
+from ClusterShell.NodeSet import NodeSet
 from dlck_utils import TestDlck
 from fault_config_utils import FaultInjection
 from file_utils import distribute_files
@@ -59,13 +60,38 @@ class DlckBasicTest(TestDlck):
             else:
                 time.sleep(5)
 
-    def cleanup_dpdk(self):
-        """Cleanup DPDK temporary files on the remote hosts."""
-        cmd = 'rm -rf /tmp/dpdk*'
+    def read_nr_hugepages(self, host):
+        """Return the number of persistent huge pages on one server."""
+        hosts = NodeSet(host)
+        if len(hosts) != 1:
+            self.fail(f"Expected a single server hostname, got {host!r}")
+        result = run_remote(
+            self.log, hosts, "sysctl -n vm.nr_hugepages", stderr=True
+        )
+        if hosts - result.passed_hosts:
+            self.fail(f"Could not read vm.nr_hugepages on {host}")
+        return int(result.joined_stdout.strip())
+
+    def setup_dlck_env(self):
+        """Setup the environment for dlck tests."""
+        cmd = 'bash -c "rm -rf /tmp/dpdk* &&' \
+              'sync && echo 3 | tee /proc/sys/vm/drop_caches && ' \
+              'echo 1 | sudo tee /proc/sys/vm/compact_memory && ' \
+              'sysctl -w vm.nr_hugepages=9216"'
         command_root = command_as_user(command=cmd, user="root")
         result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
         if not result.passed:
             self.fail(f"{command_root} failed on {result.failed_hosts}")
+
+    def revert_nr_hugepages(self, host, nr_hugepages):
+        """Restore the number of persistent huge pages and return cleanup errors."""
+        cmd = f'sysctl -w vm.nr_hugepages={nr_hugepages}'
+        command_root = command_as_user(command=cmd, user="root")
+        hosts = NodeSet(host)
+        result = run_remote(log=self.log, hosts=hosts, command=command_root)
+        if hosts - result.passed_hosts:
+            return [f"{command_root} failed on {host}"]
+        return []
 
     def mount_dlck_tmpfs(self, tmpfs_mounts):
         """Mount 124G of memory-backed tmpfs for testing purposes on the remote hosts.
@@ -119,7 +145,11 @@ class DlckBasicTest(TestDlck):
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
-            self.cleanup_dpdk()
+            orig_hugepages = {host: self.read_nr_hugepages(host) for host in self.hostlist_servers}
+            for host, nr_hugepages in orig_hugepages.items():
+                dlck.register_cleanup_method(
+                    self.revert_nr_hugepages, host=host, nr_hugepages=nr_hugepages)
+            self.setup_dlck_env()
             self.mount_dlck_tmpfs(tmpfs_mounts=tmpfs_mounts)
             # Make sure to clean the mounts even if the test hits an error.
             dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mounts=tmpfs_mounts)
@@ -171,7 +201,11 @@ class DlckBasicTest(TestDlck):
             dlck.nvme.value = os.path.join(
                 self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
                 "daos_nvme.conf")
-            self.cleanup_dpdk()
+            orig_hugepages = {host: self.read_nr_hugepages(host) for host in self.hostlist_servers}
+            for host, nr_hugepages in orig_hugepages.items():
+                dlck.register_cleanup_method(
+                    self.revert_nr_hugepages, host=host, nr_hugepages=nr_hugepages)
+            self.setup_dlck_env()
             self.mount_dlck_tmpfs(tmpfs_mounts=tmpfs_mounts)
             # Make sure to clean the mounts even if the test hits an error.
             dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mounts=tmpfs_mounts)
