@@ -159,7 +159,9 @@ def generate(env):
     # If not already set in the environment, define some parameters for the Go toolchain
     # that allow it to download and use a newer version as required to meet the requirements
     # defined in go.mod.
-    if 'GOTOOLCHAIN' not in env['ENV']:
+    if os.environ.get('DAOS_GO_CANDIDATE_VALIDATION') == '1':
+        env['ENV']['GOTOOLCHAIN'] = 'local'
+    elif 'GOTOOLCHAIN' not in env['ENV']:
         env['ENV']['GOTOOLCHAIN'] = 'auto'
     if 'GOSUMDB' not in env['ENV']:
         env['ENV']['GOSUMDB'] = 'sum.golang.org'
