@@ -1193,9 +1193,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	if (dth->dth_solo) {
 		/*
 		 * For very rare case, from client perspective, there is unique available
-		 * shard and curent dth is marked solo. But oringal DTX MBS contains more
-		 * participants. Let's commit it now instead of waiting for DTX resync to
-		 * handle it. If failed, then make client to retry sometime later.
+		 * shard and current dth is marked solo. But the original DTX MBS contains
+		 * more participants. Let's commit it now instead of waiting for DTX resync
+		 * to handle it. If failed, then make client to retry sometime later.
 		 */
 		if (result == 0 && unlikely(dth->dth_prepared)) {
 			rc = vos_dtx_commit(cont->sc_hdl, &dth->dth_xid, 1, false, NULL);

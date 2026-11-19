@@ -3368,7 +3368,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	tgts = orw->orw_shard_tgts.ca_arrays;
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
-	if (tgts[0].st_flags & DTF_DELAY_FORWARD)
+	if (tgt_cnt > 0 && tgts[0].st_flags & DTF_DELAY_FORWARD)
 		dtx_flags |= DTX_LEADER_DELAY;
 
 	rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
@@ -4339,7 +4339,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	tgts = opi->opi_shard_tgts.ca_arrays;
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
-	if (tgts[0].st_flags & DTF_DELAY_FORWARD)
+	if (tgt_cnt > 0 && tgts[0].st_flags & DTF_DELAY_FORWARD)
 		dtx_flags |= DTX_LEADER_DELAY;
 
 	rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
