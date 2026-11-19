@@ -11,6 +11,7 @@ import os
 from time import sleep, time
 
 from avocado import TestFail, fail_on
+from ClusterShell.NodeSet import NodeSet
 from command_utils import BasicParameter
 from data_utils import assert_dict_subset
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
@@ -21,6 +22,29 @@ from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
+DEFAULT_POOL_PROPS = {
+    "checkpoint": "timed",
+    "checkpoint_freq": 5,
+    "checkpoint_thresh": 50,
+    "data_thresh": 4096,
+    "ec_cell_sz": 131072,   # 128 KiB
+    "ec_pda": 1,
+    "global_version": 4,
+    "perf_domain": "root",
+    "rd_fac": 3,
+    "reclaim": "lazy",
+    "reintegration": "data_sync",
+    "rp_pda": 4294967295,
+    "scrub": "off",
+    "scrub_freq": 604800,
+    "scrub_thresh": 0,
+    "self_heal": "exclude;rebuild",
+    "space_rb": 5,
+    "svc_ops_enabled": 1,
+    "svc_ops_entry_age": 300,
+    "svc_rf": 2,
+    "upgrade_status": "not started"
+}
 
 
 def get_size_params(pool):
@@ -170,7 +194,7 @@ class TestPool(TestDaosApiBase):
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)                           # name of property to be set
         self.prop_value = BasicParameter(None)                          # value of property
-        self.properties = BasicParameter(None, "rd_fac:0,space_rb:0")   # string of cs name:value
+        self.properties = BasicParameter(None)                          # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.pool_query_delay = BasicParameter(None)
@@ -199,10 +223,8 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.svc_leader = None
+        self.__ranks = []
         self.connected = False
-        # Flag to allow the non-create operations to use UUID. e.g., if you want
-        # to destroy the pool with UUID, set this to False, then call destroy().
-        self.use_label = True
 
         self._dmg = None
         self.dmg = dmg_command
@@ -269,20 +291,6 @@ class TestPool(TestDaosApiBase):
         """
         if self.pool:
             self.pool.set_uuid_str(value)
-
-    @property
-    def identifier(self):
-        """Get the pool uuid or label.
-
-        Returns:
-            str: pool label if using labels and one is defined; otherwise the
-                pool uuid
-
-        """
-        identifier = self.uuid
-        if self.use_label and self.label.value is not None:
-            identifier = self.label.value
-        return identifier
 
     @property
     def dmg(self):
@@ -421,6 +429,9 @@ class TestPool(TestDaosApiBase):
             self.scm_per_rank = data["scm_per_rank"]
             self.nvme_per_rank = data["nvme_per_rank"]
 
+            # Set ranks for the pool
+            self.__ranks = [int(rank) for rank in data["ranks"].split(",")]
+
         # Set the TestPool attributes for the created pool
         if self.pool.attached:
             self.svc_ranks = [
@@ -506,6 +517,7 @@ class TestPool(TestDaosApiBase):
             self.pool = None
             self.info = None
             self.svc_ranks = None
+            self.__ranks = []
 
         return status
 
@@ -641,6 +653,18 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
 
+    def verify_prop(self, expected_props):
+        """Verify pool properties match expected values.
+
+        Args:
+            expected_props (dict): expected properties and values
+
+        Raises:
+            AssertionError: If any property does not match the expected value.
+        """
+        result = self.get_prop(name=list(expected_props.keys()))
+        self.validate_properties(result, expected_props)
+
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
         """Get the pool property with the specified name.
@@ -756,13 +780,53 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
 
     def rebuild_stop(self, *args, **kwargs):
-        """Use dmg to stop rebuild on this pool.
+        """Stop rebuild on this pool with dmg pool rebuild stop.
+
+        Raises:
+            CommandFailure: if the command fails
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
         return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
+
+    def rebuild_stop_retry(self, timeout=60, interval=3, force=False):
+        """Stop rebuild on this pool with dmg pool rebuild stop.
+
+        Retries the command until it succeeds or the timeout is reached.
+
+        Args:
+            timeout (int, optional): Maximum time to wait for rebuild to stop in seconds.
+                Defaults to 60.
+            interval (int, optional): Time to wait between retries in seconds. Defaults to 3.
+            force (bool, optional): Whether to force stop the rebuild. Defaults to False.
+
+        Raises:
+            CommandFailure: if the command fails for any reason other than
+                DER_NONEXIST or if the timeout is reached.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        time_start = time()
+        while True:
+            try:
+                return self.rebuild_stop(force=force)
+            except CommandFailure as error:
+                # Any error other than DER_NONEXIST is a real error
+                if 'DER_NONEXIST' not in str(error):
+                    raise
+                # Raise a failure if we exceed the max wait time
+                if time() - time_start > timeout:
+                    raise CommandFailure(
+                        f"Failed to stop rebuild after {timeout} seconds"
+                    ) from error
+                # Otherwise, sleep and retry
+                self.log.info(
+                    'Assuming rebuild is not started yet. Retrying in %s seconds...', interval)
+                sleep(interval)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
@@ -1543,3 +1607,17 @@ class TestPool(TestDaosApiBase):
                     raise AssertionError(
                         f'Expected target {target} to be in state {expected_target_state}, '
                         f'but current state is {info["target_state"]}')
+
+    def get_fault_domains(self, rank_info):
+        """Get the fault domains for this pool.
+
+        Args:
+            rank_info (dict): The server rank information containing each rank (keys) and the host
+                on which it runs (value).
+
+        Returns:
+            NodeSet: The set of fault domains for this pool.
+
+        """
+        return NodeSet.fromlist(
+            [host for rank, host in rank_info.items() if rank in self.__ranks])

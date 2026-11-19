@@ -1,4 +1,7 @@
 %changelog
+* Mon Nov 09 2026  Kris Jacque <kris.jacque@hpe.com> - 2.8.1-6
+- Remove build requirement for ipmctl. This package is now optional.
+
 * Thu Nov 05 2026 Jerome Soumagne <jerome.soumagne@hpe.com> - 2.8.1-5
 - Remove boost-devel dependency (now uses internal headers)
 
