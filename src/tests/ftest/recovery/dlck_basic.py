@@ -128,6 +128,7 @@ class DlckBasicTest(TestDlck):
         self.check_daos_engines_stopped()
         self.log_step("Run dlck command to check the health of the pool and storage")
         dlck.timeout = 180
+        dlck.env["DAOS_DMA_INIT_PCT"] = "1"
         result = dlck.run()
 
         self.log_step("Perform dmg system start after running dlck command")
@@ -161,6 +162,7 @@ class DlckBasicTest(TestDlck):
         dlck.log_dir.value = self.test_env.log_dir
         dlck.exit_status_exception = False
         dlck.env["D_FI_CONFIG"] = fault_inject_file
+        dlck.env["DAOS_DMA_INIT_PCT"] = "1"
         dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
 
         self.log_step("Perform dmg system stop to run dlck command")
