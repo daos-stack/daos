@@ -14,7 +14,7 @@ dlck_ut_filter(int argc, char **argv)
 {
 #if CMOCKA_FILTER_SUPPORTED
 	static char filter[256];
-	int  rc;
+	int         rc;
 
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s <test_filter>\n", argv[0]);
