@@ -82,8 +82,10 @@ class ChangeFabricProvider(IorTestBase):
         """
         # Get all supported providers for the interface in use
         self.log_step("Choose a new common provider")
+
+        first_interface = self.test_env.interface.split(",", maxsplit=1)[0]
         common_providers = get_common_provider(
-            self.log, self.host_info.all_hosts, self.test_env.interface)
+            self.log, self.host_info.all_hosts, first_interface)
 
         # Find a different provider than the input provider
         alternate_providers = (
