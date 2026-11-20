@@ -1672,6 +1672,7 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 		"system unavailable":   system.ErrRaftUnavail,
 		"connection closed":    FaultConnectionClosed(""),
 		"connection refused":   FaultConnectionRefused(""),
+		"network unreachable":  FaultConnectionNetUnreachable(""),
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)

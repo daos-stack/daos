@@ -32,6 +32,11 @@ func TestControl_connErrToFault(t *testing.T) {
 			st:     status.New(codes.Unavailable, "no route to host"),
 			expErr: FaultConnectionNoRoute(testTarget),
 		},
+		"network is unreachable": {
+			st: status.New(codes.Unavailable,
+				`connection error: desc = "transport: error while dialing: dial tcp 192.0.2.68:10001: connect: network is unreachable"`),
+			expErr: FaultConnectionNetUnreachable(testTarget),
+		},
 		"nonexistent host": {
 			st:     status.New(codes.Unavailable, "no such host"),
 			expErr: FaultConnectionBadHost(testTarget),

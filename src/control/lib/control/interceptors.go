@@ -11,6 +11,7 @@ import (
 	"context"
 	"net"
 	"strings"
+	"syscall"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -35,6 +36,8 @@ func connErrToFault(st *status.Status, target string) error {
 		return FaultConnectionClosed(target)
 	case strings.Contains(st.Message(), "no route to host"):
 		return FaultConnectionNoRoute(target)
+	case strings.Contains(st.Message(), syscall.ENETUNREACH.Error()):
+		return FaultConnectionNetUnreachable(target)
 	case strings.Contains(st.Message(), "no such host"):
 		return FaultConnectionBadHost(target)
 	case strings.Contains(st.Message(), "certificate has expired"):
