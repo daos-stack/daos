@@ -1684,6 +1684,224 @@ ec_singv_diff_size_fetch(void **state)
 	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 12 * 1024, 4000);
 }
 
+/* A stale cell of an overwritten EC single value must not fail the fetch.
+ *
+ * An evenly distributed single value of @old_len bytes is overwritten by one of
+ * @new_len bytes that is only stored on one data shard and the parity shards, so
+ * the other data shards keep a cell of the old record. A fetch with unknown size
+ * and a large buffer reads both kinds of shards to the same buffer.
+ * DAOS_OBJ_EC_SINGV_FETCH_RACE orders the bulk transfers and the replies of the
+ * shards as told by @race. The fetch must return the latest record and must not
+ * report any checksum error to the servers. If @old_len is zero only the new
+ * record is written.
+ */
+enum singv_race {
+	/* The stale shards are handled after the newer record landed in the buffer, but
+	 * before the reply that tells its size.
+	 */
+	SINGV_RACE_NEW_LAST,
+	/* The stale cells land on top of the newer record, after its size is known. */
+	SINGV_RACE_OLD_LAST,
+	/* As SINGV_RACE_NEW_LAST, and the fetch of the shard holding the newer record
+	 * fails once after its data landed, so its size is not replied.
+	 */
+	SINGV_RACE_NEW_FAIL,
+	/* The stale cells land on top of the newer record, and the stale shards are handled
+	 * before the reply that tells its size.
+	 */
+	SINGV_RACE_NEW_REPLY_LAST,
+};
+
+static void
+ec_singv_stale_shard_fetch_one(test_arg_t *arg, daos_handle_t coh, const char *akey,
+			       uint32_t old_len, uint32_t new_len, daos_size_t buf_len,
+			       bool degraded, enum singv_race race)
+{
+	uint64_t      fail_loc = DAOS_OBJ_EC_SINGV_FETCH_RACE | DAOS_FAIL_ALWAYS;
+	uint64_t      fail_val = new_len;
+	uint16_t      fail_shards[2];
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	d_iov_t       dkey;
+	d_sg_list_t   sgl;
+	d_iov_t       sg_iov;
+	daos_iod_t    iod;
+	daos_size_t   size;
+	char         *buf;
+	char         *fetch_buf;
+	uint64_t      csum_report_nr;
+	int           rc;
+
+	/* by default the buffer is large enough for the cells of both records */
+	size = buf_len != 0 ? buf_len : max(old_len, new_len) + 17 * 1024;
+	print_message("%s fetch, old record %u bytes, new record %u bytes, buffer " DF_U64
+		      " bytes, race %d\n",
+		      degraded ? "degraded" : "normal", old_len, new_len, size, race);
+	if (race == SINGV_RACE_OLD_LAST)
+		fail_val = old_len;
+	else if (race == SINGV_RACE_NEW_FAIL)
+		fail_loc = DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL | DAOS_FAIL_ONCE;
+	else if (race == SINGV_RACE_NEW_REPLY_LAST)
+		fail_loc = DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY | DAOS_FAIL_ALWAYS;
+
+	oid = daos_test_oid_gen(coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	rc  = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&iod.iod_name, (void *)akey, strlen(akey));
+	iod.iod_nr    = 1;
+	iod.iod_recxs = NULL;
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iov;
+
+	D_ALLOC(buf, max(old_len, new_len));
+	assert_non_null(buf);
+	if (old_len != 0) {
+		dts_buf_render(buf, old_len);
+		d_iov_set(&sg_iov, buf, old_len);
+		iod.iod_size = old_len;
+		rc           = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	dts_buf_render(buf, new_len);
+	d_iov_set(&sg_iov, buf, new_len);
+	iod.iod_size = new_len;
+	rc           = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+
+	if (degraded) {
+		fail_shards[0] = 0;
+		fail_shards[1] = 3;
+		daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
+		daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+	}
+	/* fail_value is the size of the record to be transferred later */
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc, fail_val, NULL);
+	assert_rc_equal(rc, 0);
+
+	csum_report_nr = dc_obj_csum_report_nr();
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size = DAOS_REC_ANY;
+	rc           = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, new_len);
+	assert_memory_equal(buf, fetch_buf, new_len);
+	/* no data is corrupted, no checksum error should be reported to the servers */
+	assert_int_equal(dc_obj_csum_report_nr(), csum_report_nr);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+	D_FREE(fetch_buf);
+}
+
+static void
+ec_singv_cont_create(test_arg_t *arg, uint64_t csum, daos_handle_t *coh, char *co_str)
+{
+	daos_prop_t *props;
+	uuid_t       co_uuid;
+	int          rc;
+
+	props = daos_prop_alloc(2);
+	assert_non_null(props);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[0].dpe_val  = csum;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[1].dpe_val  = DAOS_PROP_CO_REDUN_RANK;
+	rc                             = daos_cont_create(arg->pool.poh, &co_uuid, props, NULL);
+	daos_prop_free(props);
+	assert_rc_equal(rc, 0);
+	uuid_unparse(co_uuid, co_str);
+	rc = daos_cont_open(arg->pool.poh, co_str, DAOS_COO_RW, coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+ec_singv_stale_shard_fetch(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_handle_t coh;
+	daos_handle_t coh_nocsum;
+	char          co_str[37];
+	char          co_str_nocsum[37];
+	int           rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	/* The checksum of the fetched data is only verified if checksum is enabled for the
+	 * container, do not depend on the default container properties for that.
+	 */
+	ec_singv_cont_create(arg, DAOS_PROP_CO_CSUM_CRC32, &coh, co_str);
+	ec_singv_cont_create(arg, DAOS_PROP_CO_CSUM_OFF, &coh_nocsum, co_str_nocsum);
+
+	/* The new record lands on top of the stale cells: the verification of the stale
+	 * shards is deferred, and the fetch is done again with the replied size.
+	 */
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_overlap", 4103, 4095, 0, false,
+				       SINGV_RACE_NEW_LAST);
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_overlap_deg", 4103, 4095, 0, true,
+				       SINGV_RACE_NEW_LAST);
+	/* The stale cells land on top of the new record: the shard holding the new record
+	 * is not verified with the layout of the request, the fetch is done again.
+	 */
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_overlap_rev", 4103, 4095, 0, false,
+				       SINGV_RACE_OLD_LAST);
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_overlap_rev_deg", 4103, 4095, 0, true,
+				       SINGV_RACE_OLD_LAST);
+	/* The new record lands on top of the stale cells, but its size is not replied as the
+	 * fetch of its shard fails: the stale shards cannot be verified, the fetch is retried.
+	 */
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_overlap_fail", 4103, 4095, 0, false,
+				       SINGV_RACE_NEW_FAIL);
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_overlap_fail_deg", 4103, 4095, 0, true,
+				       SINGV_RACE_NEW_FAIL);
+	/* The new record ends before the stale cells: the verification of the stale
+	 * shards is deferred, and done when all the shards replied.
+	 */
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_short", 4103, 1000, 0, false,
+				       SINGV_RACE_NEW_LAST);
+	/* The stale cells are beyond any record that is stored on one data shard, the
+	 * stale shards are verified when they reply.
+	 */
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_far", 20000, 4095, 0, false,
+				       SINGV_RACE_NEW_LAST);
+	/* The other data shards hold nothing. */
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_no_stale", 0, 4095, 0, false,
+				       SINGV_RACE_NEW_LAST);
+
+	/* The buffer is too small for the last stale cell, its shard replies -DER_REC2BIG.
+	 * The stale cells of the other shards land on top of the new record, and all the
+	 * stale shards are handled before the size of the new record is known: the size
+	 * conflict has to be detected and the fetch done again, with and without checksum.
+	 */
+	ec_singv_stale_shard_fetch_one(arg, coh, "akey_rec2big", 6000, 4095, 5000, false,
+				       SINGV_RACE_NEW_REPLY_LAST);
+	ec_singv_stale_shard_fetch_one(arg, coh_nocsum, "akey_rec2big_nocsum", 6000, 4095, 5000,
+				       false, SINGV_RACE_NEW_REPLY_LAST);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, co_str, 1, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh_nocsum, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, co_str_nocsum, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static void
 ec_cond_fetch(void **state)
 {
@@ -3594,6 +3812,8 @@ static const struct CMUnitTest ec_tests[] = {
     {"EC34: cont clone copy of a random workload", ec_clone_random, async_disable,
      test_case_teardown},
     {"EC35: cont clone copy under a snapshot", clone_epoch_skew, async_disable, test_case_teardown},
+    {"EC36: ec single-value stale shard fetch", ec_singv_stale_shard_fetch, async_disable,
+     test_case_teardown},
 };
 
 int

@@ -1005,6 +1005,47 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 	return daos_recx_ep_add(recov_list, &recx_ep);
 }
 
+/* Fault injection for the fetch of EC single values, see DAOS_OBJ_EC_SINGV_FETCH_RACE,
+ * DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL and DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY. Return true if
+ * the replies have to race, set \a late if this shard has to transfer its data later than
+ * the others, \a last if it has to reply later than the others, and \a fail if it has to
+ * fail the fetch after the transfer.
+ */
+static bool
+obj_fetch_singv_race(daos_iod_t *iods, uint32_t iods_nr, bool *late, bool *last, bool *fail)
+{
+	bool     singv = false;
+	bool     match = false;
+	uint32_t i;
+
+	for (i = 0; i < iods_nr; i++) {
+		if (iods[i].iod_type != DAOS_IOD_SINGLE)
+			continue;
+		singv = true;
+		if (iods[i].iod_size == daos_fail_value_get())
+			match = true;
+	}
+	if (!singv)
+		return false;
+
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE)) {
+		*late = match;
+		return true;
+	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL)) {
+		*late = match;
+		*fail = match;
+		return true;
+	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY)) {
+		*late = !match;
+		*last = match;
+		return true;
+	}
+
+	return false;
+}
+
 /** Filter and prepare for the sing value EC update/fetch */
 int
 obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
@@ -1745,9 +1786,26 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 
 	if (rma) {
+		bool singv_race = false;
+		bool singv_late = false;
+		bool singv_last = false;
+		bool singv_fail = false;
+
+		if (obj_rpc_is_fetch(rpc))
+			singv_race = obj_fetch_singv_race(iods, iods_nr, &singv_late, &singv_last,
+							  &singv_fail);
+		/* let the shards with other record size transfer first */
+		if (singv_late)
+			dss_sleep(500);
+
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
 				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL);
+		/* reply after all shards' data landed in the client buffer */
+		if (rc == 0 && singv_race)
+			dss_sleep(singv_last ? 2000 : 1000);
+		if (rc == 0 && singv_fail)
+			rc = -DER_TIMEDOUT;
 		if (rc == 0) {
 			bio_iod_flush(biod);
 

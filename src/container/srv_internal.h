@@ -57,6 +57,13 @@ dsm_tls_get()
 	return tls;
 }
 
+/* The container does not exist or is being destroyed, expected if racing with a destroy */
+static inline bool
+cont_gone_rc(int rc)
+{
+	return rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING;
+}
+
 enum cont_destroyer_task_state {
 	CONT_DESTROYER_TASK_IDLE,     /* waiting for csdt_next_attempt and an in-flight slot */
 	CONT_DESTROYER_TASK_BCASTING, /* CONT_TGT_DESTROY bcast in flight */
