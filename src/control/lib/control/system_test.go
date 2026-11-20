@@ -1698,6 +1698,28 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 	}
 }
 
+func TestControl_SystemJoin_NonRetryableErrors(t *testing.T) {
+	for name, testErr := range map[string]error{
+		"connection bad host": FaultConnectionBadHost("badhost"),
+		"connection no route": FaultConnectionNoRoute("10.0.0.1"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", testErr, nil),
+					MockMSResponse("", nil, &mgmtpb.JoinResp{Rank: 42}),
+				},
+			})
+
+			_, gotErr := SystemJoin(test.Context(t), client, &SystemJoinReq{})
+			test.CmpErr(t, testErr, gotErr)
+		})
+	}
+}
+
 func TestControl_SystemJoin_Timeouts(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig

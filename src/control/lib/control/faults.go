@@ -100,8 +100,8 @@ func FaultConnectionNoRoute(srvAddr string) *fault.Fault {
 func FaultConnectionNetUnreachable(srvAddr string) *fault.Fault {
 	return clientFault(
 		code.ClientConnectionNetUnreachable,
-		fmt.Sprintf("this host has no route to the network of the server address (%s)", srvAddr),
-		"verify that the local network interface is up and that a route to the server's network is configured",
+		fmt.Sprintf("the network of the server at %s is unreachable", srvAddr),
+		"verify that the configured address is correct and that the connecting host has a route to the server's network",
 	)
 }
 
