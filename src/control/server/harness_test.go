@@ -801,7 +801,6 @@ func TestServer_Harness_preflight(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc // the preflight closure outlives the subtest's loop iteration
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)

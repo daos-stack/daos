@@ -1632,22 +1632,23 @@ configuration file `scm_mount` parameter should be mounted and should contain
 the necessary DAOS metadata indicating that the server has been formatted.
 
 When starting, `daos_server` will skip `maintenance mode` if valid DAOS metadata
-is found in `scm_mount`, and will start the I/O engines that the system expects
-to be running (see [Engine Startup](administration.md#engine-startup)).
+is found in `scm_mount`, and will restart the I/O engines whose ranks are already
+members of the system. Engines that have never joined wait for
+`dmg system initialize` (see [Engine Startup](administration.md#engine-startup)).
 
 ## System Initialization
 
 `dmg -l <host>[,...] system initialize` starts the I/O engines on the formatted
-storage nodes and waits for them to join the system. It is run once, after the
-first format, and may be rerun if some hosts did not join. To add storage nodes
-to a system that already has pools, format them and run
+storage nodes and waits for them to join the system. It is run after the first
+format, and may be rerun to pick up hosts that did not join, until the first
+pool is created. After that, format new storage nodes and run
 `dmg -l <host>[,...] system extend` instead.
 
 Successful start-up is indicated by the following on stdout:
 `DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
 
 To format and start the engines in one step, as earlier releases did, run
-`dmg storage format --start`; the engines join without `dmg system initialize`.
+`dmg storage format --init`; the engines join without `dmg system initialize`.
 
 ## Agent Setup
 

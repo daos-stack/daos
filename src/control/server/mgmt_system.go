@@ -639,7 +639,7 @@ func (svc *mgmtSvc) startHoldReason(rank ranklist.Rank) (string, error) {
 		return "", err
 	}
 	if !member.State.StartsOnBoot() {
-		return fmt.Sprintf("rank %d is %s; awaiting dmg system start", member.Rank, member.State), nil
+		return fmt.Sprintf("rank %d is %s; awaiting dmg system clear-exclude", member.Rank, member.State), nil
 	}
 	return "", nil
 }

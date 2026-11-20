@@ -226,7 +226,7 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, force=False, timeout=30, verbose=False, start=False):
+    def storage_format(self, force=False, timeout=30, verbose=False, init=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -239,7 +239,7 @@ class DmgCommand(DmgCommandBase):
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
-            start (bool): start the engines after formatting instead of waiting
+            init (bool): initialize the system after formatting instead of waiting
                 for dmg system initialize. Defaults to False
 
         Returns:
@@ -254,7 +254,7 @@ class DmgCommand(DmgCommandBase):
         try:
             self.timeout = timeout
             self._get_result(
-                ("storage", "format"), force=force, verbose=verbose, start=start)
+                ("storage", "format"), force=force, verbose=verbose, init=init)
         finally:
             self.timeout = saved_timeout
         return self.result

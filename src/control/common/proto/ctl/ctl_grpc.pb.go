@@ -77,7 +77,7 @@ type CtlSvcClient interface {
 	ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Start DAOS I/O Engines on a host by instance index. (gRPC fanout)
+	// Start every DAOS I/O Engine held on a host. (gRPC fanout)
 	StartEngines(ctx context.Context, in *StartEnginesReq, opts ...grpc.CallOption) (*StartEnginesResp, error)
 	// Perform a Log collection on Servers for support/debug purpose
 	CollectLog(ctx context.Context, in *CollectLogReq, opts ...grpc.CallOption) (*CollectLogResp, error)
@@ -277,7 +277,7 @@ type CtlSvcServer interface {
 	ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	StartRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Start DAOS I/O Engines on a host by instance index. (gRPC fanout)
+	// Start every DAOS I/O Engine held on a host. (gRPC fanout)
 	StartEngines(context.Context, *StartEnginesReq) (*StartEnginesResp, error)
 	// Perform a Log collection on Servers for support/debug purpose
 	CollectLog(context.Context, *CollectLogReq) (*CollectLogResp, error)

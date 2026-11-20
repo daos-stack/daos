@@ -191,6 +191,7 @@ func TestSystem_MemberState_isTransitionIllegal(t *testing.T) {
 				MemberStateAwaitFormat,
 				MemberStateAwaitStart,
 				MemberStateCheckerStarted,
+				MemberStateExcluded,
 				MemberStateErrored,
 				MemberStateJoined,
 				MemberStateReady,

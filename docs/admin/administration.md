@@ -985,19 +985,6 @@ The output table will indicate action and result.
 While the engines are stopped, the DAOS servers will continue to
 operate and listen on the management network.
 
-A stopped rank stays stopped across a restart of its `daos_server`, so a
-planned outage of some or all storage nodes is `dmg system stop`, reboot or
-service the nodes, then `dmg system start` once every node is back. The
-engines come up together rather than as each node returns, which keeps the
-pool services on the early nodes from excluding the ranks on the late ones.
-
-The same holds for a subset of ranks: a rank stopped for maintenance on its
-node needs `dmg system start` once the node is back. Its pools still exclude
-it under their self-heal policy just as they would a failed rank, including a
-rank left stopped when the rest of a stopped system is started. To stop a
-rank without a pool exclusion, disable self-heal exclusion on its pools
-first.
-
 !!! warning
     All engines monitor each other and pro-actively exclude unresponsive
     members. It is critical to properly stop a DAOS system as with dmg in
@@ -1048,9 +1035,8 @@ be reintegrated. Please see the pool operation section for more information.
 A `daos_server` only starts an I/O engine when the system expects it to be
 running. After the first `dmg storage format`, engines wait for
 `dmg system initialize` (or `dmg system extend` for hosts added later). When
-`daos_server` restarts, an engine whose rank was stopped with `dmg system stop`
-stays stopped until `dmg system start`; any other rank that was a member is
-restarted.
+`daos_server` restarts, it restarts the engines whose ranks are members of the
+system.
 
 - Initialize a System:
 
@@ -1062,6 +1048,8 @@ Starts the engines on the listed hosts (or the hosts in the dmg configuration
 file) and waits for them to join. With `--timeout`, hosts whose engines had
 not joined when it expired are named in the output and the command may be
 rerun once they are fixed; without it, the command waits until interrupted.
+A host that has not been formatted is reported as an error
+(`N engines awaiting format`) and the other hosts proceed.
 
 - Extend a System:
 
@@ -1071,7 +1059,7 @@ $ dmg system extend -l ${new_storage_nodes} [--timeout=<duration>]
 
 The same operation for hosts added to a system that already has pools.
 
-`dmg storage format --start` formats and starts the engines in one step, as
+`dmg storage format --init` formats and starts the engines in one step, as
 earlier releases did; on hosts that are already formatted it starts the engines
 still waiting. `dmg storage format --replace` also starts the engine it
 formats, so the rank it replaces rejoins without a further command.

@@ -1885,7 +1885,7 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 				Engines: []*mgmtpb.EnginePreflightResp_Engine{hold(0, notMember)},
 			},
 		},
-		"stopped rank": {
+		"stopped rank starts": {
 			req: &mgmtpb.EnginePreflightReq{Engines: engines(1)},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
@@ -1893,7 +1893,7 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 			},
 			expResp: &mgmtpb.EnginePreflightResp{
 				Engines: []*mgmtpb.EnginePreflightResp_Engine{
-					hold(0, "rank 1 is Stopped; awaiting dmg system start"),
+					start(0),
 				},
 			},
 		},
@@ -1910,12 +1910,12 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 			req: &mgmtpb.EnginePreflightReq{Engines: engines(0, 1, uint32(ranklist.NilRank))},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
 			},
 			expResp: &mgmtpb.EnginePreflightResp{
 				Engines: []*mgmtpb.EnginePreflightResp_Engine{
 					start(0),
-					hold(1, "rank 1 is Stopped; awaiting dmg system start"),
+					hold(1, "rank 1 is AdminExcluded; awaiting dmg system clear-exclude"),
 					hold(2, notMember),
 				},
 			},

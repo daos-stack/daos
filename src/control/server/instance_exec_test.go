@@ -142,7 +142,7 @@ func TestServer_EngineInstance_awaitStart(t *testing.T) {
 		"not held": {
 			expState: system.MemberStateStopped,
 		},
-		"released by format --start before the gate": {
+		"released by format --init before the gate": {
 			held:     true,
 			notify:   true,
 			expState: system.MemberStateStopped,
