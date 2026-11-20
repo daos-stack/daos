@@ -955,6 +955,8 @@ enum {
 #define DAOS_CONT_EC_BOUNDARY_FREEZE       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa5)
 /* cap the EC aggregation upper bound at the epoch given by fail_value */
 #define DAOS_CONT_EC_AGG_EPOCH_MAX         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa6)
+/* Convert update to internal TX, then restart the convert TX via stale pool map check */
+#define DAOS_FAIL_TX_CONVERT_RESTART       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xab)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)

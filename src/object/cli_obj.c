@@ -6783,7 +6783,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	if (daos_fail_check(DAOS_FAIL_TX_CONVERT))
+	if (daos_fail_check(DAOS_FAIL_TX_CONVERT) || daos_fail_check(DAOS_FAIL_TX_CONVERT_RESTART))
 		D_GOTO(out_task, rc = -DER_NEED_TX);
 
 	/* For update, based on re-assembled sgl for csum calculate (to match with iod).
