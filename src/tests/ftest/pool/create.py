@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_pool import add_pool, check_pool_creation, get_size_params
+from test_utils_pool import check_pool_creation, get_size_params
 
 
 class PoolCreateTests(TestWithServers):
@@ -39,7 +39,7 @@ class PoolCreateTests(TestWithServers):
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
         data = self.server_managers[0].get_available_storage()
         params = {"scm_size": int(float(data["scm"]) * 0.9)}
-        pool = add_pool(self, namespace="/run/pool_1/*", create=False, **params)
+        pool = self.get_pool(namespace="/run/pool_1/*", create=False, **params)
         check_pool_creation(self, [pool], 60)
 
     def test_create_max_pool(self):
@@ -56,7 +56,7 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=PoolCreateTests,test_create_max_pool
         """
         # Create 1 pool using almost all of the available capacity
-        pool = add_pool(self, namespace="/run/pool_2/*", create=False)
+        pool = self.get_pool(namespace="/run/pool_2/*", create=False)
         check_pool_creation(self, [pool], 120)
 
     def test_create_no_space_loop(self):
@@ -91,11 +91,11 @@ class PoolCreateTests(TestWithServers):
         self.get_dmg_command().exit_status_exception = False
 
         # Create the first of three pools which should succeed.
-        pools = [add_pool(self, namespace="/run/pool_2/*", create=False, **params[0])]
+        pools = [self.get_pool(namespace="/run/pool_2/*", create=False, **params[0])]
         self.log.info("Creating")
         pools[0].create()
-        self.assertTrue(
-            pools[0].dmg.result.exit_status == 0,
+        self.assertEqual(
+            pools[0].dmg.result.exit_status, 0,
             "Creating a large capacity pool on a single server should succeed."
         )
 
@@ -104,7 +104,7 @@ class PoolCreateTests(TestWithServers):
         for index in range(1, 3):
             params[index].update(size_params)
             pools.append(
-                add_pool(self, namespace="/run/pool_2/*", create=False, **params[index]))
+                self.get_pool(namespace="/run/pool_2/*", create=False, **params[index]))
 
         for index in range(20):
             # Create the second of three pools which should fail due to not enough space.
@@ -137,3 +137,23 @@ class PoolCreateTests(TestWithServers):
                 self.fail(
                     "Destroying a large capacity pool that spans across all but the first server "
                     "should succeed.")
+
+    def test_create_after_stop_rank(self):
+        """JIRA ID: DAOS-18621.
+
+        Test Description:
+            Create a single pool with 100% usage that utilizes all the persistent memory and all
+            the SSD capacity on all of the servers after stopping rank 0.
+            Verify that pool creation succeeds.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=pool
+        :avocado: tags=PoolCreateTests,test_create_after_stop_rank
+        """
+        # Stop rank 0 on server
+        self.server_managers[0].stop_ranks([0])
+
+        # Create 1 pool using 100% of the available capacity
+        pool = self.get_pool(size='100%', create=False)
+        check_pool_creation(self, [pool], 120)

@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +9,6 @@ import traceback
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 class ObjUpdateBadParam(TestWithServers):
@@ -29,7 +29,7 @@ class ObjUpdateBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjUpdateBadParam,test_obj_update_bad_handle
         """
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         container.open()
         try:
@@ -70,7 +70,7 @@ class ObjUpdateBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjUpdateBadParam,test_null_values
         """
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
         container.open()
 

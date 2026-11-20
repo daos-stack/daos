@@ -25,17 +25,18 @@ server_config:
 
 pool_size_ratio_80:
   size: 80%
+  properties: rd_fac:0,space_rb:0
 pool_size_value:
   size: 100G
   svcn: 3
+  properties: rd_fac:0,space_rb:0
 
 container_wo_rf:
   type: POSIX
-  control_method: daos
+  properties: cksum:off,srv_cksum:off
 container_with_rf:
   type: POSIX
-  control_method: daos
-  properties: rd_fac:1
+  properties: cksum:off,srv_cksum:off,rd_fac:1
 
 ior: &ior_base
   client_processes:

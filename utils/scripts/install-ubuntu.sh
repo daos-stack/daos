@@ -33,7 +33,6 @@ apt-get install ${apt_get_install_args} \
     kmod \
     libaio-dev \
     libasan6 \
-    libboost-dev \
     libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \

@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2017-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2312,8 +2312,8 @@ rdb_raft_append_apply_cfg(struct rdb *db, raft_logtype_e type, rdb_replica_id_t 
 	int         rc;
 
 	D_ASSERTF(raft_entry_is_cfg_change(&entry), "invalid type: %d\n", type);
-	D_DEBUG(DB_MD, DF_DB ": %s " RDB_F_RID "\n", DP_DB(db), rdb_raft_entry_type_str(type),
-		RDB_P_RID(id));
+	D_INFO(DF_DB ": %s " RDB_F_RID "\n", DP_DB(db), rdb_raft_entry_type_str(type),
+	       RDB_P_RID(id));
 
 	if (db->d_version >= RDB_LAYOUT_VERSION_REPLICA_ID) {
 		entry.data.buf = &id;
@@ -3675,14 +3675,10 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	if (lease != NULL) {
 		int adjustment = d_hlc2msec(d_hlc_epsilon_get()) + 1 /* ms margin */;
 
-		if (*lease < adjustment) {
-			D_ERROR(DF_DB ": dropping %s response from " RDB_F_RID
-				      ": invalid lease: %ld\n",
-				DP_DB(db), opc == RDB_APPENDENTRIES ? "AE" : "IS",
-				RDB_P_RID(out_op->ro_from), *lease);
-			return;
-		}
-		*lease -= adjustment;
+		if (*lease > adjustment)
+			*lease -= adjustment;
+		else
+			*lease = 0; /* will effectively be ignored by raft_node_set_lease */
 	}
 
 	ABT_mutex_lock(db->d_raft_mutex);

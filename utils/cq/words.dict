@@ -5,6 +5,7 @@ APs
 Ansible
 BW
 Broadwell
+CaRT
 CGO
 Cilk
 CompletedProcess
@@ -50,9 +51,11 @@ RAS
 RawArray
 RawValue
 Romio
+RoCE
 SConstruct
 SGL
 SHA
+SHS
 SSF
 SX
 Skylake
@@ -225,6 +228,7 @@ iface
 indata
 infiniband
 init
+inlining
 inode
 inodes
 interoperability

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +7,7 @@ import json
 
 from apricot import TestWithServers
 from general_utils import bytes_to_human, list_to_str, report_errors
-from test_utils_pool import POOL_NAMESPACE, add_pools, get_pool_create_percentages
+from test_utils_pool import POOL_NAMESPACE, get_pool_create_percentages
 
 
 class MemRatioTest(TestWithServers):
@@ -69,7 +69,7 @@ class MemRatioTest(TestWithServers):
         :avocado: tags=MemRatioTest,test_mem_ratio
         """
         dmg = self.get_dmg_command()
-        kwargs_list = [{"test": self, "dmg": dmg.copy()}]
+        kwargs_list = [{"dmg": dmg.copy()}]
         if self.server_managers[0].manager.job.using_control_metadata:
             # Additional pools for MD on SSD
             _sizes = get_pool_create_percentages(5, self.params.get("size", POOL_NAMESPACE))
@@ -83,7 +83,6 @@ class MemRatioTest(TestWithServers):
             kwargs_list[0]["mem_ratio"] = _ratios[0]
             for index in range(1, 5):
                 kwargs_list.append({
-                    "test": self,
                     "dmg": dmg.copy(),
                     "size": _sizes[index],
                     "mem_ratio": _ratios[index],
@@ -91,7 +90,7 @@ class MemRatioTest(TestWithServers):
 
         # Create pools with different --mem_ratio arguments
         self.log_step(f"Creating {len(kwargs_list)} pool(s)")
-        pools = add_pools(dmg, kwargs_list, error_handler=self.check_insufficient_size)
+        pools = self.get_pools(kwargs_list, dmg=dmg, error_handler=self.check_insufficient_size)
         if len(kwargs_list) > 1 and len(pools) < 4:
             self.fail("Test failed to create a minimum of 4 pools with various mem-ratios")
 

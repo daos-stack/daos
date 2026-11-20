@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -168,7 +169,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         :avocado: tags=BoundaryPoolContainerSpace,test_fill_destroy_cont_loop
         """
         # create pool
-        self.add_pool()
+        self.pool = self.get_pool()
 
         for test_loop in range(1, self.test_loop + 1):
             self.log.info("==>Starting test loop: %i ...", test_loop)

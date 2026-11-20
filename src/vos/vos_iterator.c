@@ -269,8 +269,8 @@ out:
 	if (rc == -DER_NONEXIST && dtx_is_valid_handle(dth)) {
 		if (vos_ts_wcheck(ts_set, dth->dth_epoch, dth->dth_epoch_bound))
 			rc = -DER_TX_RESTART;
-		else
-			vos_ts_set_update(ts_set, dth->dth_epoch);
+		else if (!vos_ts_set_update(ts_set, dth->dth_epoch))
+			rc = -DER_TX_RESTART;
 	}
 	if (rc != 0)
 		vos_ts_set_free(ts_set);
@@ -306,7 +306,8 @@ vos_iter_ts_set_update(daos_handle_t ih, daos_epoch_t read_time, int rc)
 	if (vos_ts_wcheck(iter->it_ts_set, read_time, iter->it_bound))
 		return -DER_TX_RESTART;
 
-	vos_ts_set_update(iter->it_ts_set, read_time);
+	if (!vos_ts_set_update(iter->it_ts_set, read_time))
+		return -DER_TX_RESTART;
 
 	return rc;
 }

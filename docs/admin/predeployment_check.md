@@ -79,6 +79,38 @@ If there are site-specific rules for the creation of users and groups, it is adv
 create these users and groups following the site-specific conventions _before_ installing the
 `daos-client` RPM.
 
+### DAOS User Creation Example
+
+The following examples show how to consistently create the DAOS groups and users
+with a set of numerical GIDs and UIDs (which are chosen by site-specific conventions),
+using the Linux `groupadd` and `useradd` commands.
+On DAOS _servers_:
+
+```bash
+groupadd -r -g 966 daos_server
+groupadd -r -g 968 daos_daemons
+groupadd -r -g 969 daos_metrics
+
+useradd -s /sbin/nologin -r \
+  -g daos_server \
+  -G daos_metrics,daos_daemons \
+  -u 966 daos_server
+```
+
+On DAOS _clients_:
+
+```bash
+groupadd -r -g 967 daos_agent
+groupadd -r -g 968 daos_daemons
+
+useradd -s /sbin/nologin -r \
+  -g daos_agent \
+  -G daos_daemons \
+  -u 967 daos_agent
+```
+
+Nodes with the DAOS _admin_ role do not need any specific user/group setup.
+
 ### User/Group Synchronization for End Users
 
 DAOS ACLs for pools and containers store the actual user and group names (instead of numeric
@@ -138,6 +170,18 @@ set to 1.
 
 ```
 $ sysctl -w net.ipv4.conf.all.arp_ignore=1
+```
+
+Linux must also be configured to use the outgoing interface's own IP address as
+the sender address of ARP requests. This is configured via the `arp_announce`
+parameter. Otherwise, when the kernel routes a packet from one IPoIB interface's
+address out of another interface in the same subnet, the ARP request advertises
+the first address with the second interface's hardware address. Peers then map
+that IP to the wrong RDMA device, and librdmacm connections to it are rejected
+(`RDMA_CM_EVENT_REJECTED`, reported by UCX as `Destination is unreachable`).
+
+```
+$ sysctl -w net.ipv4.conf.all.arp_announce=2
 ```
 
 Finally, the `rp_filter` is set to 1 by default on several distributions (e.g. on

@@ -36,3 +36,15 @@ tests: !mux
     test_servers_arg: "-e no_pmix_corpc_errors"
     test_servers_env: ""
     test_servers_ppn: "8"
+  corpc_bulk_inline:
+    name: corpc_bulk_inline
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e test_corpc_bulks -i"
+    test_servers_env: ""
+    test_servers_ppn: "5"
+  corpc_bulk_explicit:
+    name: corpc_bulk_explicit
+    test_servers_bin: crt_launch
+    test_servers_arg: "-e test_corpc_bulks"
+    test_servers_env: ""
+    test_servers_ppn: "5"

@@ -825,6 +825,14 @@ dmg_pool_create(const char *dmg_config_file,
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_REDUN_FAC);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_rf:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 	}
 
 	/* Temporarily use old pool property defaults due to DAOS-17946 */
@@ -1707,6 +1715,51 @@ int dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank)
 
 	cmd_free_args(args, argcount);
 
+out:
+	return rc;
+}
+
+int
+dmg_system_query_rank_state(const char *dmg_config_file, d_rank_t rank, char *state,
+			    size_t state_len)
+{
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	struct json_object *members  = NULL;
+	struct json_object *member   = NULL;
+	struct json_object *tmp      = NULL;
+	int                 rc       = 0;
+
+	if (rank == CRT_NO_RANK || state == NULL || state_len == 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("system query", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg system query failed\n");
+		goto out_json;
+	}
+
+	if (!json_object_object_get_ex(dmg_out, "members", &members) || members == NULL ||
+	    json_object_array_length(members) != 1)
+		D_GOTO(out_json, rc = -DER_INVAL);
+
+	member = json_object_array_get_idx(members, 0);
+	if (member == NULL || !json_object_object_get_ex(member, "state", &tmp) || tmp == NULL)
+		D_GOTO(out_json, rc = -DER_INVAL);
+
+	strncpy(state, json_object_get_string(tmp), state_len - 1);
+	state[state_len - 1] = '\0';
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
 out:
 	return rc;
 }

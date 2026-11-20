@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -674,8 +675,17 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache
 		name_len = 0;
 		while (name + name_len < path + path_len && name[name_len] != '/')
 			++name_len;
-		if (name_len == 0)
+		if (name_len == 0) {
+			/* An empty component would silently return a partial parent. The path is
+			 * normalized by the caller, so this is a bug rather than a user error.
+			 */
+			if (name < path + path_len) {
+				D_ERROR("empty component in path " DF_PATH "\n", DP_PATH(path));
+				drec_decref(dcache, rec_tmp);
+				D_GOTO(out, rc = -DER_INVAL);
+			}
 			break;
+		}
 
 		key_prefix = &rec_tmp->dr_key_child_prefix[0];
 		parent     = rec_tmp;

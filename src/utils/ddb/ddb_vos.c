@@ -64,7 +64,7 @@ dv_pool_open(const char *path, struct vos_file_parts *path_parts, daos_handle_t 
 		goto exit;
 	}
 
-	rc = vos_pool_open(path, path_parts->vf_pool_uuid, flags, poh);
+	rc = vos_pool_open(path, path_parts->vf_pool_uuid, flags | VOS_POF_FOR_CHECK, poh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
@@ -2151,7 +2151,8 @@ dv_run_prov_mem(const char *db_path, const char *tmpfs_mount, unsigned int tmpfs
 
 	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
 	if (!md_on_ssd) {
-		D_ERROR("Not in MD-on-SSD mode; skipping memory environment provisioning.");
+		D_ERROR("Provided db_path is not configured in MD-on-SSD mode.");
+		rc = -DER_INVAL;
 		goto out;
 	}
 

@@ -24,8 +24,8 @@
 %endif
 
 Name:          daos
-Version:       2.8.0
-Release:       3%{?relval}%{?dist}
+Version:       2.8.1
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -55,11 +55,9 @@ BuildRequires: bullseye
 %if (0%{?rhel} >= 8)
 BuildRequires: argobots-devel >= %{argobots_version}
 BuildRequires: json-c-devel
-BuildRequires: boost-python3-devel
 %else
 BuildRequires: libabt-devel >= %{argobots_version}
 BuildRequires: libjson-c-devel
-BuildRequires: boost-devel
 %endif
 %if %{with server}
 BuildRequires: libpmemobj-devel >= 2.1.3
@@ -97,10 +95,6 @@ BuildRequires: pciutils-devel
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
-# needed to retrieve PMM region info through control-plane
-%if %{with server}
-BuildRequires: libipmctl-devel
-%endif
 %if (0%{?rhel} >= 9)
 BuildRequires: python-devel
 %else
@@ -116,16 +110,7 @@ BuildRequires: Lmod
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
-%if %{with server}
-BuildRequires: ipmctl-devel
-%endif
 BuildRequires: python3-devel
-BuildRequires: python3-distro
-BuildRequires: python-rpm-macros
-BuildRequires: lua-lmod
-BuildRequires: systemd-rpm-macros
-%endif
-%endif
 BuildRequires: libuuid-devel
 
 # Needed for debugging tasks
@@ -164,10 +149,8 @@ Requires: spdk-tools >= 26.01
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 2.1.3
 %else
-Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 2.1.3
 %endif
 Requires: mercury >= %{mercury_version}

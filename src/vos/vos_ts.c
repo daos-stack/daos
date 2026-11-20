@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -375,10 +376,7 @@ vos_ts_check_conflict(daos_epoch_t read_time, const struct dtx_id *read_id,
 	if (write_time != read_time)
 		return true;
 
-	if (read_id->dti_hlc != write_id->dti_hlc)
-		return true;
-
-	return uuid_compare(read_id->dti_uuid, write_id->dti_uuid) != 0;
+	return !daos_dti_equal(write_id, read_id);
 }
 
 bool

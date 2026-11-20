@@ -22,12 +22,13 @@ server_config:
       storage: auto
 
 pool:
-  scm_size: 5000000000
-  nvme_size: 20000000000
-  properties: rd_fac:0
+  scm_size: 5G
+  nvme_size: 20G
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
+  properties: cksum:off,srv_cksum:off
 
 ior:
   client_processes:

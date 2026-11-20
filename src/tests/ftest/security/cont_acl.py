@@ -1,6 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -89,7 +89,7 @@ class DaosContainerSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         # (2)Create pool and container with acl
         self.log.info("(2)==>Create a pool and a container with acl\n"
                       "   base_acl_entries= %s\n", base_acl_entries)
-        self.add_pool()
+        self.pool = self.get_pool()
         secTestBase.create_acl_file(acl_file_name, base_acl_entries)
         self.container = self.create_container_with_daos(self.pool, None, acl_file_name)
 

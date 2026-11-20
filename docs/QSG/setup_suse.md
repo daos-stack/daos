@@ -9,7 +9,7 @@ This document includes instructions for openSUSE/SLES-compatible distributions.
 For setup instructions on RHEL and RHEL clones, refer to the [RHEL setup](setup_rhel.md).
 
 For more details, including the prerequisite steps before installing DAOS,
-reference the [DAOS administration guide](https://docs.daos.io/v2.6/admin/hardware/).
+reference the [DAOS administration guide](https://docs.daos.io/v2.8/admin/hardware/).
 
 
 ## Requirements
@@ -29,8 +29,8 @@ All nodes must have:
 
 In addition the server nodes should also have:
 
-- [IOMMU enabled](https://docs.daos.io/v2.6/admin/predeployment_check/#enable-iommu-optional)
-- [Transparent HugePage Support disabled](https://docs.daos.io/v2.6/admin/deployment/#transparent-hugepage-thp-support)
+- [IOMMU enabled](https://docs.daos.io/v2.8/admin/predeployment_check/#enable-iommu-optional)
+- [Transparent HugePage Support disabled](https://docs.daos.io/v2.8/admin/deployment/#transparent-hugepage-thp-support)
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -59,8 +59,6 @@ ALL_NODES="$ADMIN_NODES,$CLIENT_NODES,$SERVER_NODES"
     `$ADMIN_NODES` from the `ALL_NODES` assignment to prevent duplication.
     For example: `ALL_NODES=$CLIENT_NODES,$SERVER_NODES`
 
-
-
 ## RPM Installation
 
 In this section the required RPMs will be installed on each of the nodes
@@ -68,9 +66,9 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.6/):
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.8/):
 
-		clush -B -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.6/Leap15/packages/x86_64/daos_packages.repo'
+		clush -B -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.8/Leap15/packages/x86_64/daos_packages.repo'
 
 2. Import GPG key on all nodes:
 
@@ -80,7 +78,8 @@ daos-server RPM.
 
 		clush -B -w $ALL_NODES 'sudo zypper --non-interactive refresh'
 
-4. Install `mercury-ucx` or `mercury-libfabric` RPMs on all nodes. For more details, reference [Network Requirements](https://docs.daos.io/v2.6/admin/hardware/#network-requirements).
+4. Install `mercury-ucx` or `mercury-libfabric` RPMs on all nodes. For more details, reference
+   [Network Requirements](https://docs.daos.io/v2.8/admin/hardware/#network-requirements).
 
 		clush -B -w $ALL_NODES 'sudo zypper install -y mercury-ucx'
 
@@ -95,7 +94,6 @@ daos-server RPM.
 7. Install the `daos-client` RPMs on the client nodes:
 
 		clush -B -w $CLIENT_NODES 'sudo zypper install -y daos-client'
-
 
 ## Generate certificates
 
@@ -129,7 +127,7 @@ Server nodes require the following certificate files:
 - A copy of the Client certificate (client.crt) owned by the
   daos\_server user
 
-See [Certificate Configuration](https://docs.daos.io/v2.6/admin/deployment/#certificate-configuration)
+See [Certificate Configuration](https://docs.daos.io/v2.8/admin/deployment/#certificate-configuration)
 for more information.
 
 !!! note
@@ -201,12 +199,11 @@ for more information.
 		clush -B -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients/agent.crt
 		clush -B -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients
 
-
 ## Hardware Provisioning
 
 If the server nodes are configured with PMem (Intel(R) Optane(TM) persistent memory), it will need
 to be prepared and configured to be used by DAOS and NVME SSDs will be identified. See
-[SCM Preparation](https://docs.daos.io/v2.6/admin/deployment/#scm-preparation) for more infortamtion.
+[SCM Preparation](https://docs.daos.io/v2.8/admin/deployment/#scm-preparation) for more infortamtion.
 
 1. Prepare the pmem devices on Server nodes:
 
@@ -251,11 +248,10 @@ to be prepared and configured to be used by DAOS and NVME SSDs will be identifie
 		pmem0 			0 			3.2 TB
 		pmem1 			1 			3.2 TB
 
-
 ## Create Configuration Files
 
 In this section the `daos_server`, `daos_agent`, and dmg command configuration files will be defined.
-Examples are available on [github](https://github.com/daos-stack/daos/tree/master/utils/config/examples).
+Examples are available on [github](https://github.com/daos-stack/daos/tree/release/2.8/utils/config/examples).
 
 1. Determine the addresses for the NVMe storage on the server nodes:
 
@@ -275,7 +271,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		used to populate the "bdev_list" server configuration parameter
 		below.
 
-2. Create a server configuration file. See [DAOS Server Setup](https://docs.daos.io/v2.6/admin/deployment/#daos-server-setup) for more details.
+2. Create a server configuration file. See [DAOS Server Setup](https://docs.daos.io/v2.8/admin/deployment/#daos-server-setup) for more details.
    Either modify the sample `/etc/daos/daos_server.yml` file or use the config generate tool to
    create a server configuration file in `/tmp/daos_server.yml`:
 
@@ -397,7 +393,6 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		clush -B -w $ADMIN_NODES --copy /tmp/daos_control.yml
 		clush -B -w $ADMIN_NODES sudo cp /tmp/daos_control.yml /etc/daos/
 
-
 ## Start the DAOS Servers
 
 1. Start daos engines on server nodes:
@@ -430,7 +425,6 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		2    745d2a5b-46dd-42c5-b90a-d2e46e178b3e 10.8.1.189:10001 /server-2.test.example.com Joined
 		3    ba6a7800-3952-46ce-af92-bba9daa35048 10.8.1.189:10001 /server-2.test.example.com Joined
 
-
 ## Start the DAOS Agents
 
 1. Start the daos agents on the client nodes:
@@ -454,4 +448,3 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		        rank[1]: ofi+tcp://10.8.1.179:10001
 		        rank[2]: ofi+tcp://10.8.1.189:10001
 		        rank[3]: ofi+tcp://10.8.1.189:10001
-

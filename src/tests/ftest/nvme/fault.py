@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -35,7 +36,7 @@ class NvmeFault(ServerFillUp):
 
         # Create the Pool with Maximum NVMe size
         self.log_step(f'Creating a pool using {pool_capacity}% of the free NVMe space')
-        self.add_pool()
+        self.pool = self.get_pool()
         self.result.clear()
 
         # Create the IOR threads

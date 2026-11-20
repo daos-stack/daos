@@ -70,6 +70,7 @@ TARGET_PATH="${mandir}/man3"
 list_files files "${SL_PMDK_PREFIX}/share/man/man3/pmem_*.3.gz"
 append_install_list "${files[@]}"
 
+DEPENDS=("${pmem_lib} = ${pmdk_full}")
 build_package "libpmem-devel"
 
 #libpmemobj-devel

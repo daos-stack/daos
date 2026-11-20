@@ -1,6 +1,6 @@
 """
   (C) Copyright 2018-2022 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,7 +41,7 @@ class RbldWithIOR(IorTestBase):
         rank_to_kill = self.params.get("rank_to_kill", "/run/ior/*")
 
         # create pool
-        self.create_pool()
+        self.pool = self.get_pool(connect=False)
 
         # make sure pool looks good before we start
         checks = {

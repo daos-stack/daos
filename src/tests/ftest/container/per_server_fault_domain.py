@@ -49,7 +49,7 @@ class PerServerFaultDomainTest(IorTestBase):
         # container property.
         if create_pool:
             self.pool = self.get_pool()
-        self.container = self.get_container(pool=self.pool, properties=properties)
+        self.container = self.get_container(self.pool, properties=properties)
 
         # Run IOR to write some data to the container.
         self.ior_cmd.set_daos_params(self.pool, self.container.identifier)

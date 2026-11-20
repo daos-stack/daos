@@ -18,6 +18,7 @@
 #include <gurt/common.h>
 #include <gurt/fault_inject.h>
 #include <cart/api.h>
+#include <cart/rpc_gen_macros.h>
 
 #include "crt_hg.h"
 #include "crt_internal_types.h"

@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -48,7 +49,7 @@ class PoolBadEvictTest(TestWithServers):
 
         saveduuid = None
 
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         original_test_pool_uuid = self.pool.uuid
 
         # trash the UUID value in various ways

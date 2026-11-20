@@ -23,6 +23,8 @@
 #include <daos/pool_map.h>
 #include <daos/pool.h>
 
+#include <cart/rpc_gen_macros.h>
+
 /*
  * RPC operation codes
  *
@@ -159,10 +161,6 @@ enum map_update_opc {
 enum pool_map_update_flags {
 	POOL_TGT_UPDATE_SKIP_RF_CHECK = (1 << 0),
 	POOL_RESET_RECOV_CONT         = (1 << 1),
-};
-
-enum pool_recov_cont_flags {
-	PRCF_BIND_BULK = (1 << 0),
 };
 
 static inline uint32_t
@@ -942,7 +940,6 @@ CRT_RPC_DECLARE(pool_eval_self_heal, DAOS_ISEQ_POOL_EVAL_SELF_HEAL, DAOS_OSEQ_PO
 	((uint32_t)			(prci_flags)		CRT_VAR) \
 	((uint32_t)			(prci_padding)		CRT_VAR) \
 	((uint64_t)			(prci_cont_nr)		CRT_VAR) \
-	((crt_bulk_t)			(prci_cont_bulk)	CRT_VAR) \
 	((struct pool_target_addr)	(prci_addrs)		CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_RECOV_CONT	/* output fields */		 \

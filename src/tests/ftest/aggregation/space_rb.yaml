@@ -20,9 +20,10 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 ior: &ior_base
+  env_vars:
+    - DD_STDERR=ERR
   flags: -w
   api: DFS
   ppn: 32

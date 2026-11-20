@@ -7,17 +7,12 @@ set -uex
 
 if [ -n "${STAGE_NAME:?}" ]; then
   case $STAGE_NAME in
-    *CentOS\ 7*|*el7*|*centos7*)
-      : "${TARGET:=centos7}"
-      : "${REPO_SPEC:=el-7}"
-      ;;
-    *CentOS\ 8*|*EL\ 8*|*el8*|*centos8*)
-      : "${TARGET:=centos8}"
-      : "${REPO_SPEC:=el-8}"
-      ;;
     *CentOS\ 9*|*EL\ 9*|*el9*|*centos9*)
       : "${TARGET:=centos9}"
       : "${REPO_SPEC:=el-9}"
+      ;;
+    *SLES\ 15.7*|*sles15.7*)
+      : "${TARGET:=sles15.7}"
       ;;
     *Leap\ 15.6*|*leap15.6*|*opensuse15.6*|*sles15.6*)
       : "${TARGET:=leap15.6}"

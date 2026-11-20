@@ -609,6 +609,8 @@ daos_errno2der(int err)
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
 	case EIO:		return -DER_IO;
+	case EINPROGRESS:
+		return -DER_INPROGRESS;
 	case ENOTSUP:
 		return -DER_NOTSUPPORTED;
 	case EFAULT:
@@ -669,6 +671,8 @@ daos_der2errno(int err)
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
 	case -DER_TX_RESTART:	return ERESTART;
+	case -DER_INPROGRESS:
+		return EINPROGRESS;
 	case -DER_NOTSUPPORTED:
 		return ENOTSUP;
 	default:		return EIO;
@@ -793,6 +797,7 @@ enum {
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 #define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
+#define DAOS_RDB_FAIL_MODIFY_REPLICAS     (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1c)
 
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
@@ -896,6 +901,30 @@ enum {
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
 #define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
 #define DAOS_OBJ_EC_AGG_LEADER_DIFF	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x83)
+/**
+ * This fault makes the shard fetch replies of an EC single value race: a shard
+ * holding a record of fail_value bytes delays its bulk transfer, and every
+ * shard delays its reply after the bulk transfer. A shard holding a stale cell
+ * of an overwritten record is then handled by the client after the data of the
+ * newer record landed in the shared fetch buffer, but before the reply that
+ * exposes the record size conflict.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x84)
+/**
+ * Same as DAOS_OBJ_EC_SINGV_FETCH_RACE, and the shard holding a record of
+ * fail_value bytes fails the fetch with -DER_TIMEDOUT after its bulk transfer:
+ * its data landed in the shared fetch buffer, but the client does not get the
+ * record size it holds.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL  (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x85)
+/**
+ * Reverse of DAOS_OBJ_EC_SINGV_FETCH_RACE for the reply order: the shard holding
+ * a record of fail_value bytes transfers its data first and replies last, the
+ * other shards transfer later and reply earlier. The data of the other shards
+ * is then on top of that record in the shared fetch buffer, and their replies
+ * are handled before the reply that tells its size.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x86)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
@@ -921,6 +950,10 @@ enum {
 #define DAOS_POOL_REINT_SLOW            (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa2)
 #define DAOS_CONT_DESTROY_FAIL_POST        (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa3)
 #define DAOS_POOL_TGT_UPDATE_SKIP_RF_CHECK (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa4)
+/* target stops raising its EC aggregation boundary (stale puller epoch) */
+#define DAOS_CONT_EC_BOUNDARY_FREEZE       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa5)
+/* cap the EC aggregation upper bound at the epoch given by fail_value */
+#define DAOS_CONT_EC_AGG_EPOCH_MAX         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa6)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)

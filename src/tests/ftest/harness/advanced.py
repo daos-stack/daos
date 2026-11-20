@@ -1,5 +1,6 @@
 """
   (C) Copyright 2021-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -58,9 +59,9 @@ class HarnessAdvancedTest(TestWithServers):
             timeouts[key].append(get_avocado_config_value(namespace, key))
             self.log.info("    %s.%s = %s", namespace, key, timeouts[key][0])
 
-        self.add_pool(create=True, connect=True)
-        self.add_pool(create=True, connect=False)
-        self.add_pool(create=False)
+        self.pool = self.get_pool(create=True, connect=True)
+        self.pool = self.get_pool(create=True, connect=False)
+        self.pool = self.get_pool(create=False)
 
         self.log.info("After creating pools:")
         for key in sorted(timeouts):

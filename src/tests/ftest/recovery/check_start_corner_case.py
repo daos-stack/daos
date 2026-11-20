@@ -65,6 +65,21 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         dmg_command.check_disable()
 
+    def clear_reports(self, dmg_command):
+        """Clear old checker inconsistency reports.
+
+        Start with --reset clears the inconsistency reports. Old inconsistency reports
+        may cause subsequent tests to fail because the tests don't expect them. The
+        tests expect the system to be clean at the beginning.
+
+        Args:
+            dmg_command (DmgCommand): DmgCommand used for check operations.
+        """
+        self.log_step("Clear the checker inconsistency reports.")
+        dmg_command.check_stop()
+        dmg_command.check_start(reset=True)
+        wait_for_check_complete(dmg=dmg_command)
+
     def test_start_back_to_back(self):
         """Test dmg check start <pool_1> and <pool_2> back to back.
 
@@ -84,7 +99,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartCornerCaseTest,test_start_back_to_back
         """
         self.log_step("Create two pools and a container.")
@@ -129,12 +144,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         self.log_step("Query checker and verify that they’re fixed.")
         wait_for_check_complete(dmg=dmg_command)
 
-        self.log_step("Clear the checker inconsistency reports.")
-        dmg_command.check_stop()
-        # Start with --reset clears the inconsistency reports. Old inconsistency reports
-        # may cause subsequent tests to fail because the tests don't expect them. The
-        # tests expect the system to be clean at the beginning.
-        dmg_command.check_start(reset=True)
+        self.clear_reports(dmg_command=dmg_command)
 
         self.log_step("Disable checker and start system.")
         dmg_command.check_disable()
@@ -171,7 +181,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartCornerCaseTest,test_two_pools_healthy
         """
         # 1. Create three pools and one container.
@@ -265,12 +275,17 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
             if exp_msg not in str(command_failure):
                 self.fail(f"{exp_msg} is not in the error message!")
 
+        # 8. Clear inconsistency reports.
+        self.clear_reports(dmg_command=dmg_command)
+
         # 9. Disable checker and verify that the fault is actually fixed.
         self.log_step("Disable checker and verify that the fault is actually fixed.")
         dmg_command.check_disable()
         expected_props = {"label": container.label.value}
-        label_verified = container.verify_prop(expected_props=expected_props)
-        self.assertTrue(label_verified, "Container label isn't fixed!")
+        try:
+            container.verify_prop(expected_props=expected_props)
+        except AssertionError:
+            self.fail("Container label isn't fixed!")
 
     def test_two_pools_corrupted(self):
         """Test to pass in two pool labels where one is corrupted pool.
@@ -287,7 +302,7 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,cat_recov
+        :avocado: tags=recovery,cat_recov,faults
         :avocado: tags=DMGCheckStartCornerCaseTest,test_two_pools_corrupted
         """
         # 1. Create three pools and containers.
@@ -402,10 +417,14 @@ class DMGCheckStartCornerCaseTest(TestWithServers):
         self.log_step("Check that the fault is fixed for pool_2 pool_3.")
         wait_for_check_complete(dmg=dmg_command)
 
+        self.clear_reports(dmg_command=dmg_command)
+
         # 7. Disable checker and verify that the three pools were actually fixed.
         self.log_step("Disable checker and verify that the three pools were actually fixed.")
         dmg_command.check_disable()
         for container in containers:
             expected_props = {"label": container.label.value}
-            label_verified = container.verify_prop(expected_props=expected_props)
-            self.assertTrue(label_verified, f"{container.label.value} label isn't fixed!")
+            try:
+                container.verify_prop(expected_props=expected_props)
+            except AssertionError:
+                self.fail(f"{container.label.value} label isn't fixed!")

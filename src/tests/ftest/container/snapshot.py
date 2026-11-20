@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +8,6 @@ from apricot import TestWithServers
 from general_utils import get_random_bytes
 from pydaos.raw import DaosApiError, DaosSnapshot, c_uuid_to_str
 from test_utils_container import add_container
-from test_utils_pool import add_pool
 
 
 # pylint: disable=broad-except
@@ -37,7 +37,7 @@ class Snapshot(TestWithServers):
         """
         self.log_step('Creating pool and container')
         self.log.info("self.context= %s", self.context)
-        pool = add_pool(self)
+        pool = self.get_pool()
         container = add_container(self, pool)
 
         self.log_step('Querying container and verifying UUID matches')

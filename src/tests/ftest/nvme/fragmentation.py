@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -110,7 +111,7 @@ class NvmeFragmentation(TestWithServers):
         num_repeat = self.params.get("num_repeat", '/run/ior/*')
         num_parallel_job = self.params.get("num_parallel_job", '/run/ior/*')
         # Create a pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
         self.pool.display_pool_daos_space("Pool space at the Beginning")
 
         # Repeat the test many times

@@ -43,7 +43,7 @@ typedef struct crt_init_options {
 	 * Global RPC timeout.
 	 *
 	 * This field is similar in behavior to setting of CRT_TIMEOUT
-	 * evnironment variable.
+	 * environment variable.
 	 */
 	int		cio_crt_timeout;
 	uint32_t        cio_sep_override : 1, /**< Deprecated */
@@ -56,7 +56,7 @@ typedef struct crt_init_options {
 	    /** whether or not to use expected sizes */
 	    cio_use_expected_size : 1, cio_use_unexpected_size : 1;
 
-	/** overrides the value of the environment variable CRT_CTX_NUM */
+	/** Non-zero overrides CRT_CTX_NUM; zero uses the environment variable/default */
 	int		cio_ctx_max_num;
 
 	/** set credit limit */
@@ -87,6 +87,19 @@ typedef struct crt_init_options {
 
 	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
 	char            *cio_auth_key;
+
+	/**
+	 * If set, used as the preferred address family for fabric init instead of
+	 * the D_ADDR_FORMAT env. Accepted values: "unspec" (default), "ipv4",
+	 * "ipv6", "native". The value is forwarded to Mercury via
+	 * na_init_info.addr_format, which lets libfabric's fabric scan find
+	 * interfaces of the chosen family. Useful for IPv6-only fabric
+	 * deployments where the default IPv4 preference would otherwise hide
+	 * the only usable interfaces. For multi-provider configurations, the
+	 * value may be a comma-separated list (one entry per provider, same
+	 * ordering as cio_provider).
+	 */
+	char            *cio_addr_format;
 
 	/** use single thread to access context */
 	bool             cio_thread_mode_single;

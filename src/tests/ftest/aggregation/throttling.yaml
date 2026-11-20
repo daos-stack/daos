@@ -1,7 +1,9 @@
 hosts:
   test_servers: 2
   test_clients: 2
+
 timeout: 2400
+
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -9,13 +11,17 @@ server_config:
     0:
       log_mask: INFO
       storage: auto
+
 pool:
   scm_size: 20000000000
   nvme_size: 50000000000
   svcn: 1
+  properties: "rd_fac:0,space_rb:0"
+
 container:
   type: POSIX
-  control_method: daos
+  properties: "cksum:off,srv_cksum:off"
+
 ior:
   client_processes:
     np: 12

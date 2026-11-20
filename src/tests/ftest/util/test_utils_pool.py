@@ -11,6 +11,7 @@ import os
 from time import sleep, time
 
 from avocado import TestFail, fail_on
+from ClusterShell.NodeSet import NodeSet
 from command_utils import BasicParameter
 from data_utils import assert_dict_subset
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
@@ -21,120 +22,29 @@ from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
-
-
-def add_pools(dmg, add_pool_kwargs, error_handler=None):
-    """Add multiple TestPool objects to the test.
-
-    Args:
-        dmg (DmgCommand): dmg command used to update the server log mask before creating the first
-            pool and reset it after creating the last pool. Not used if no pools are created.
-        add_pool_args (list): list of kwargs (dict) for add_pool() method to use when creating each
-            pool. Must at least include the 'test' kwargs. See add_pool() for other options.
-        error_handler (method, optional): optional method to call when a pool create fails. Defaults
-            to None.
-
-    Returns:
-        list: a list of new pool objects
-    """
-    _any_create = any(kwargs.get("create", True) is True for kwargs in add_pool_kwargs)
-
-    if _any_create:
-        # Set the DEBUG log mask before the first pool create
-        dmg.server_set_logmasks("DEBUG", raise_exception=False)
-
-    # Add the requested pools
-    pools = []
-    try:
-        for kwargs in add_pool_kwargs:
-            # Disable setting/resetting log masks for each individual pool create
-            _restore = kwargs.get("set_logmasks", True)
-            kwargs["set_logmasks"] = False
-            try:
-                pools.append(add_pool(**kwargs))
-                pools[-1].set_logmasks.value = _restore
-            except TestFail as error:
-                if not error_handler:
-                    raise
-                error_handler(error)
-    finally:
-        if _any_create:
-            # Reset the log mask after the last pool create
-            dmg.server_set_logmasks(raise_exception=False)
-
-    return pools
-
-
-def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
-    """Add a new TestPool object to the test.
-
-    Args:
-        test (Test): the test to which the pool will be added
-        namespace (str, optional): TestPool parameters path in the test yaml file. Defaults to
-            POOL_NAMESPACE.
-        create (bool, optional): should the pool be created. Defaults to True.
-        connect (bool, optional): should the pool be connected. Defaults to True.
-        dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
-            calls test.get_dmg_command().
-
-    Returns:
-        TestPool: the new pool object
-
-    """
-    if not dmg:
-        dmg = test.get_dmg_command()
-    pool = TestPool(
-        namespace=namespace, context=test.context, dmg_command=dmg,
-        label_generator=test.label_generator)
-    pool.get_params(test)
-    if params:
-        pool.update_params(**params)
-    if create:
-        pool.create()
-    if create and connect:
-        pool.connect()
-
-    # Add a step to remove this pool when the test completes and ensure their is enough time for the
-    # pool destroy to be attempted - accounting for a possible dmg command timeout
-    if pool.register_cleanup.value is True:
-        test.increment_timeout(POOL_TIMEOUT_INCREMENT)
-        test.register_cleanup(remove_pool, test=test, pool=pool)
-
-    return pool
-
-
-def remove_pool(test, pool):
-    """Remove the requested pool from the test.
-
-    Args:
-        test (Test): the test from which to destroy the pool
-        pool (TestPool): the pool to destroy
-
-    Returns:
-        list: a list of any errors detected when removing the pool
-
-    """
-    error_list = []
-    test.log.info("Destroying pool %s", pool.identifier)
-
-    # Ensure exceptions are raised for any failed command
-    exit_status_exception = None
-    if pool.dmg is not None:
-        exit_status_exception = pool.dmg.exit_status_exception
-        pool.dmg.exit_status_exception = True
-
-    # Attempt to destroy the pool
-    try:
-        pool.destroy(force=1, disconnect=1, recursive=1)
-    except (DaosApiError, TestFail) as error:
-        test.log.info("  {}".format(error))
-        error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
-
-    # Restore raising exceptions for any failed command
-    if exit_status_exception is False:
-        pool.dmg.exit_status_exception = exit_status_exception
-
-    return error_list
+DEFAULT_POOL_PROPS = {
+    "checkpoint": "timed",
+    "checkpoint_freq": 5,
+    "checkpoint_thresh": 50,
+    "data_thresh": 4096,
+    "ec_cell_sz": 131072,   # 128 KiB
+    "ec_pda": 1,
+    "global_version": 4,
+    "perf_domain": "root",
+    "rd_fac": 3,
+    "reclaim": "lazy",
+    "reintegration": "data_sync",
+    "rp_pda": 4294967295,
+    "scrub": "off",
+    "scrub_freq": 604800,
+    "scrub_thresh": 0,
+    "self_heal": "exclude;rebuild",
+    "space_rb": 5,
+    "svc_ops_enabled": 1,
+    "svc_ops_entry_age": 300,
+    "svc_rf": 2,
+    "upgrade_status": "not started"
+}
 
 
 def get_size_params(pool):
@@ -148,7 +58,7 @@ def get_size_params(pool):
         pool (TestPool): pool whose size is being replicated.
 
     Returns:
-        dict: size params argument for an add_pool() method
+        dict: size params argument for an self.get_pool() method
 
     """
     return {"size": None,
@@ -284,7 +194,7 @@ class TestPool(TestDaosApiBase):
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)                           # name of property to be set
         self.prop_value = BasicParameter(None)                          # value of property
-        self.properties = BasicParameter(None, "rd_fac:0,space_rb:0")   # string of cs name:value
+        self.properties = BasicParameter(None)                          # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
         self.pool_query_delay = BasicParameter(None)
@@ -313,10 +223,8 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.svc_leader = None
+        self.__ranks = []
         self.connected = False
-        # Flag to allow the non-create operations to use UUID. e.g., if you want
-        # to destroy the pool with UUID, set this to False, then call destroy().
-        self.use_label = True
 
         self._dmg = None
         self.dmg = dmg_command
@@ -385,20 +293,6 @@ class TestPool(TestDaosApiBase):
             self.pool.set_uuid_str(value)
 
     @property
-    def identifier(self):
-        """Get the pool uuid or label.
-
-        Returns:
-            str: pool label if using labels and one is defined; otherwise the
-                pool uuid
-
-        """
-        identifier = self.uuid
-        if self.use_label and self.label.value is not None:
-            identifier = self.label.value
-        return identifier
-
-    @property
     def dmg(self):
         """Get the DmgCommand object.
 
@@ -422,6 +316,15 @@ class TestPool(TestDaosApiBase):
         if not isinstance(value, DmgCommand):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
+
+    def temp_exit_status_exception(self, value):
+        """Temporarily set the exit_status_exception attribute.
+
+        Args:
+            value (bool): the temporary value for exit_status_exception
+
+        """
+        return self.dmg.temp_exit_status_exception(value)
 
     def no_exception(self):
         """Temporarily disable raising exceptions for failed commands."""
@@ -526,6 +429,9 @@ class TestPool(TestDaosApiBase):
             self.scm_per_rank = data["scm_per_rank"]
             self.nvme_per_rank = data["nvme_per_rank"]
 
+            # Set ranks for the pool
+            self.__ranks = [int(rank) for rank in data["ranks"].split(",")]
+
         # Set the TestPool attributes for the created pool
         if self.pool.attached:
             self.svc_ranks = [
@@ -611,6 +517,7 @@ class TestPool(TestDaosApiBase):
             self.pool = None
             self.info = None
             self.svc_ranks = None
+            self.__ranks = []
 
         return status
 
@@ -746,6 +653,18 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
 
+    def verify_prop(self, expected_props):
+        """Verify pool properties match expected values.
+
+        Args:
+            expected_props (dict): expected properties and values
+
+        Raises:
+            AssertionError: If any property does not match the expected value.
+        """
+        result = self.get_prop(name=list(expected_props.keys()))
+        self.validate_properties(result, expected_props)
+
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
         """Get the pool property with the specified name.
@@ -861,13 +780,53 @@ class TestPool(TestDaosApiBase):
         return self.dmg.pool_rebuild_start(self.identifier, *args, **kwargs)
 
     def rebuild_stop(self, *args, **kwargs):
-        """Use dmg to stop rebuild on this pool.
+        """Stop rebuild on this pool with dmg pool rebuild stop.
+
+        Raises:
+            CommandFailure: if the command fails
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
         return self.dmg.pool_rebuild_stop(self.identifier, *args, **kwargs)
+
+    def rebuild_stop_retry(self, timeout=60, interval=3, force=False):
+        """Stop rebuild on this pool with dmg pool rebuild stop.
+
+        Retries the command until it succeeds or the timeout is reached.
+
+        Args:
+            timeout (int, optional): Maximum time to wait for rebuild to stop in seconds.
+                Defaults to 60.
+            interval (int, optional): Time to wait between retries in seconds. Defaults to 3.
+            force (bool, optional): Whether to force stop the rebuild. Defaults to False.
+
+        Raises:
+            CommandFailure: if the command fails for any reason other than
+                DER_NONEXIST or if the timeout is reached.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        time_start = time()
+        while True:
+            try:
+                return self.rebuild_stop(force=force)
+            except CommandFailure as error:
+                # Any error other than DER_NONEXIST is a real error
+                if 'DER_NONEXIST' not in str(error):
+                    raise
+                # Raise a failure if we exceed the max wait time
+                if time() - time_start > timeout:
+                    raise CommandFailure(
+                        f"Failed to stop rebuild after {timeout} seconds"
+                    ) from error
+                # Otherwise, sleep and retry
+                self.log.info(
+                    'Assuming rebuild is not started yet. Retrying in %s seconds...', interval)
+                sleep(interval)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name, prop_value):
@@ -1648,3 +1607,17 @@ class TestPool(TestDaosApiBase):
                     raise AssertionError(
                         f'Expected target {target} to be in state {expected_target_state}, '
                         f'but current state is {info["target_state"]}')
+
+    def get_fault_domains(self, rank_info):
+        """Get the fault domains for this pool.
+
+        Args:
+            rank_info (dict): The server rank information containing each rank (keys) and the host
+                on which it runs (value).
+
+        Returns:
+            NodeSet: The set of fault domains for this pool.
+
+        """
+        return NodeSet.fromlist(
+            [host for rank, host in rank_info.items() if rank in self.__ranks])

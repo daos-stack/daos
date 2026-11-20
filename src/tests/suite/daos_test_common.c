@@ -244,70 +244,6 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 			}
 		}
 
-		/* Temporarily use old container property defaults due to DAOS-17946 */
-		/* Set DAOS_PROP_CO_CSUM to off if not already defined */
-		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM) == NULL) {
-			daos_prop_t *csum_prop = daos_prop_alloc(1);
-			if (csum_prop == NULL) {
-				D_ERROR("failed to allocate csum prop\n");
-				daos_prop_free(redun_lvl_prop);
-				daos_prop_free(merged_props);
-				return -DER_NOMEM;
-			}
-			csum_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
-			csum_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_OFF;
-
-			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_prop);
-			if (new_merged_props == NULL) {
-				D_ERROR("failed to merge co_prop and csum_prop\n");
-				daos_prop_free(redun_lvl_prop);
-				daos_prop_free(merged_props);
-				daos_prop_free(csum_prop);
-				return -DER_NOMEM;
-			}
-
-			/* Update co_prop to point to the newly merged properties */
-			if (merged_props) {
-				daos_prop_free(merged_props);
-				merged_props = new_merged_props;
-			} else {
-				merged_props = new_merged_props;
-			}
-			co_prop = merged_props;
-			daos_prop_free(csum_prop);
-		}
-		/* Set DAOS_PROP_CO_CSUM_SERVER_VERIFY to off if not already defined */
-		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_CSUM_SERVER_VERIFY) == NULL) {
-			daos_prop_t *csum_sv_prop = daos_prop_alloc(1);
-			if (csum_sv_prop == NULL) {
-				D_ERROR("failed to allocate csum_sv_prop\n");
-				daos_prop_free(redun_lvl_prop);
-				daos_prop_free(merged_props);
-				return -DER_NOMEM;
-			}
-			csum_sv_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-			csum_sv_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
-
-			daos_prop_t *new_merged_props = daos_prop_merge(co_prop, csum_sv_prop);
-			if (new_merged_props == NULL) {
-				D_ERROR("failed to merge co_prop and csum_sv_prop\n");
-				daos_prop_free(redun_lvl_prop);
-				daos_prop_free(merged_props);
-				daos_prop_free(csum_sv_prop);
-				return -DER_NOMEM;
-			}
-
-			/* Update co_prop to point to the newly merged properties */
-			if (merged_props) {
-				daos_prop_free(merged_props);
-				merged_props = new_merged_props;
-			} else {
-				merged_props = new_merged_props;
-			}
-			co_prop = merged_props;
-			daos_prop_free(csum_sv_prop);
-		}
-
 		D_ASSERT(co_prop != NULL);
 		if (daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
 			char cont_label[32];
@@ -882,6 +818,42 @@ rebuild_pool_started_after_ver(test_arg_t *arg, uint32_t rs_version)
 	}
 }
 
+/* Determine if pool rebuild has started scanning and rebuild version > rs_version */
+static bool
+rebuild_pool_scanning_after_ver(test_arg_t *arg, uint32_t rs_version)
+{
+	daos_pool_info_t            pinfo = {0};
+	struct daos_rebuild_status *rst;
+	int                         rc;
+
+	pinfo.pi_bits = DPI_REBUILD_STATUS;
+	rc            = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
+	rst           = &pinfo.pi_rebuild_st;
+
+	if (rc != 0) {
+		print_message("pool query for rebuild status failed, rc=%d, pool " DF_UUIDF "\n",
+			      rc, DP_UUID(arg->pool.pool_uuid));
+		return false;
+	} else {
+		bool in_progress   = (rst->rs_state == DRS_IN_PROGRESS);
+		bool ver_advanced  = (rst->rs_version > rs_version);
+		bool scanning_seen = (rst->rs_toberb_obj_nr > 0);
+
+		print_message("rebuild for pool " DF_UUIDF
+			      " state=%d rs_version=%u (waiting for > %u), tobe_obj=" DF_U64
+			      " (waiting for > 0)\n",
+			      DP_UUID(arg->pool.pool_uuid), rst->rs_state, rst->rs_version,
+			      rs_version, rst->rs_toberb_obj_nr);
+
+		if (in_progress && ver_advanced && scanning_seen) {
+			/* save final pool query info to be able to inspect rebuild status */
+			memcpy(&arg->pool.pool_info, &pinfo, sizeof(pinfo));
+			return true;
+		}
+		return false;
+	}
+}
+
 /* Determine if pool rebuild is busy, and the rebuild version is < rs_version */
 static bool
 rebuild_pool_started_before_ver(test_arg_t *arg, uint32_t rs_version)
@@ -1052,6 +1024,24 @@ test_rebuild_started_after(test_arg_t **args, int args_cnt, uint32_t *cur_versio
 	return all_started;
 }
 
+static bool
+test_rebuild_scanning_after(test_arg_t **args, int args_cnt, uint32_t *cur_versions)
+{
+	bool all_scanning = true;
+	int  i;
+
+	for (i = 0; i < args_cnt; i++) {
+		bool scanning = true;
+
+		if (!args[i]->pool.destroyed)
+			scanning = rebuild_pool_scanning_after_ver(args[i], cur_versions[i]);
+
+		if (!scanning)
+			all_scanning = false;
+	}
+	return all_scanning;
+}
+
 /* wait until pools start rebuilds with rs_version < current (e.g.,. expecting op:Fail_reclaim) */
 void
 test_rebuild_wait_to_start_lower(test_arg_t **args, int args_cnt)
@@ -1086,6 +1076,27 @@ test_rebuild_wait_to_start_next(test_arg_t **args, int args_cnt)
 		cur_versions[i] = args[i]->pool.pool_info.pi_rebuild_st.rs_version;
 
 	while (!test_rebuild_started_after(args, args_cnt, cur_versions))
+		sleep(2);
+
+	/* NB: when control reaches here, each pool's current rs_version has been updated
+	 * (for subsequent calls that will rely on it as a baseline)
+	 */
+	D_FREE(cur_versions);
+}
+
+/* wait until pools start rebuilds with rs_version > current and scanning activity is observed */
+void
+test_rebuild_wait_to_scanning_next(test_arg_t **args, int args_cnt)
+{
+	uint32_t *cur_versions;
+	int       i;
+
+	D_ALLOC_ARRAY(cur_versions, args_cnt);
+	assert_true(cur_versions != NULL);
+	for (i = 0; i < args_cnt; i++)
+		cur_versions[i] = args[i]->pool.pool_info.pi_rebuild_st.rs_version;
+
+	while (!test_rebuild_scanning_after(args, args_cnt, cur_versions))
 		sleep(2);
 
 	/* NB: when control reaches here, each pool's current rs_version has been updated

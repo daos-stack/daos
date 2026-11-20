@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -221,11 +222,11 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         # Create a pool
         self.log_step("Create a pool")
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
         # (6) Container create and attributes test
         self.log_step("Create a container and verify the attributes")
-        self.add_container(self.pool)
+        self.container = self.get_container(self.pool)
         self.container.open()
         attr_dict = self.create_data_set(num_attributes)
         try:

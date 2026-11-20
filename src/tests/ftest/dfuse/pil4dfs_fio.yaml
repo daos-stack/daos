@@ -24,7 +24,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 test_pil4dfs_vs_dfs:
   bw_deltas:

@@ -142,6 +142,27 @@ struct shard_fetch_stat {
 	int32_t			sfs_rc_other;
 };
 
+/* Per-IOM state for the client side EC IOM merge (obj_ec_iom_merge()).
+ * A fetch request can carry multiple IODs and one IOM per IOD, so this
+ * state must be tracked per IOM rather than per request. It is anchored in
+ * struct obj_auxi_args (rather than in struct obj_reasb_req) so that it
+ * survives the request re-assembly teardown/re-init that some retry paths
+ * perform, keeping the oims_realloc flag consistent with the iom_recxs
+ * buffer ownership across retries.
+ */
+struct obj_iom_merge_state {
+	/* number of targets that with this IOM handled */
+	uint32_t oims_tgt_nr;
+	/* number of iom extents that could not be stored in the caller
+	 * provided iom_recxs buffer (used to report the needed iom_nr).
+	 */
+	uint32_t oims_extra_nr;
+	/* the flag of this IOM's iom_recxs internally allocated by DAOS
+	 * (and so re-allocable).
+	 */
+	uint32_t oims_realloc : 1;
+};
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -171,13 +192,9 @@ struct obj_reasb_req {
 	/* to record returned data size from each targets */
 	daos_size_t			*orr_data_sizes;
 	/* number of targets this IO req involves */
-	uint32_t			 orr_tgt_nr;
-	/* number of targets that with IOM handled */
-	uint32_t			 orr_iom_tgt_nr;
-	/* number of iom extends */
-	uint32_t			 orr_iom_nr;
+	uint32_t                         orr_tgt_nr;
 	/* #iods of IO req */
-	uint32_t			 orr_iod_nr;
+	uint32_t                         orr_iod_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
@@ -192,23 +209,21 @@ struct obj_reasb_req {
 	struct daos_recx_ep_list	*orr_parity_lists;
 	uint32_t			 orr_parity_list_nr;
 	/* for data recovery flag */
-	uint32_t			 orr_recov:1,
-	/* for snapshot data recovery flag */
-					 orr_recov_snap:1,
-	/* for iod_size fetching flag */
-					 orr_size_fetch:1,
-	/* for iod_size fetched flag */
-					 orr_size_fetched:1,
-	/* only with single data target flag */
-					 orr_single_tgt:1,
-	/* only for single-value IO flag */
-					 orr_singv_only:1,
-	/* the flag of IOM re-allocable (used for EC IOM merge) */
-					 orr_iom_realloc:1,
-	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
-					 orr_fail_alloc:1,
-	/* The fetch data/sgl is rebuilt by EC parity rebuild */
-					 orr_recov_data:1;
+	uint32_t                         orr_recov : 1,
+	    /* for snapshot data recovery flag */
+	    orr_recov_snap                         : 1,
+	    /* for iod_size fetching flag */
+	    orr_size_fetch                         : 1,
+	    /* for iod_size fetched flag */
+	    orr_size_fetched                       : 1,
+	    /* only with single data target flag */
+	    orr_single_tgt                         : 1,
+	    /* only for single-value IO flag */
+	    orr_singv_only                         : 1,
+	    /* orr_fail allocated flag, recovery task's orr_fail is inherited */
+	    orr_fail_alloc                         : 1,
+	    /* The fetch data/sgl is rebuilt by EC parity rebuild */
+	    orr_recov_data                         : 1;
 };
 
 static inline void
@@ -265,7 +280,7 @@ struct shard_auxi_args {
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
-	/* only for EC, the target idx [0, k + p) */
+	/* EC target index [0, k + p), saved from the request layout. */
 	uint16_t		 ec_tgt_idx;
 	/* group index within the req_tgts->ort_shard_tgts */
 	uint16_t		 grp_idx;
@@ -439,6 +454,8 @@ struct obj_auxi_tgt_list {
 	uint32_t	*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
+	/** Last replica error, preserved across layout retries. */
+	int              tl_error;
 };
 
 struct coll_query_args {
@@ -481,9 +498,14 @@ struct obj_auxi_args {
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
+	/* Replica-cycle start in the request layout; UINT32_MAX requires reselection. */
 	uint32_t			 initial_shard;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
+	/* per-IOM merge state for EC fetch, one per iod, allocated on demand
+	 * and kept across retries.
+	 */
+	struct obj_iom_merge_state      *iom_state;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
 	uint64_t			 dkey_hash;
 	/* one shard_args embedded to save one memory allocation if the obj
@@ -775,6 +797,9 @@ int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 struct daos_oclass_attr *obj_get_oca(struct dc_object *obj);
 bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
+int
+obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
@@ -923,18 +948,6 @@ struct obj_io_context {
 				 ioc_lost_reply:1,
 				 ioc_fetch_snap:1;
 };
-
-static inline void
-obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
-	       uint32_t *grp_nr)
-{
-	*start_shard = 0;
-	*shard_nr = obj->cob_shards_nr;
-	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
-
-	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "DF_OID": %u/%u\n",
-		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
-}
 
 static inline uint64_t
 obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
@@ -1129,8 +1142,8 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
 /* cli_coll.c */
-bool
-obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+int
+obj_need_coll(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
 	      uint32_t *grp_nr);
 
 int

@@ -24,7 +24,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         super().setUp()
 
         # Init the pool
-        self.add_pool(connect=False)
+        self.pool = self.get_pool(connect=False)
 
     def test_pool_query_basic(self):
         """

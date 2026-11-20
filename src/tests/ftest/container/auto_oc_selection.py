@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,7 +34,7 @@ class AutoOCSelectionTest(TestWithServers):
         :avocado: tags=container,dfs
         :avocado: tags=AutoOCSelectionTest,test_oc_selection
         """
-        self.add_pool()
+        self.pool = self.get_pool()
 
         # (Redundancy Factor, Object Class, Failure Expected)
         prop_oclasses = [

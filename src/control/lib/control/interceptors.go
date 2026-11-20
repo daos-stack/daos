@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +9,7 @@ package control
 
 import (
 	"context"
+	"net"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -28,7 +30,8 @@ func connErrToFault(st *status.Status, target string) error {
 		return FaultConnectionRefused(target)
 	case strings.Contains(st.Message(), "connection closed"),
 		strings.Contains(st.Message(), "transport is closing"),
-		strings.Contains(st.Message(), "closed the connection"):
+		strings.Contains(st.Message(), "closed the connection"),
+		strings.Contains(st.Message(), net.ErrClosed.Error()):
 		return FaultConnectionClosed(target)
 	case strings.Contains(st.Message(), "no route to host"):
 		return FaultConnectionNoRoute(target)

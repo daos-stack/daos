@@ -64,6 +64,7 @@ def scons():
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
 
+    # Mercury headers are needed for mercury boost headers inclusion
     env.require('mercury', headers_only=True)
 
     # Needed in order to include src/object/obj_rpc.h

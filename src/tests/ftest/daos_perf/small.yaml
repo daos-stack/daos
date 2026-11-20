@@ -11,10 +11,11 @@ job_manager:
 
 pool:
   size: 500GB
+  properties: rd_fac:0,space_rb:0
 
 container:
   type: POSIX
-  control_method: daos
+  properties: cksum:off,srv_cksum:off
 
 server_config:
   name: daos_server

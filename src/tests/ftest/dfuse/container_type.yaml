@@ -20,4 +20,3 @@ container:
   cont_types:
     - ""
     - "POSIX"
-  control_method: daos

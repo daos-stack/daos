@@ -29,6 +29,9 @@ if [ -n "$DAOS_PKG_VERSION" ]; then
 fi
 
 set -uex
+
+echo "${PRETTY_NAME:-Unknown OS}"
+
 sudo $YUM -y install daos-client"$DAOS_PKG_VERSION"
 if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"

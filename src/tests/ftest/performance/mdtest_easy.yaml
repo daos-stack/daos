@@ -28,7 +28,7 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
+  properties: cksum:off,srv_cksum:off
 
 mdtest: &mdtest_base
   client_processes:

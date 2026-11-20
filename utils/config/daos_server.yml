@@ -8,9 +8,6 @@
 ## Name associated with the DAOS system.
 ## Immutable after running "dmg storage format".
 #
-## NOTE: Changing the DAOS system name is not supported yet.
-##       It must not be changed from the default "daos_server".
-#
 ## default: daos_server
 #name: daos_server
 #
@@ -482,13 +479,6 @@
 #    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
 #    #bdev_list: ["0000:5d:05.5"]
 #
-#    # Optional override, will be automatically generated based on NUMA affinity.
-#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
-#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
-#    # will not be processed by this engine. Empty or unset range signifies allow all.
-#    bdev_busid_range: 0x80-0x8f
-#    #bdev_busid_range: 128-143
-#
 #    # Optional explicit nvme-class bdev tier role assignments will
 #    # define the roles and responsibilities of this bdev tier.
 #    # If DCPM class is defined for the first tier,
@@ -664,13 +654,6 @@
 #
 #    #class: nvme
 #    #bdev_list: ["0000:da:00.0", "0000:db:00.0"]  # generate regular nvme.conf
-#
-#    # Optional override, will be automatically generated based on NUMA affinity.
-#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
-#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
-#    # will not be processed by this engine. Empty or unset range signifies allow all.
-#    #bdev_busid_range: 0xd0-0xdf
-#    #bdev_busid_range: 208-223
 #
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]

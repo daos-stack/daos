@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2021-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -258,6 +259,49 @@ type fsGetAttrCmd struct {
 	fsAttrCmd
 }
 
+// fsGetAttrDirJSON is the JSON representation of a directory's default
+// creation attributes returned by the fs get-attr command.
+type fsGetAttrDirJSON struct {
+	ObjAttr struct {
+		OID      string `json:"oid"`
+		ObjClass string `json:"oclass"`
+	} `json:"object"`
+	DirAttr struct {
+		DirObjClass  string `json:"dir_oclass"`
+		FileObjClass string `json:"file_oclass"`
+		ChunkSize    uint64 `json:"chunk_size"`
+	} `json:"directory"`
+}
+
+// fsGetAttrFileJSON is the JSON representation of a file's attributes
+// returned by the fs get-attr command.
+type fsGetAttrFileJSON struct {
+	OID       string `json:"oid"`
+	ObjClass  string `json:"oclass"`
+	ChunkSize uint64 `json:"chunk_size"`
+}
+
+// newFSGetAttrJSON builds the JSON output value for the fs get-attr command.
+// It is kept free of cgo so that the attribute-to-field mapping can be unit
+// tested.
+func newFSGetAttrJSON(isDir bool, oidStr, oclass, dirOclass, fileOclass string, chunkSize uint64) any {
+	if isDir {
+		out := fsGetAttrDirJSON{}
+		out.ObjAttr.OID = oidStr
+		out.ObjAttr.ObjClass = oclass
+		out.DirAttr.DirObjClass = dirOclass
+		out.DirAttr.FileObjClass = fileOclass
+		out.DirAttr.ChunkSize = chunkSize
+		return out
+	}
+
+	return fsGetAttrFileJSON{
+		OID:       oidStr,
+		ObjClass:  oclass,
+		ChunkSize: chunkSize,
+	}
+}
+
 func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
 	if err != nil {
@@ -286,59 +330,22 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	var fileoclassName [16]C.char
 	var oid C.daos_obj_id_t = attrs.doi_oid
 	var oidStr string = fmt.Sprintf("%d.%d", oid.hi, oid.lo)
-	if C.mode_is_dir(cmode) {
+	isDir := bool(C.mode_is_dir(cmode))
+	if isDir {
 		C.daos_oclass_id2name(attrs.doi_dir_oclass_id, &diroclassName[0])
 		C.daos_oclass_id2name(attrs.doi_file_oclass_id, &fileoclassName[0])
 	}
 
 	if cmd.JSONOutputEnabled() {
-		if C.mode_is_dir(cmode) {
-			jsonAttrs := struct {
-				ObjAttr struct {
-					OID      string `json:"oid"`
-					ObjClass string `json:"oclass"`
-				} `json:"object"`
-				DirAttr struct {
-					DirObjClass  string `json:"dir_oclass"`
-					FileObjClass string `json:"file_oclass"`
-					ChunkSize    uint64 `json:"chunk_size"`
-				} `json:"directory"`
-			}{
-				ObjAttr: struct {
-					OID      string `json:"oid"`
-					ObjClass string `json:"oclass"`
-				}{
-					OID:      oidStr,
-					ObjClass: C.GoString(&oclassName[0]),
-				},
-				DirAttr: struct {
-					DirObjClass  string `json:"dir_oclass"`
-					FileObjClass string `json:"file_oclass"`
-					ChunkSize    uint64 `json:"chunk_size"`
-				}{
-					FileObjClass: C.GoString(&diroclassName[0]),
-					DirObjClass:  C.GoString(&fileoclassName[0]),
-					ChunkSize:    uint64(attrs.doi_chunk_size),
-				},
-			}
-			return cmd.OutputJSON(jsonAttrs, nil)
-		} else {
-			jsonAttrs := &struct {
-				OID       string `json:"oid"`
-				ObjClass  string `json:"oclass"`
-				ChunkSize uint64 `json:"chunk_size"`
-			}{
-				OID:       oidStr,
-				ObjClass:  C.GoString(&oclassName[0]),
-				ChunkSize: uint64(attrs.doi_chunk_size),
-			}
-			return cmd.OutputJSON(jsonAttrs, nil)
-		}
+		jsonAttrs := newFSGetAttrJSON(isDir, oidStr, C.GoString(&oclassName[0]),
+			C.GoString(&diroclassName[0]), C.GoString(&fileoclassName[0]),
+			uint64(attrs.doi_chunk_size))
+		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("OID = %s", oidStr)
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
-	if C.mode_is_dir(cmode) {
+	if isDir {
 		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
 		cmd.Infof("File Creation Object Class = %s", C.GoString(&fileoclassName[0]))
 		cmd.Infof("File Creation Chunk Size = %d", attrs.doi_chunk_size)

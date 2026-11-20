@@ -1,5 +1,6 @@
 '''
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -108,7 +109,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=pool,pool_attribute
         :avocado: tags=PoolAPIAttributeTest,test_pool_large_attributes
         """
-        self.add_pool()
+        self.pool = self.get_pool()
         attr_dict = self.create_data_set()
 
         try:
@@ -137,7 +138,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=pool,pool_attribute
         :avocado: tags=PoolAPIAttributeTest,test_pool_attributes
         """
-        self.add_pool()
+        self.pool = self.get_pool()
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
         expected_for_param.append(name[1])
@@ -213,7 +214,7 @@ class PoolAPIAttributeTest(TestWithServers):
         :avocado: tags=pool,pool_attribute
         :avocado: tags=PoolAPIAttributeTest,test_pool_attribute_async
         """
-        self.add_pool()
+        self.pool = self.get_pool()
 
         expected_for_param = []
 

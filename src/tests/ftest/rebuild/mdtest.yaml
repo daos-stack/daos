@@ -31,7 +31,6 @@ pool:
 
 container:
   type: POSIX
-  control_method: daos
 
 mpirun:
   args: "--bind-to hwthread --map-by socket"

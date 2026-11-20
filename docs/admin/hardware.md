@@ -36,9 +36,9 @@ An RDMA-capable fabric is preferred for best performance.
 The DAOS data plane relies on [OFI libfabric](https://ofiwg.github.io/libfabric/)
 and supports OFI providers for Ethernet/tcp and InfiniBand/verbs.
 [UCX](https://www.openucx.org/)
-is also supported as an alternative network stack for DAOS on InfiniBand/verbs
-platforms.
-Refer to [UCX Fabric Support](./ucx.md)
+is also supported as an alternative network stack for DAOS on NVIDIA
+InfiniBand and RoCE fabrics.
+Refer to [UCX Fabric Support](./fabrics.md#ucx-fabric-support)
 for details on setting up DAOS with UCX support.
 
 DAOS supports multiple network interfaces on the servers

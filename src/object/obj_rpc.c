@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -206,6 +206,12 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (nr == 0)
 		D_GOTO(out, rc = 0);
 #endif
+
+	if (ENCODING(proc_op) && iod->iod_type == DAOS_IOD_ARRAY && iod->iod_recxs == NULL) {
+		D_ERROR("Invalid array IOD before RPC encoding: iod=%p nr=%u recxs=NULL\n", iod,
+			nr);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	if (ENCODING(proc_op) || FREEING(proc_op)) {
 		if (iod->iod_type == DAOS_IOD_ARRAY && iod->iod_recxs != NULL)

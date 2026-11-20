@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
@@ -30,6 +31,8 @@ func defBdevCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(NvmeController{}, "HealthStats", "Serial"),
+		cmp.AllowUnexported(hardware.PCIAddressSet{}),
+		cmp.AllowUnexported(BdevDeviceList{}),
 	}
 }
 
@@ -42,23 +45,17 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg        *Config
 		vmdEnabled bool
-		getTopoFn  topologyGetter
 		expReq     *BdevWriteConfigRequest
 		expErr     error
 	}{
 		"nil config": {
 			expErr: errors.New("nil config"),
 		},
-		"nil topo function": {
-			cfg:    &Config{},
-			expErr: errors.New("nil GetTopology"),
-		},
 		"no bdev configs": {
 			cfg: &Config{
 				Tiers:         TierConfigs{mockScmTier},
 				EnableHotplug: true,
 			},
-			getTopoFn: MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID:       os.Geteuid(),
 				OwnerGID:       os.Getegid(),
@@ -75,7 +72,6 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 						WithBdevBusidRange("0x00-0x7f"),
 				},
 			},
-			getTopoFn: MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
@@ -85,7 +81,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname: hostname,
 			},
 		},
-		"range specified": {
+		"legacy busid_range specified": {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
@@ -94,17 +90,160 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 				EnableHotplug: true,
 			},
-			getTopoFn: MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
 					{Class: ClassNvme},
 				},
-				Hostname:          hostname,
-				HotplugEnabled:    true,
-				HotplugBusidBegin: 0x70,
-				HotplugBusidEnd:   0x7f,
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:70-7f"),
+				},
+			},
+		},
+		"hotplug_range specified": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevHotplugRange("01:70-7f"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("01:70-7f"),
+				},
+			},
+		},
+		"range unspecified; auto-derived from bdev_list, single domain, non-contiguous": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:80:00.0", "0000:8f:00.0"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{
+						Class:      ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:80:00.0", "0000:8f:00.0"),
+					},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:80"),
+					MustNewBdevHotplugRange("00:8f"),
+				},
+			},
+		},
+		"range unspecified; auto-derived from bdev_list, single domain, contiguous": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:80:00.0", "0000:81:00.0"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{
+						Class:      ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:80:00.0", "0000:81:00.0"),
+					},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:80-81"),
+				},
+			},
+		},
+		"range unspecified; auto-derived from bdev_list, multiple domains": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:80:00.0", "0001:80:00.0"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{
+						Class:      ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:80:00.0", "0001:80:00.0"),
+					},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:80"),
+					MustNewBdevHotplugRange("01:80"),
+				},
+			},
+		},
+		"range unspecified; empty bdev_list": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+			},
+			expErr: errors.New("empty bdev_list"),
+		},
+		"range unspecified; auto-derived across multiple bdev tiers": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:e3:00.0"),
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevDeviceList("0000:e5:00.0", "0000:e6:00.0",
+							"0000:e7:00.0"),
+				},
+				EnableHotplug: true,
+			},
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{
+						Class:      ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:e3:00.0"),
+					},
+					{
+						Class: ClassNvme,
+						DeviceList: MustNewBdevDeviceList("0000:e5:00.0",
+							"0000:e6:00.0", "0000:e7:00.0"),
+					},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:e3"),
+					MustNewBdevHotplugRange("00:e5-e7"),
+				},
 			},
 		},
 		"range specified; vmd enabled": {
@@ -117,38 +256,63 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				EnableHotplug: true,
 			},
 			vmdEnabled: true,
-			getTopoFn:  MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
 					{Class: ClassNvme},
 				},
-				Hostname:          hostname,
-				HotplugEnabled:    true,
-				HotplugBusidBegin: 0x00,
-				HotplugBusidEnd:   0xff,
-				VMDEnabled:        true,
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				VMDEnabled:     true,
+				HotplugRanges:  nil,
 			},
 		},
-		"range unspecified": {
+		"range unspecified; emulated nvme only (no pci addresses to derive from)": {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
-					NewTierConfig().WithStorageClass(ClassNvme.String()),
+					NewTierConfig().WithStorageClass(ClassFile.String()).
+						WithBdevDeviceList("/tmp/daos-bdev0"),
 				},
 				EnableHotplug: true,
 			},
-			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassFile, DeviceList: MustNewBdevDeviceList("/tmp/daos-bdev0")},
+				},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges:  nil,
+			},
+		},
+		"range specified on more than one bdev tier": {
+			// Config-time validation (TierConfigs.Validate()) rejects this; here
+			// setHotplugRanges() picks the first bdev tier's manual range.
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevHotplugRange("00:70-7f"),
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevHotplugRange("01:70-7f"),
+				},
+				EnableHotplug: true,
+			},
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
 					{Class: ClassNvme},
+					{Class: ClassNvme},
 				},
-				Hostname:        hostname,
-				HotplugEnabled:  true,
-				HotplugBusidEnd: 0x07,
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				HotplugRanges: BdevHotplugRanges{
+					MustNewBdevHotplugRange("00:70-7f"),
+				},
 			},
 		},
 		"range unspecified; vmd enabled": {
@@ -160,18 +324,16 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				EnableHotplug: true,
 			},
 			vmdEnabled: true,
-			getTopoFn:  MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
 				TierProps: []BdevTierProperties{
 					{Class: ClassNvme},
 				},
-				Hostname:          hostname,
-				HotplugEnabled:    true,
-				HotplugBusidBegin: 0x00,
-				HotplugBusidEnd:   0xff,
-				VMDEnabled:        true,
+				Hostname:       hostname,
+				HotplugEnabled: true,
+				VMDEnabled:     true,
+				HotplugRanges:  nil,
 			},
 		},
 		"accel properties; spdk": {
@@ -185,7 +347,6 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 					Options: AccelOptCRCFlag | AccelOptMoveFlag,
 				},
 			},
-			getTopoFn: MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
@@ -210,7 +371,6 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 					SockAddr: "/tmp/spdk.sock",
 				},
 			},
-			getTopoFn: MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
@@ -236,7 +396,6 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 					MaxCsumErrs: 20000,
 				},
 			},
-			getTopoFn: MockGetTopology,
 			expReq: &BdevWriteConfigRequest{
 				OwnerUID: os.Geteuid(),
 				OwnerGID: os.Getegid(),
@@ -256,8 +415,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			gotReq, gotErr := BdevWriteConfigRequestFromConfig(test.Context(t), log, tc.cfg,
-				tc.vmdEnabled, tc.getTopoFn)
+			gotReq, gotErr := BdevWriteConfigRequestFromConfig(log, tc.cfg, tc.vmdEnabled)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
@@ -343,7 +501,6 @@ func TestStorage_ProviderUpgradeBdevConfig(t *testing.T) {
 			ctx := test.MustLogContext(t, test.Context(t))
 
 			p := NewProvider(logging.FromContext(ctx), 0, tc.cfg, nil, nil, tc.bdevProv, nil)
-			p.setTopologyGetter(MockGetTopology)
 			gotErr := p.UpgradeBdevConfig(ctx, tc.ctrlrs)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {

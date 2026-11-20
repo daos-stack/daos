@@ -1,6 +1,6 @@
 """
 (C) Copyright 2021-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 (C) Copyright 2025 Google LLC
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -373,15 +373,10 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_waitq_depth",
-        "engine_net_quota_exceeded",
-        "engine_net_glitch",
-        "engine_net_failed_addr",
-        "engine_net_req_timeout",
-        *_gen_stats_metrics("engine_net_swim_delay"),
-        "engine_net_uri_lookup_timeout",
+        # Global CaRT URI metrics
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self",
+        # Mercury per context metrics
         "engine_net_hg_bulks",
         "engine_net_hg_req_recv",
         "engine_net_hg_extra_bulk_resp",
@@ -390,7 +385,30 @@ class TelemetryUtils():
         "engine_net_hg_resp_recv",
         "engine_net_hg_mr_copies",
         "engine_net_hg_req_sent",
-        "engine_net_hg_active_rpcs"]
+        "engine_net_hg_active_rpcs",
+        # CaRT per context metrics
+        "engine_net_cm_uri_lookup_timedout",
+        "engine_net_cm_failed_addr",
+        "engine_net_cm_net_glitches",
+        *_gen_stats_metrics("engine_net_cm_swim_delay"),
+        "engine_net_cm_rpc_waitq_depth",
+        "engine_net_cm_rpc_quota_exceeded",
+        "engine_net_cm_rpc_recv",
+        "engine_net_cm_rpc_fwd",
+        "engine_net_cm_rpc_replied",
+        "engine_net_cm_rpc_reply_failed",
+        "engine_net_cm_rpc_sent",
+        "engine_net_cm_rpc_completed",
+        "engine_net_cm_rpc_completed_err",
+        "engine_net_cm_rpc_timedout",
+        "engine_net_cm_rpc_double_complete",
+        "engine_net_cm_bulk_create",
+        "engine_net_cm_bulk_create_failed",
+        "engine_net_cm_bulk_bound",
+        "engine_net_cm_bulk_free",
+        "engine_net_cm_corpc_created",
+        "engine_net_cm_corpc_completed",
+        "engine_net_cm_corpc_completed_err"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [

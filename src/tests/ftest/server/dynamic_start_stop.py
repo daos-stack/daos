@@ -1,5 +1,6 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -76,11 +77,11 @@ class DynamicStartStop(TestWithServers):
         5. Stop one of the original servers - Stopping with pool.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=vm
         :avocado: tags=server
         :avocado: tags=DynamicStartStop,test_dynamic_server_addition
         """
-        self.add_pool()
+        self.pool = self.get_pool()
 
         extra_servers = self.get_hosts_from_yaml(
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3047,6 +3048,230 @@ dtx_41(void **state)
 	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true, true);
 }
 
+static void
+dtx_42(void **state)
+{
+	test_arg_t   *arg  = *state;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	char          write_buf[DTX_IO_SMALL];
+	char          fetch_buf[DTX_IO_SMALL];
+	daos_handle_t th = {0};
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	daos_epoch_t  epoch = 0;
+	int           i;
+
+	print_message("DTX42: query max epoch in transaction\n");
+
+	par_barrier(PAR_COMM_WORLD);
+
+	arg->async = 0;
+	oid        = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	dts_buf_render(write_buf, DTX_IO_SMALL);
+	insert_single(dkey, akey, 0, write_buf, DTX_IO_SMALL, DAOS_TX_NONE, &req);
+
+	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+
+	/* Object level read: neither dkey nor akey is involved. */
+	MUST(daos_obj_query_max_epoch(req.oh, th, &epoch, NULL));
+	assert_int_not_equal(epoch, 0);
+
+	/* Reuse 'write_buf' with different data. */
+	for (i = 0; i < DTX_IO_SMALL; i++)
+		write_buf[i] += 1;
+
+	/* Modification to make the commit generate a CPD RPC carrying the cached read above. */
+	insert_single(dkey, akey, 0, write_buf, DTX_IO_SMALL, th, &req);
+
+	MUST(daos_tx_commit(th, NULL));
+
+	lookup_single(dkey, akey, 0, fetch_buf, DTX_IO_SMALL, DAOS_TX_NONE, &req);
+	assert_memory_equal(write_buf, fetch_buf, DTX_IO_SMALL);
+
+	ioreq_fini(&req);
+	MUST(daos_tx_close(th, NULL));
+
+	par_barrier(PAR_COMM_WORLD);
+}
+
+/*
+ * Wait until the given rank becomes the expected state in the system, give up after @timeout.
+ */
+static int
+dtx_wait_rank_state(test_arg_t *arg, d_rank_t rank, const char *expected, int timeout)
+{
+	char state[32];
+	int  rc = 0;
+	int  i;
+
+	for (i = 0; i < timeout; i++) {
+		rc = dmg_system_query_rank_state(dmg_config_file, rank, state, sizeof(state));
+		if (rc == 0 && strcmp(state, expected) == 0) {
+			print_message("Rank %u is %s after %d seconds\n", rank, expected, i);
+			return 0;
+		}
+
+		sleep(1);
+	}
+
+	print_message("Rank %u is not %s after %d seconds: rc %d, state %s\n", rank, expected,
+		      timeout, rc, rc == 0 ? state : "unknown");
+	return -DER_TIMEDOUT;
+}
+
+/* Restart the given rank quickly, make sure that the pool map version is not changed. */
+static void
+dtx_restart_rank(test_arg_t *arg, d_rank_t rank)
+{
+	daos_pool_info_t pinfo = {0};
+	uint32_t         map_ver;
+	int              rc;
+
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	map_ver = pinfo.pi_map_ver;
+
+	print_message("Killing the rank %u (pool map version %u) ...\n", rank, map_ver);
+
+	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	assert_rc_equal(rc, 0);
+
+	rc = dtx_wait_rank_state(arg, rank, "stopped", 60);
+	assert_rc_equal(rc, 0);
+
+	print_message("Restarting the rank %u before it is excluded from the pool...\n", rank);
+
+	rc = dmg_system_start_rank(dmg_config_file, rank);
+	assert_rc_equal(rc, 0);
+
+	rc = dtx_wait_rank_state(arg, rank, "joined", 120);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Pool map version %u after the rank %u restarted\n", pinfo.pi_map_ver, rank);
+	assert_int_equal(pinfo.pi_map_ver, map_ver);
+}
+
+static void
+dtx_43_verify(struct ioreq *req, char **dkeys, const char *akey, int nr, int rep_nr, uint64_t base)
+{
+	uint64_t val;
+	int      i;
+	int      j;
+
+	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_ALWAYS);
+
+	for (i = 0; i < rep_nr; i++) {
+		daos_fail_value_set(i);
+
+		for (j = 0; j < nr; j++) {
+			val = 0;
+			lookup_single(dkeys[j], akey, 0, &val, sizeof(val), DAOS_TX_NONE, req);
+			if (val != base + j)
+				print_message("dkey_%2d shard %d: exp " DF_U64 ", got " DF_U64 "\n",
+					      j, i, base + j, val);
+			assert_int_equal(val, base + j);
+		}
+	}
+
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+}
+
+static void
+dtx_43(void **state)
+{
+	test_arg_t   *arg  = *state;
+	const char   *akey = dts_dtx_akey;
+	char         *dkeys[DTX_NC_CNT];
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	uint64_t      val;
+	d_rank_t      rank;
+	int           rc;
+	int           i;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX43: engine restarted quickly without pool map change\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	arg->async = 0;
+	oid        = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	/*
+	 * According to DTX leader election algorithm, it is possible that the
+	 * DTX leaders for different dkeys will reside on different target.
+	 */
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		D_ALLOC(dkeys[i], 16);
+		assert_non_null(dkeys[i]);
+		snprintf(dkeys[i], 15, "dtx_43_dkey_%2d", i);
+	}
+
+	par_barrier(PAR_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+
+	print_message("Generating base values...\n");
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++)
+		insert_single(dkeys[i], akey, 0, &val, sizeof(val), DAOS_TX_NONE, &req);
+
+	par_barrier(PAR_COMM_WORLD);
+	daos_fail_loc_set(0);
+	if (arg->myrank == 0)
+		/*
+		 * Disable batched commit, then the DTXs are only prepared on the all replicas,
+		 * the "committable" status only exists in the leader's DRAM (CoS cache). That
+		 * simulates the case that the leader engine is killed before the batched commit
+		 * for the DTXs that have been replied to the client.
+		 */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_NO_BATCHED_CMT | DAOS_FAIL_ALWAYS, 0, NULL);
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("More updates that are prepared but not committed by leader\n");
+	for (i = 0, val = 31; i < DTX_NC_CNT; i++, val++)
+		insert_single(dkeys[i], akey, 0, &val, sizeof(val), DAOS_TX_NONE, &req);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		/*
+		 * Simulate the case that the engine is restarted before being excluded from the
+		 * pool: disable the "self-healing" exclusion for the pool, otherwise the engine
+		 * killing may trigger pool map change and rebuild.
+		 */
+		rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "rebuild");
+		assert_rc_equal(rc, 0);
+
+		rank = get_rank_by_oid_shard(arg, oid, 0);
+		dtx_restart_rank(arg, rank);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("Verifying data after engine quick restart...\n");
+	dtx_43_verify(&req, dkeys, akey, DTX_NC_CNT, 3, 31);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+	par_barrier(PAR_COMM_WORLD);
+	daos_fail_loc_set(0);
+
+	for (i = 0; i < DTX_NC_CNT; i++)
+		D_FREE(dkeys[i]);
+
+	ioreq_fini(&req);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -3104,95 +3329,58 @@ dtx_sub_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
-	{"DTX0: SV fetch against EC obj",
-	 dtx_0, NULL, test_case_teardown},
-	{"DTX1: multiple SV update against the same obj",
-	 dtx_1, NULL, test_case_teardown},
-	{"DTX2: multiple EV update against the same obj",
-	 dtx_2, NULL, test_case_teardown},
-	{"DTX3: Multiple small SV update against multiple objs",
-	 dtx_3, NULL, test_case_teardown},
-	{"DTX4: Multiple large EV update against multiple objs",
-	 dtx_4, NULL, test_case_teardown},
-	{"DTX5: Multiple small SV update on multiple EC objs",
-	 dtx_5, NULL, test_case_teardown},
-	{"DTX6: Multiple large EV update on multiple EC objs",
-	 dtx_6, NULL, test_case_teardown},
-	{"DTX7: SV update plus punch",
-	 dtx_7, NULL, test_case_teardown},
-	{"DTX8: EV update plus punch",
-	 dtx_8, NULL, test_case_teardown},
-	{"DTX9: conditional insert/update",
-	 dtx_9, NULL, test_case_teardown},
-	{"DTX10: conditional punch",
-	 dtx_10, NULL, test_case_teardown},
-	{"DTX11: read only transaction",
-	 dtx_11, NULL, test_case_teardown},
-	{"DTX12: zero copy flag",
-	 dtx_12, NULL, test_case_teardown},
-	{"DTX13: DTX status machnie",
-	 dtx_13, NULL, test_case_teardown},
-	{"DTX14: restart because of conflict with others",
-	 dtx_14, NULL, test_case_teardown},
-	{"DTX15: restart because of stale pool map",
-	 dtx_15, NULL, test_case_teardown},
-	{"DTX16: resend commit because of lost CPD request",
-	 dtx_16, NULL, test_case_teardown},
-	{"DTX17: resend commit because of lost CPD reply",
-	 dtx_17, NULL, test_case_teardown},
-	{"DTX18: spread read time-stamp when commit",
-	 dtx_18, NULL, test_case_teardown},
-	{"DTX19: Misc rep and EC object update in same TX",
-	 dtx_19, NULL, test_case_teardown},
+    {"DTX0: SV fetch against EC obj", dtx_0, NULL, test_case_teardown},
+    {"DTX1: multiple SV update against the same obj", dtx_1, NULL, test_case_teardown},
+    {"DTX2: multiple EV update against the same obj", dtx_2, NULL, test_case_teardown},
+    {"DTX3: Multiple small SV update against multiple objs", dtx_3, NULL, test_case_teardown},
+    {"DTX4: Multiple large EV update against multiple objs", dtx_4, NULL, test_case_teardown},
+    {"DTX5: Multiple small SV update on multiple EC objs", dtx_5, NULL, test_case_teardown},
+    {"DTX6: Multiple large EV update on multiple EC objs", dtx_6, NULL, test_case_teardown},
+    {"DTX7: SV update plus punch", dtx_7, NULL, test_case_teardown},
+    {"DTX8: EV update plus punch", dtx_8, NULL, test_case_teardown},
+    {"DTX9: conditional insert/update", dtx_9, NULL, test_case_teardown},
+    {"DTX10: conditional punch", dtx_10, NULL, test_case_teardown},
+    {"DTX11: read only transaction", dtx_11, NULL, test_case_teardown},
+    {"DTX12: zero copy flag", dtx_12, NULL, test_case_teardown},
+    {"DTX13: DTX status machnie", dtx_13, NULL, test_case_teardown},
+    {"DTX14: restart because of conflict with others", dtx_14, NULL, test_case_teardown},
+    {"DTX15: restart because of stale pool map", dtx_15, NULL, test_case_teardown},
+    {"DTX16: resend commit because of lost CPD request", dtx_16, NULL, test_case_teardown},
+    {"DTX17: resend commit because of lost CPD reply", dtx_17, NULL, test_case_teardown},
+    {"DTX18: spread read time-stamp when commit", dtx_18, NULL, test_case_teardown},
+    {"DTX19: Misc rep and EC object update in same TX", dtx_19, NULL, test_case_teardown},
 
-	{"DTX20: atomicity - either all done or none done",
-	 dtx_20, NULL, test_case_teardown},
-	{"DTX21: atomicity - internal transaction",
-	 dtx_21, NULL, test_case_teardown},
-	{"DTX22: TX isolation - invisible partial modification",
-	 dtx_22, NULL, test_case_teardown},
-	{"DTX23: server start epoch - refuse TX with old epoch",
-	 dtx_23, NULL, test_case_teardown},
-	{"DTX24: async batched commit",
-	 dtx_24, NULL, test_case_teardown},
+    {"DTX20: atomicity - either all done or none done", dtx_20, NULL, test_case_teardown},
+    {"DTX21: atomicity - internal transaction", dtx_21, NULL, test_case_teardown},
+    {"DTX22: TX isolation - invisible partial modification", dtx_22, NULL, test_case_teardown},
+    {"DTX23: server start epoch - refuse TX with old epoch", dtx_23, NULL, test_case_teardown},
+    {"DTX24: async batched commit", dtx_24, NULL, test_case_teardown},
 
-	{"DTX25: uncertain status check - committable",
-	 dtx_25, NULL, test_case_teardown},
-	{"DTX26: uncertain status check - non-committable",
-	 dtx_26, NULL, test_case_teardown},
-	{"DTX27: uncertain status check - miss commit",
-	 dtx_27, NULL, test_case_teardown},
-	{"DTX28: uncertain status check - miss abort",
-	 dtx_28, NULL, test_case_teardown},
+    {"DTX25: uncertain status check - committable", dtx_25, NULL, test_case_teardown},
+    {"DTX26: uncertain status check - non-committable", dtx_26, NULL, test_case_teardown},
+    {"DTX27: uncertain status check - miss commit", dtx_27, NULL, test_case_teardown},
+    {"DTX28: uncertain status check - miss abort", dtx_28, NULL, test_case_teardown},
 
-	{"DTX29: uncertain status check - fetch re-entry",
-	 dtx_29, NULL, test_case_teardown},
-	{"DTX30: uncertain status check - enumeration re-entry",
-	 dtx_30, NULL, test_case_teardown},
-	{"DTX31: uncertain status check - punch re-entry",
-	 dtx_31, NULL, test_case_teardown},
-	{"DTX32: uncertain status check - update re-entry",
-	 dtx_32, NULL, test_case_teardown},
-	{"DTX33: uncertain status check - query key re-entry",
-	 dtx_33, NULL, test_case_teardown},
-	{"DTX34: uncertain status check - CPD RPC re-entry",
-	 dtx_34, NULL, test_case_teardown},
+    {"DTX29: uncertain status check - fetch re-entry", dtx_29, NULL, test_case_teardown},
+    {"DTX30: uncertain status check - enumeration re-entry", dtx_30, NULL, test_case_teardown},
+    {"DTX31: uncertain status check - punch re-entry", dtx_31, NULL, test_case_teardown},
+    {"DTX32: uncertain status check - update re-entry", dtx_32, NULL, test_case_teardown},
+    {"DTX33: uncertain status check - query key re-entry", dtx_33, NULL, test_case_teardown},
+    {"DTX34: uncertain status check - CPD RPC re-entry", dtx_34, NULL, test_case_teardown},
 
-	{"DTX35: resync during reopen container",
-	 dtx_35, NULL, test_case_teardown},
-	{"DTX36: resync - DTX entry for read only ops",
-	 dtx_36, dtx_sub_setup, dtx_sub_teardown},
-	{"DTX37: resync - leader failed during prepare",
-	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
-	{"DTX38: resync - lost whole redundancy groups",
-	 dtx_38, dtx_sub_rf0_setup, dtx_sub_teardown},
-	{"DTX39: not restart the transaction with fixed epoch",
-	 dtx_39, dtx_sub_rf1_setup, dtx_sub_teardown},
+    {"DTX35: resync during reopen container", dtx_35, NULL, test_case_teardown},
+    {"DTX36: resync - DTX entry for read only ops", dtx_36, dtx_sub_setup, dtx_sub_teardown},
+    {"DTX37: resync - leader failed during prepare", dtx_37, dtx_sub_setup, dtx_sub_teardown},
+    {"DTX38: resync - lost whole redundancy groups", dtx_38, dtx_sub_rf0_setup, dtx_sub_teardown},
+    {"DTX39: not restart the transaction with fixed epoch", dtx_39, dtx_sub_rf1_setup,
+     dtx_sub_teardown},
 
-	{"DTX40: uncertain check - miss commit with delay",
-	 dtx_40, NULL, test_case_teardown},
-	{"DTX41: uncertain check - miss abort with delay",
-	 dtx_41, NULL, test_case_teardown},
+    {"DTX40: uncertain check - miss commit with delay", dtx_40, NULL, test_case_teardown},
+    {"DTX41: uncertain check - miss abort with delay", dtx_41, NULL, test_case_teardown},
+
+    {"DTX42: query max epoch in transaction", dtx_42, NULL, test_case_teardown},
+    {"DTX43: engine restarted quickly without pool map change", dtx_43, dtx_sub_setup,
+     dtx_sub_teardown},
 };
 
 static int

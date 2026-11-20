@@ -17,6 +17,7 @@ server_config:
   system_ram_reserved: 1
 pool:
   scm_size: 3G
+  properties: "rd_fac:0,space_rb:0"
 array_size:
   size: 10
 dkeys: !mux
