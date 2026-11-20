@@ -632,6 +632,24 @@ ctl_system_reint_rank(const char *dmg_config_file, d_rank_t rank)
 }
 
 int
+ctl_system_query_rank_state(const char *dmg_config_file, d_rank_t rank, char *state,
+			    size_t state_len)
+{
+	uintptr_t ctx = 0;
+	int       rc;
+
+	rc = ctl_ctx_init(dmg_config_file, &ctx);
+	if (rc != 0)
+		return rc;
+
+	rc = ctl_log_rc(daos_control_system_query_rank_state(ctx, rank, state, state_len),
+			"daos_control_system_query_rank_state");
+
+	ctl_ctx_fini(ctx);
+	return rc;
+}
+
+int
 ctl_system_exclude_rank(const char *dmg_config_file, d_rank_t rank)
 {
 	uintptr_t ctx = 0;

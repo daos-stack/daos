@@ -13,7 +13,10 @@ package main
 */
 import "C"
 import (
+	"strings"
+
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -91,6 +94,29 @@ func daos_control_system_reint_rank(handle C.uintptr_t, rank C.d_rank_t) C.int {
 			return err
 		}
 		return firstMemberStatus(ctx, resp.Results)
+	})
+}
+
+//export daos_control_system_query_rank_state
+func daos_control_system_query_rank_state(handle C.uintptr_t, rank C.d_rank_t, state *C.char, stateLen C.size_t) C.int {
+	return withContext(handle, func(ctx *ctrlContext) error {
+		if err := requireRank(rank); err != nil {
+			return err
+		}
+		if state == nil || stateLen == 0 {
+			return daos.InvalidInput
+		}
+		req := &control.SystemQueryReq{}
+		req.Ranks.Add(ranklist.Rank(rank))
+		resp, err := control.SystemQuery(ctx.ctx(), ctx.client, req)
+		if err != nil {
+			return err
+		}
+		if len(resp.Members) == 0 {
+			return daos.Nonexistent
+		}
+		copyStringToCharArray(strings.ToLower(resp.Members[0].State.String()), state, int(stateLen))
+		return nil
 	})
 }
 

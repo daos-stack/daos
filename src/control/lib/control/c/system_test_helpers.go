@@ -46,6 +46,16 @@ func callSystemReintRank(handle cgo.Handle, rank uint32) int {
 	return int(daos_control_system_reint_rank(C.uintptr_t(handle), C.d_rank_t(rank)))
 }
 
+func callSystemQueryRankState(handle cgo.Handle, rank uint32, bufSize int) (string, int) {
+	var out *C.char
+	if bufSize > 0 {
+		buf := make([]C.char, bufSize)
+		out = &buf[0]
+	}
+	rc := int(daos_control_system_query_rank_state(C.uintptr_t(handle), C.d_rank_t(rank), out, C.size_t(bufSize)))
+	return goCString(out), rc
+}
+
 func callSystemExcludeRank(handle cgo.Handle, rank uint32) int {
 	return int(daos_control_system_exclude_rank(C.uintptr_t(handle), C.d_rank_t(rank)))
 }

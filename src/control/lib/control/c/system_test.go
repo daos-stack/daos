@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -15,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestControlC_SystemStopRank(t *testing.T) {
@@ -328,6 +330,91 @@ func TestControlC_SystemReintRank(t *testing.T) {
 			if rc != tc.expRC {
 				t.Fatalf("expected RC %d, got %d", tc.expRC, rc)
 			}
+		})
+	}
+}
+
+func TestControlC_SystemQueryRankState(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic      *control.MockInvokerConfig
+		rank     uint32
+		bufSize  int
+		expState string
+		expRC    int
+	}{
+		"success": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 1, State: system.MemberStateStopped.String()},
+					},
+				}),
+			},
+			rank:     1,
+			bufSize:  32,
+			expState: "stopped",
+		},
+		"state truncated": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemQueryResp{
+					Members: []*mgmtpb.SystemMember{
+						{Rank: 1, State: system.MemberStateJoined.String()},
+					},
+				}),
+			},
+			rank:     1,
+			bufSize:  4,
+			expState: "joi",
+		},
+		"rank not found": {
+			mic: &control.MockInvokerConfig{
+				UnaryResponse: control.MockMSResponse("host1", nil, &mgmtpb.SystemQueryResp{
+					Absentranks: "1",
+				}),
+			},
+			rank:    1,
+			bufSize: 32,
+			expRC:   int(daos.Nonexistent),
+		},
+		"rpc failure": {
+			mic: &control.MockInvokerConfig{
+				UnaryError: daos.Unreachable,
+			},
+			rank:    1,
+			bufSize: 32,
+			expRC:   int(daos.Unreachable),
+		},
+		"no buffer": {
+			mic:   &control.MockInvokerConfig{},
+			rank:  1,
+			expRC: int(daos.InvalidInput),
+		},
+		"CRT_NO_RANK rejected": {
+			mic:     &control.MockInvokerConfig{},
+			rank:    0xffffffff,
+			bufSize: 32,
+			expRC:   int(daos.InvalidInput),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := control.NewMockInvoker(log, tc.mic)
+			handle := makeTestHandle(mi, log)
+			defer handle.Delete()
+
+			state, rc := callSystemQueryRankState(handle, tc.rank, tc.bufSize)
+
+			if rc != tc.expRC {
+				t.Fatalf("expected RC %d, got %d", tc.expRC, rc)
+			}
+			test.AssertEqual(t, tc.expState, state, "unexpected state")
+			if tc.expRC != 0 {
+				return
+			}
+			req := mi.SentReqs[0].(*control.SystemQueryReq)
+			test.AssertEqual(t, fmt.Sprint(tc.rank), req.Ranks.String(), "unexpected ranks")
 		})
 	}
 }
