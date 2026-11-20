@@ -83,21 +83,11 @@ isal_crypto_pkg="$("${rpms_dir}/package_version.sh" isal_crypto dev)"
 daos_spdk_pkg="$("${rpms_dir}/package_version.sh" daos_spdk dev)"
 pmdk_pkg="$("${rpms_dir}/package_version.sh" pmdk dev pmemobj)"
 
-dnf_install_args=(sudo dnf install --allowerasing -y)
-if sudo dnf repolist --all | grep -q 'daos-stack-deps'; then
-  dnf_install_args+=(--enablerepo='daos-stack-deps*')
-fi
-
-install_dep() {
-  local package="$1"
-  "${dnf_install_args[@]}" "${package}" || echo "${package} not available"
-}
-
-install_dep "${libfabric_pkg}"
-install_dep "${mercury_pkg}"
-install_dep "${argobots_pkg}"
-install_dep "${daos_spdk_pkg}"
-install_dep "${fused_pkg}"
-install_dep "${pmdk_pkg}"
-install_dep "${isal_pkg}"
-install_dep "${isal_crypto_pkg}"
+sudo dnf install --allowerasing -y "${libfabric_pkg}" || echo "${libfabric_pkg} not available"
+sudo dnf install --allowerasing -y "${mercury_pkg}" || echo "${mercury_pkg} not available"
+sudo dnf install --allowerasing -y "${argobots_pkg}" || echo "${argobots_pkg} not available"
+sudo dnf install --allowerasing -y "${daos_spdk_pkg}" || echo "${daos_spdk_pkg} not available"
+sudo dnf install --allowerasing -y "${fused_pkg}" || echo "${fused_pkg} not available"
+sudo dnf install --allowerasing -y "${pmdk_pkg}" || echo "${pmdk_pkg} not available"
+sudo dnf install --allowerasing -y "${isal_pkg}" || echo "${isal_pkg} not available"
+sudo dnf install --allowerasing -y "${isal_crypto_pkg}" || echo "${isal_crypto_pkg} not available"
