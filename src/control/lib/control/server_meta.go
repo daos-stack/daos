@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -103,6 +104,9 @@ func (si *SmdInfo) addRankPools(rank ranklist.Rank, pools []*SmdPool) {
 }
 
 func (si *SmdInfo) String() string {
+	if si == nil {
+		return "<nil>"
+	}
 	return fmt.Sprintf("[Devices: %v, Pools: %v]", si.Devices, si.Pools)
 }
 
