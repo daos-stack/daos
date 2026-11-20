@@ -1,8 +1,10 @@
 """
   (C) Copyright 2018-2024 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 import re
 import traceback
 
@@ -551,7 +553,8 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): pool UUID or label
             cont (str): container UUID or label
-            properties (list): "name" field(s). Defaults to None.
+            properties (str or list, optional): name(s) of specific properties to get. Defaults to
+                None, which will get all properties.
 
         Returns:
             str: JSON that contains the command output.
@@ -681,10 +684,12 @@ class DaosCommand(DaosCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        props = list_to_str(properties, ',') if properties else None
-
-        return self._get_json_result(
-            ("container", "get-prop"), pool=pool, cont=cont, prop=props)
+        props = None
+        if isinstance(properties, (list, tuple)):
+            props = list_to_str(properties, ',')
+        elif properties is not None:
+            props = str(properties)
+        return self._get_json_result(("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
     def container_set_owner(self, pool, cont, user=None, group=None, uid=None, gid=None,
                             no_check=False):
