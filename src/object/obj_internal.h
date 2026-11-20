@@ -333,7 +333,7 @@ struct coll_oper_args {
 				 coa_sparse:1;
 	uint8_t			 coa_target_nr;
 	/*
-	 * The target ID for the top four healthy shards.
+	 * The object shard index for the top four healthy shards.
 	 * Please check comment for DTX_COLL_INLINE_TARGETS.
 	 */
 	uint32_t		 coa_targets[DTX_COLL_INLINE_TARGETS];
@@ -487,7 +487,7 @@ struct obj_auxi_args {
 	    nvme_io_err : 1, no_retry : 1, ec_wait_recov : 1, ec_in_recov : 1, rebuilding : 1,
 	    sub_anchors : 1, ec_degrade_fetch : 1, long_retry_delay : 1, cond_fetch_split : 1,
 	    cond_modify : 1, reintegrating : 1, tx_renew : 1, tx_convert : 1, req_dup_sgl : 1,
-	    for_migrate : 1;
+	    for_migrate : 1, spec_leader : 1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t                         specified_shard;
 	uint32_t                         flags;
@@ -498,8 +498,14 @@ struct obj_auxi_args {
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
-	/* Replica-cycle start in the request layout; UINT32_MAX requires reselection. */
-	uint32_t			 initial_shard;
+
+	union {
+		/* Fetch: replica-cycle start in request layout; UINT32_MAX requires reselection. */
+		uint32_t initial_shard;
+		/* Modification: the ID for DAOS target where DTX leader resides on. */
+		uint32_t leader_tgt;
+	};
+
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	/* per-IOM merge state for EC fetch, one per iod, allocated on demand
@@ -942,11 +948,8 @@ struct obj_io_context {
 	uint32_t		 ioc_opc;
 	uint64_t		 ioc_start_time;
 	uint64_t		 ioc_io_size;
-	uint32_t		 ioc_began:1,
-				 ioc_update_ec_ts:1,
-				 ioc_free_sgls:1,
-				 ioc_lost_reply:1,
-				 ioc_fetch_snap:1;
+	uint32_t ioc_began : 1, ioc_update_ec_ts : 1, ioc_free_sgls : 1, ioc_lost_reply : 1,
+	    ioc_fetch_snap : 1, ioc_drop_cond : 1;
 };
 
 static inline uint64_t
@@ -1153,8 +1156,8 @@ void
 obj_coll_oper_args_fini(struct coll_oper_args *coa);
 
 int
-obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
-		  uint32_t map_ver, uint32_t idx);
+obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj, uint32_t map_ver, uint32_t idx,
+		  int *candidate, struct obj_auxi_args *auxi);
 
 int
 dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,

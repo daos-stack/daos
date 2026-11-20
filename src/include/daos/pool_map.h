@@ -122,6 +122,12 @@ struct pool_target {
 	/** nothing else for the time being */
 };
 
+static inline bool
+pool_dtx_leader_candidate_status(uint32_t status)
+{
+	return status == PO_COMP_ST_UPIN || status == PO_COMP_ST_DRAIN;
+}
+
 /**
  * an intermediate component in pool map, a domain can either contains low
  * level domains or just leaf targets.

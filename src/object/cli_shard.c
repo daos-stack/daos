@@ -928,6 +928,7 @@ static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
 	struct rw_cb_args	*rw_args = arg;
+	struct obj_auxi_args    *obj_auxi;
 	struct obj_rw_in	*orw;
 	struct obj_rw_v10_out	*orwo;
 	daos_handle_t		th;
@@ -991,8 +992,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	 * orwo->orw_epoch may be set even when the status is nonzero (e.g.,
 	 * -DER_TX_RESTART and -DER_INPROGRESS).
 	 */
-	api_args = dc_task_get_args(rw_args->shard_args->auxi.obj_auxi->obj_task);
-	th = api_args->th;
+	obj_auxi = rw_args->shard_args->auxi.obj_auxi;
+	api_args = dc_task_get_args(obj_auxi->obj_task);
+	th       = api_args->th;
 	if (daos_handle_is_valid(th)) {
 		int rc_tmp;
 
@@ -1008,6 +1010,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	if (rc != 0) {
+		if (rc == -DER_INPROGRESS && opc == DAOS_OBJ_RPC_UPDATE &&
+		    orwo->orw_comm_out.req_flags & DRCF_DTX_LEADER) {
+			obj_auxi->leader_tgt  = orwo->orw_comm_out.req_leader;
+			obj_auxi->spec_leader = 1;
+		}
+
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
 				"need retry: "DF_RC"\n", rw_args->rpc, opc,
@@ -1235,11 +1243,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					if (recov_list->re_nr == 0)
 						recov_list = NULL;
 				}
-				if (is_ec_obj &&
-				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
-					struct obj_auxi_args	*obj_auxi;
-
-					obj_auxi = rw_args->shard_args->auxi.obj_auxi;
+				if (is_ec_obj && reply_maps->iom_type == DAOS_IOD_ARRAY) {
 					D_ASSERT(obj_auxi->iom_state != NULL);
 					D_ASSERTF(i < obj_auxi->iod_nr, "iod_idx %d, iod_nr %d.\n",
 						  i, obj_auxi->iod_nr);
@@ -1528,27 +1532,30 @@ struct obj_punch_cb_args {
 static int
 obj_shard_punch_cb(tse_task_t *task, void *data)
 {
-	struct obj_punch_cb_args	*cb_args;
-	crt_rpc_t			*rpc;
-	struct shard_punch_args		*shard_args;
+	struct obj_punch_cb_args *cb_args    = (struct obj_punch_cb_args *)data;
+	crt_rpc_t                *rpc        = cb_args->rpc;
+	struct obj_punch_v10_out *opo        = crt_reply_get(rpc);
+	struct shard_punch_args  *shard_args = cb_args->shard_args;
+	struct obj_auxi_args     *obj_auxi   = shard_args->pa_auxi.obj_auxi;
 
-	cb_args = (struct obj_punch_cb_args *)data;
-	rpc = cb_args->rpc;
 	if (task->dt_result == 0) {
 		task->dt_result = obj_reply_get_status(rpc);
 		*cb_args->map_ver = obj_reply_map_version_get(rpc);
 		if (task->dt_result == -DER_OVERLOAD_RETRY) {
-			uint32_t		  timeout = 0;
-			struct obj_punch_v10_out *opo = crt_reply_get(cb_args->rpc);
+			uint32_t timeout = 0;
 
-			shard_args = cb_args->shard_args;
 			if (shard_args->pa_auxi.enqueue_id == 0)
 				shard_args->pa_auxi.enqueue_id =
 						opo->opo_comm_out.req_out_enqueue_id;
 			crt_req_get_timeout(cb_args->rpc, &timeout);
 			if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
-				shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+				obj_auxi->max_delay = timeout;
 		}
+	}
+
+	if (task->dt_result == -DER_INPROGRESS && opo->opo_comm_out.req_flags & DRCF_DTX_LEADER) {
+		obj_auxi->leader_tgt  = opo->opo_comm_out.req_leader;
+		obj_auxi->spec_leader = 1;
 	}
 
 	obj_shard_update_metrics_end(cb_args->rpc, cb_args->send_time, cb_args, task->dt_result);
@@ -1659,9 +1666,12 @@ struct shard_coll_punch_cb_args {
 static int
 obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 {
-	struct shard_coll_punch_cb_args	*cb_args = data;
-	crt_rpc_t			*rpc = cb_args->cpca_rpc;
-	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+	struct shard_coll_punch_cb_args *cb_args    = data;
+	crt_rpc_t                       *rpc        = cb_args->cpca_rpc;
+	struct obj_coll_punch_in        *ocpi       = crt_req_get(rpc);
+	struct obj_coll_punch_out       *ocpo       = crt_reply_get(rpc);
+	struct shard_punch_args         *shard_args = cb_args->cpca_shard_args;
+	struct obj_auxi_args            *obj_auxi   = shard_args->pa_auxi.obj_auxi;
 
 	if (task->dt_result == 0) {
 		task->dt_result = obj_reply_get_status(rpc);
@@ -1669,15 +1679,18 @@ obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 	}
 
 	if (task->dt_result == -DER_OVERLOAD_RETRY) {
-		struct obj_coll_punch_out	*ocpo = crt_reply_get(rpc);
-		struct shard_punch_args		*shard_args = cb_args->cpca_shard_args;
-		uint32_t			 timeout = 0;
+		uint32_t timeout = 0;
 
 		if (shard_args->pa_auxi.enqueue_id == 0)
 			shard_args->pa_auxi.enqueue_id = ocpo->ocpo_comm_out.req_out_enqueue_id;
 		crt_req_get_timeout(rpc, &timeout);
 		if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
 			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+	}
+
+	if (task->dt_result == -DER_INPROGRESS && ocpo->ocpo_comm_out.req_flags & DRCF_DTX_LEADER) {
+		obj_auxi->leader_tgt  = ocpo->ocpo_comm_out.req_leader;
+		obj_auxi->spec_leader = 1;
 	}
 
 	DL_CDEBUG(task->dt_result < 0 && task->dt_result != -DER_INPROGRESS,
