@@ -20,6 +20,8 @@
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
+#include <daos/event.h>
+#include <daos/task.h>
 
 static void
 rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
@@ -1515,6 +1517,11 @@ struct rcl_ctx {
 	struct rcl_layout cur[RCL_OBJ_NR];
 	int               chain_o; /* first (obj, dkey) following the chain */
 	int               chain_d;
+	int               gen;       /* generation of the data pattern */
+	int               only_cell; /* generation > 0 only rewrote this data cell, -1: all */
+	daos_obj_id_t     ctl_oid;   /* control object, see rpr_ctl_write() */
+	int               hot_nr;    /* the first @hot_nr objects were overwritten ... */
+	int               hot_gen;   /* ... with this generation, see rpr_hot_stripes() */
 };
 
 static inline void
@@ -1533,9 +1540,21 @@ rcl_cell2shard(const char *dkey, int cell)
 }
 
 static inline char
-rcl_pattern(int o)
+rcl_pattern(int o, int gen)
 {
-	return 'a' + o % 26;
+	/* three different generations for every object */
+	return 'a' + (o + gen * 7) % 26;
+}
+
+/* expected pattern of data cell @cell */
+static inline char
+rcl_cell_pattern(struct rcl_ctx *ctx, int o, int cell)
+{
+	if (ctx->gen > 0 && ctx->only_cell >= 0 && cell != ctx->only_cell)
+		return rcl_pattern(o, 0);
+	if (o < ctx->hot_nr)
+		return rcl_pattern(o, ctx->hot_gen);
+	return rcl_pattern(o, ctx->gen);
 }
 
 static void
@@ -1571,13 +1590,16 @@ rcl_write_blocks(struct rcl_ctx *ctx)
 	assert_non_null(buf);
 	print_message("write every 64K block separately\n");
 	for (o = 0; o < RCL_OBJ_NR; o++) {
-		memset(buf, rcl_pattern(o), RCL_BLK_SIZE);
+		memset(buf, rcl_pattern(o, ctx->gen), RCL_BLK_SIZE);
 		ioreq_init(&req, ctx->arg->coh, ctx->oids[o], DAOS_IOD_ARRAY, ctx->arg);
 		for (d = 0; d < RCL_DKEY_NR; d++) {
 			rcl_dkey(d, dkey, sizeof(dkey));
 			for (s = 0; s < RCL_STRIPE_NR; s++)
 				for (cell = 0; cell < RCL_DATA_NR; cell++)
 					for (b = 0; b < RCL_BLKS_PER_CELL; b++) {
+						if (ctx->gen > 0 && ctx->only_cell >= 0 &&
+						    cell != ctx->only_cell)
+							continue;
 						recx.rx_idx = (uint64_t)s * RCL_STRIPE_SIZE +
 							      (uint64_t)cell * CELL_SIZE +
 							      (uint64_t)b * RCL_BLK_SIZE;
@@ -1750,8 +1772,6 @@ rcl_verify(struct rcl_ctx *ctx, const char *stage)
 	print_message("verify [%s]\n", stage);
 	rcl_layout_get(ctx, ctx->cur);
 	for (o = 0; o < RCL_OBJ_NR; o++) {
-		char pat = rcl_pattern(o);
-
 		ioreq_init(&req, ctx->arg->coh, ctx->oids[o], DAOS_IOD_ARRAY, ctx->arg);
 		for (d = 0; d < RCL_DKEY_NR; d++) {
 			rcl_dkey(d, dkey, sizeof(dkey));
@@ -1762,6 +1782,7 @@ rcl_verify(struct rcl_ctx *ctx, const char *stage)
 				lookup_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, buf,
 					     RCL_STRIPE_SIZE, &req);
 				for (c = 0; c < RCL_DATA_NR; c++) {
+					char     pat   = rcl_cell_pattern(ctx, o, c);
 					char    *got   = buf + c * CELL_SIZE;
 					uint32_t shard = rcl_cell2shard(dkey, c);
 					bool     nbad, dbad;
@@ -1834,6 +1855,521 @@ rcl_reint_ranks(struct rcl_ctx *ctx, d_rank_t *ranks, int nr, const char *stage)
 	return bad;
 }
 
+/*
+ * REBUILD50: EC aggregation must not generate parity below a newer update of
+ * the stripe once a data shard was rebuilt.
+ *
+ * Rebuild only migrates visible extents, so a data shard rebuilt after an
+ * overwrite at T no longer holds the older versions. If EC aggregation then
+ * runs with an upper bound below T (it resumes within the aggregation gap
+ * after a short rebuild; the test caps the upper bound by fail_loc) and
+ * generates parity at an epoch E < T from the old replicas, that parity cannot
+ * be used: the rebuilt shard has nothing at E.
+ *
+ * Two sets of objects with different histories go through the same sequence:
+ *
+ *   set A: every stripe filled by partial updates (replicas R@<=E on the parity
+ *          shards), then, above the cap, one data cell overwritten (R@T);
+ *   set B: every stripe written as one update (parity P@E0), one data cell
+ *          overwritten (R@E1), then, above the cap, every stripe written as one
+ *          update again (P@T; a full stripe update leaves no replica extent).
+ *
+ *   1. the rank hosting the overwritten cell of most dkeys of set A is
+ *      excluded: the cells rebuilt onto the spares only exist at T;
+ *   2. EC aggregation runs below the cap. A control object, filled below the
+ *      cap and never updated again, tells that the round really ran. The
+ *      stripes of both sets must be skipped:
+ *      - set A: otherwise parity is encoded at E from the old content of the
+ *        cell and daos_obj_verify() reports DER_MISMATCH;
+ *      - set B: otherwise parity is recalculated at E1. It is hidden by P@T
+ *        for any fetch, so the parity shards are probed: R@E1 must still be
+ *        there;
+ *   3. a rank hosting another data cell of the dkeys of step 1 is excluded.
+ *      With parity below the overwrite, the lost cell would be recovered at the
+ *      parity epoch with zeros in place of the cell rebuilt in step 1 and wrong
+ *      content written, without any error;
+ *   4. both ranks are reintegrated. With parity below the overwrite, the fetch
+ *      at the parity epoch from the copy on the spare would return no data and
+ *      the migration fail with DER_DATA_LOSS (logged by
+ *      __migrate_fetch_update_bulk(), not reported by the rebuild);
+ *   5. some stripes of set A are overwritten in a loop, more often than the
+ *      aggregation gap, and the cap is removed: they must be aggregated
+ *      although they always have an update newer than the aggregation round;
+ *   6. without the cap the skipped stripes of set B must be aggregated as well.
+ *
+ * The data is verified by fetch and by daos_obj_verify() after every step.
+ */
+#define RPR_GAP_SEC      10 /* distance between the two generations and the cap */
+#define RPR_AGG_WAIT_SEC 120
+#define RPR_POLL_SEC     5
+#define RPR_CTL_DKEY     "d_key_ctl"
+#define RPR_HOT_OBJ_NR   4 /* objects overwritten in a loop by rpr_hot_stripes() */
+#define RPR_HOT_GAP_SEC  2 /* much shorter than the aggregation gap */
+#define RPR_CELL         1 /* the data cell overwritten by the second generation */
+
+/*
+ * ranks[0]: the rank hosting data cell @cell of most dkeys; ranks[1]: the rank
+ * hosting most other data cells of those dkeys. Returns the number of cells
+ * on ranks[1] following the scenario.
+ */
+static int
+rpr_pick_ranks(struct rcl_ctx *ctx, d_rank_t *ranks, int cell)
+{
+	int  n                 = ctx->arg->srv_nnodes;
+	int  cnt[RCL_RANK_MAX] = {0};
+	char dkey[32];
+	int  o, d, c, r, best;
+
+	D_ASSERT(n <= RCL_RANK_MAX);
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			cnt[ctx->orig[o].rank[rcl_cell2shard(dkey, cell)]]++;
+		}
+	for (r = 0, best = -1; r < n; r++)
+		if (cnt[r] > best) {
+			best     = cnt[r];
+			ranks[0] = r;
+		}
+	print_message("rank %u hosts cell %d of %d dkeys\n", ranks[0], cell, best);
+
+	memset(cnt, 0, sizeof(cnt));
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			if (ctx->orig[o].rank[rcl_cell2shard(dkey, cell)] != ranks[0])
+				continue;
+			for (c = 0; c < RCL_DATA_NR; c++)
+				if (c != cell)
+					cnt[ctx->orig[o].rank[rcl_cell2shard(dkey, c)]]++;
+		}
+	for (r = 0, best = -1; r < n; r++)
+		if (r != ranks[0] && cnt[r] > best) {
+			best     = cnt[r];
+			ranks[1] = r;
+		}
+	print_message("rank %u hosts %d other data cells of those dkeys\n", ranks[1], best);
+	return best;
+}
+
+/* number of parity shards of @dkey holding a replica extent in [offset, offset + size) */
+static int
+rpr_parity_replica_nr(test_arg_t *arg, daos_obj_id_t oid, const char *dkey, daos_off_t offset,
+		      daos_size_t size)
+{
+	d_sg_list_t   sgl;
+	d_iov_t       sg_iov;
+	d_iov_t       dkey_iov;
+	daos_iod_t    iod = {0};
+	daos_recx_t   recx;
+	daos_handle_t oh;
+	char         *buf;
+	int           i, rc, nr = 0;
+
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+	buf = malloc(size);
+	assert_non_null(buf);
+	d_iov_set(&dkey_iov, (void *)dkey, strlen(dkey));
+	d_iov_set(&sg_iov, buf, size);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iov;
+	d_iov_set(&iod.iod_name, "a_key", strlen("a_key"));
+	iod.iod_nr    = 1;
+	recx.rx_idx   = offset;
+	recx.rx_nr    = size;
+	iod.iod_recxs = &recx;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+
+	for (i = 0; i < RCL_TGT_NR - RCL_DATA_NR; i++) {
+		uint32_t    shard = rcl_cell2shard(dkey, RCL_DATA_NR + i);
+		tse_task_t *task;
+		int         retry;
+
+		/* a fetch from a specific shard does not wait for an uncommitted update */
+		for (retry = 0; retry < 60; retry++) {
+			task         = NULL;
+			iod.iod_size = 1;
+			rc           = dc_obj_fetch_task_create(oh, DAOS_TX_NONE, 0, &dkey_iov, 1,
+								DIOF_TO_SPEC_SHARD, &iod, &sgl, NULL, &shard,
+								NULL, NULL, NULL, &task);
+			assert_rc_equal(rc, 0);
+			rc = dc_task_schedule(task, true);
+			if (rc != -DER_INPROGRESS)
+				break;
+			sleep(1);
+		}
+		assert_rc_equal(rc, 0);
+		if (iod.iod_size != 0)
+			nr++;
+	}
+	free(buf);
+	daos_obj_close(oh, NULL);
+	return nr;
+}
+
+/*
+ * Control object: one stripe filled by partial updates before the cap of the EC
+ * aggregation and never updated again. Its replicas disappear from the parity
+ * shards once a round of EC aggregation below the cap processed it, which tells
+ * that the capped aggregation really ran.
+ */
+static void
+rpr_ctl_write(struct rcl_ctx *ctx)
+{
+	struct ioreq req;
+	daos_recx_t  recx;
+	char         buf[RCL_BLK_SIZE];
+	int          i;
+
+	ctx->ctl_oid = daos_test_oid_gen(ctx->arg->coh, OC_EC_4P2G1, 0, 0, ctx->arg->myrank);
+	memset(buf, 'z', RCL_BLK_SIZE);
+	ioreq_init(&req, ctx->arg->coh, ctx->ctl_oid, DAOS_IOD_ARRAY, ctx->arg);
+	for (i = 0; i < RCL_DATA_NR * RCL_BLKS_PER_CELL; i++) {
+		recx.rx_idx = (uint64_t)i * RCL_BLK_SIZE;
+		recx.rx_nr  = RCL_BLK_SIZE;
+		insert_recxs(RPR_CTL_DKEY, "a_key", 1, DAOS_TX_NONE, &recx, 1, buf, RCL_BLK_SIZE,
+			     &req);
+	}
+	ioreq_fini(&req);
+	assert_int_equal(
+	    rpr_parity_replica_nr(ctx->arg, ctx->ctl_oid, RPR_CTL_DKEY, 0, RCL_STRIPE_SIZE),
+	    RCL_TGT_NR - RCL_DATA_NR);
+}
+
+/* cap EC aggregation at @cap on all ranks, enable aggregation and wait for a round below the cap */
+static void
+rpr_agg_run(struct rcl_ctx *ctx, uint64_t cap)
+{
+	test_arg_t *arg = ctx->arg;
+	int         sec, rc;
+
+	/* no EC aggregation so far */
+	assert_int_equal(rpr_parity_replica_nr(arg, ctx->ctl_oid, RPR_CTL_DKEY, 0, RCL_STRIPE_SIZE),
+			 RCL_TGT_NR - RCL_DATA_NR);
+	print_message("cap EC aggregation at " DF_X64 ", enable aggregation and wait %d s\n", cap,
+		      RPR_AGG_WAIT_SEC);
+	/* the fail value is set together with the fail_loc */
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				   DAOS_CONT_EC_AGG_EPOCH_MAX | DAOS_FAIL_ALWAYS, cap, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	assert_rc_equal(rc, 0);
+
+	for (sec = 0; sec < 2 * RPR_AGG_WAIT_SEC; sec += RPR_POLL_SEC) {
+		if (rpr_parity_replica_nr(arg, ctx->ctl_oid, RPR_CTL_DKEY, 0, RCL_STRIPE_SIZE) == 0)
+			break;
+		sleep(RPR_POLL_SEC);
+	}
+	print_message("control object aggregated after %d s\n", sec);
+	assert_true(sec < 2 * RPR_AGG_WAIT_SEC);
+	/* let the round go through the other objects */
+	if (sec < RPR_AGG_WAIT_SEC)
+		sleep(RPR_AGG_WAIT_SEC - sec);
+}
+
+/*
+ * Number of (dkey, stripe, parity shard) without the replica of data cell
+ * @cell, for the dkeys of the first @obj_nr objects whose parity cells are not
+ * on @skip (rebuilt).
+ */
+static int
+rpr_cell_replica_missing(struct rcl_ctx *ctx, d_rank_t skip, int cell, int obj_nr, int *total)
+{
+	char dkey[32];
+	int  o, d, s, c, nr, missing = 0;
+
+	*total = 0;
+	for (o = 0; o < obj_nr; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			for (c = RCL_DATA_NR; c < RCL_TGT_NR; c++)
+				if (ctx->orig[o].rank[rcl_cell2shard(dkey, c)] == skip)
+					break;
+			if (c < RCL_TGT_NR)
+				continue;
+			for (s = 0; s < RCL_STRIPE_NR; s++) {
+				nr = rpr_parity_replica_nr(
+				    ctx->arg, ctx->oids[o], dkey,
+				    (uint64_t)s * RCL_STRIPE_SIZE + cell * CELL_SIZE, CELL_SIZE);
+				*total += RCL_TGT_NR - RCL_DATA_NR;
+				missing += RCL_TGT_NR - RCL_DATA_NR - nr;
+			}
+		}
+	return missing;
+}
+
+/* overwrite data cell RPR_CELL of every stripe of the first RPR_HOT_OBJ_NR objects */
+static void
+rpr_hot_write(struct rcl_ctx *ctx)
+{
+	struct ioreq req;
+	daos_recx_t  recx;
+	char         dkey[32];
+	char         buf[RCL_BLK_SIZE];
+	int          o, d, s, b;
+
+	ctx->hot_nr = RPR_HOT_OBJ_NR;
+	ctx->hot_gen++;
+	for (o = 0; o < RPR_HOT_OBJ_NR; o++) {
+		memset(buf, rcl_pattern(o, ctx->hot_gen), RCL_BLK_SIZE);
+		ioreq_init(&req, ctx->arg->coh, ctx->oids[o], DAOS_IOD_ARRAY, ctx->arg);
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			for (s = 0; s < RCL_STRIPE_NR; s++)
+				for (b = 0; b < RCL_BLKS_PER_CELL; b++) {
+					recx.rx_idx = (uint64_t)s * RCL_STRIPE_SIZE +
+						      (uint64_t)RPR_CELL * CELL_SIZE +
+						      (uint64_t)b * RCL_BLK_SIZE;
+					recx.rx_nr = RCL_BLK_SIZE;
+					insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, buf,
+						     RCL_BLK_SIZE, &req);
+				}
+		}
+		ioreq_fini(&req);
+	}
+}
+
+/*
+ * Stripes overwritten more often than the aggregation gap always have an update
+ * newer than the EC aggregation round. They must still be aggregated once the
+ * round is beyond the last rebuild, otherwise they hold back the EC aggregation
+ * boundary (and VOS aggregation of the whole container) forever.
+ *
+ * Called with the EC aggregation still capped: the replicas of data cell 0,
+ * never overwritten, are on the parity shards. Keep overwriting data cell
+ * RPR_CELL of the hot stripes, remove the cap and wait for the replicas of
+ * cell 0 to be aggregated. Returns the number of replicas left.
+ */
+static int
+rpr_hot_stripes(struct rcl_ctx *ctx)
+{
+	test_arg_t *arg = ctx->arg;
+	int         sec, rc, total, missing;
+
+	ctx->hot_gen = ctx->gen;
+	rpr_hot_write(ctx);
+	missing = rpr_cell_replica_missing(ctx, -1, 0, RPR_HOT_OBJ_NR, &total);
+	print_message("hot stripes: %d of %d replicas of cell 0 missing before removing the cap\n",
+		      missing, total);
+	assert_int_equal(missing, 0);
+
+	print_message("clear fail_loc on all ranks\n");
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (sec = 0; sec < 2 * RPR_AGG_WAIT_SEC; sec += RPR_HOT_GAP_SEC) {
+		rpr_hot_write(ctx);
+		missing = rpr_cell_replica_missing(ctx, -1, 0, RPR_HOT_OBJ_NR, &total);
+		if (missing == total)
+			break;
+		sleep(RPR_HOT_GAP_SEC);
+	}
+	print_message("hot stripes: %d of %d replicas of cell 0 aggregated after %d s of "
+		      "overwrite (generation %d)\n",
+		      missing, total, sec, ctx->hot_gen);
+	return total - missing;
+}
+
+/* compare the normal and the degraded fetch of every object, returns the number of mismatches */
+static int
+rpr_obj_verify(struct rcl_ctx *ctx, const char *stage)
+{
+	int o, rc, bad = 0;
+
+	for (o = 0; o < RCL_OBJ_NR; o++) {
+		rc = daos_obj_verify(ctx->arg->coh, ctx->oids[o], DAOS_EPOCH_MAX);
+		if (rc == 0)
+			continue;
+		bad++;
+		print_message("[%s] obj[%d] " DF_OID " daos_obj_verify: " DF_RC "\n", stage, o,
+			      DP_OID(ctx->oids[o]), DP_RC(rc));
+	}
+	print_message("obj verify [%s] done: %d bad objects\n", stage, bad);
+	return bad;
+}
+
+/* every stripe as one update: parity extent on the parity shards, no replica */
+static void
+rpr_write_stripes(struct rcl_ctx *ctx)
+{
+	struct ioreq req;
+	daos_recx_t  recx;
+	char         dkey[32];
+	char        *buf;
+	int          o, d, s;
+
+	buf = malloc(RCL_STRIPE_SIZE);
+	assert_non_null(buf);
+	print_message("write every stripe as one update, generation %d\n", ctx->gen);
+	for (o = 0; o < RCL_OBJ_NR; o++) {
+		memset(buf, rcl_pattern(o, ctx->gen), RCL_STRIPE_SIZE);
+		ioreq_init(&req, ctx->arg->coh, ctx->oids[o], DAOS_IOD_ARRAY, ctx->arg);
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			for (s = 0; s < RCL_STRIPE_NR; s++) {
+				recx.rx_idx = (uint64_t)s * RCL_STRIPE_SIZE;
+				recx.rx_nr  = RCL_STRIPE_SIZE;
+				insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, buf,
+					     RCL_STRIPE_SIZE, &req);
+			}
+		}
+		ioreq_fini(&req);
+	}
+	free(buf);
+}
+
+/* verify both sets by fetch and by daos_obj_verify(), returns the number of problems */
+static int
+rpr_verify(struct rcl_ctx *ctxa, struct rcl_ctx *ctxb, const char *stage)
+{
+	char label[80];
+	int  bad;
+
+	snprintf(label, sizeof(label), "set A %s", stage);
+	bad = rcl_verify(ctxa, label);
+	bad += rpr_obj_verify(ctxa, label);
+	snprintf(label, sizeof(label), "set B %s", stage);
+	bad += rcl_verify(ctxb, label);
+	bad += rpr_obj_verify(ctxb, label);
+	return bad;
+}
+
+/* the replicas of the overwritten cell of set B which are missing on the parity shards */
+static int
+rpr_replica_missing(struct rcl_ctx *ctxb, d_rank_t skip, const char *stage, int *total)
+{
+	int missing;
+
+	missing = rpr_cell_replica_missing(ctxb, skip, RPR_CELL, RCL_OBJ_NR, total);
+	print_message("set B %s: %d of %d cell replicas missing on the parity shards\n", stage,
+		      missing, *total);
+	return missing;
+}
+
+static void
+rebuild_ec_parity_below_newer(void **state)
+{
+	test_arg_t     *arg = *state;
+	struct rcl_ctx *ctxa;
+	struct rcl_ctx *ctxb;
+	d_rank_t        ranks[2];
+	uint64_t        cap = 0;
+	int             bad = 0, pred = 0, o, rc, sec, total, missing;
+	char            stage[64];
+
+	print_message("BEGIN %s\n", __FUNCTION__);
+	if (!test_runable(arg, 8))
+		return;
+	if (svc_nreplicas < 5)
+		return;
+
+	D_ALLOC_PTR(ctxa);
+	D_ALLOC_PTR(ctxb);
+	assert_non_null(ctxa);
+	assert_non_null(ctxb);
+	ctxa->arg       = arg;
+	ctxa->only_cell = RPR_CELL;
+	ctxb->arg       = arg;
+	ctxb->only_cell = RPR_CELL;
+	for (o = 0; o < RCL_OBJ_NR; o++) {
+		ctxa->oids[o] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+		ctxb->oids[o] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	}
+
+	if (arg->myrank == 0) {
+		print_message("disable aggregation\n");
+		rc = daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
+		assert_rc_equal(rc, 0);
+
+		/* below the cap */
+		rcl_write_blocks(ctxa);
+		rpr_write_stripes(ctxb);
+		ctxb->gen = 1;
+		print_message("set B: overwrite data cell %d of every stripe\n", RPR_CELL);
+		rcl_write_blocks(ctxb);
+		rpr_ctl_write(ctxa);
+
+		sleep(RPR_GAP_SEC);
+		cap = d_hlc_get();
+		sleep(RPR_GAP_SEC);
+
+		/* above the cap */
+		ctxa->gen = 1;
+		print_message("set A: overwrite data cell %d of every stripe\n", RPR_CELL);
+		rcl_write_blocks(ctxa);
+		ctxb->gen = 2;
+		rpr_write_stripes(ctxb);
+
+		rcl_layout_get(ctxa, ctxa->orig);
+		rcl_layout_get(ctxb, ctxb->orig);
+		pred = rpr_pick_ranks(ctxa, ranks, RPR_CELL);
+	}
+	/* the last generation of set B covers every cell */
+	ctxa->gen       = 1;
+	ctxb->gen       = 2;
+	ctxb->only_cell = -1;
+	par_bcast(PAR_COMM_WORLD, ranks, 2, PAR_INT, 0);
+	par_bcast(PAR_COMM_WORLD, &pred, 1, PAR_INT, 0);
+
+	/* step 1 */
+	rebuild_pools_ranks(&arg, 1, &ranks[0], 1, false);
+	if (arg->myrank == 0) {
+		snprintf(stage, sizeof(stage), "after exclude rank %u", ranks[0]);
+		assert_int_equal(rpr_verify(ctxa, ctxb, stage), 0);
+		/* the probe must see the replicas before aggregation */
+		assert_int_equal(rpr_replica_missing(ctxb, ranks[0], stage, &total), 0);
+
+		/* step 2 */
+		rpr_agg_run(ctxa, cap);
+		bad += rpr_verify(ctxa, ctxb, "after EC aggregation");
+		bad += rpr_replica_missing(ctxb, ranks[0], "after EC aggregation", &total);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	/* step 3 */
+	rebuild_pools_ranks(&arg, 1, &ranks[1], 1, false);
+	if (arg->myrank == 0) {
+		snprintf(stage, sizeof(stage), "after exclude rank %u", ranks[1]);
+		bad += rpr_verify(ctxa, ctxb, stage);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	/* step 4, rcl_reint_ranks() verifies set A by fetch */
+	bad += rcl_reint_ranks(ctxa, ranks, 2, "set A after reint both ranks");
+	if (arg->myrank == 0) {
+		bad += rpr_obj_verify(ctxa, "set A after reint both ranks");
+		bad += rcl_verify(ctxb, "set B after reint both ranks");
+		bad += rpr_obj_verify(ctxb, "set B after reint both ranks");
+		bad += rpr_replica_missing(ctxb, ranks[0], "after reint both ranks", &total);
+
+		/* step 5, removes the cap */
+		bad += rpr_hot_stripes(ctxa);
+
+		/* step 6 */
+		for (sec = 0; sec < 2 * RPR_AGG_WAIT_SEC; sec += RPR_POLL_SEC) {
+			missing =
+			    rpr_cell_replica_missing(ctxb, ranks[0], RPR_CELL, RCL_OBJ_NR, &total);
+			if (missing == total)
+				break;
+			sleep(RPR_POLL_SEC);
+		}
+		print_message("set B after %d s without cap: %d of %d cell replicas aggregated\n",
+			      sec, missing, total);
+		bad += total - missing;
+		bad += rpr_verify(ctxa, ctxb, "after uncapped EC aggregation");
+		print_message("SUMMARY %s: %d cells of set A follow the scenario, %d problems\n",
+			      __FUNCTION__, pred, bad);
+	}
+	par_barrier(PAR_COMM_WORLD);
+	arg->srv_disabled_ntgts = 0;
+	D_FREE(ctxa);
+	D_FREE(ctxb);
+	assert_int_equal(bad, 0);
+	print_message("END %s\n", __FUNCTION__);
+}
+
 static void
 rebuild_ec_reint_parity_epoch_inflation(void **state)
 {
@@ -1851,7 +2387,8 @@ rebuild_ec_reint_parity_epoch_inflation(void **state)
 
 	D_ALLOC_PTR(ctx);
 	assert_non_null(ctx);
-	ctx->arg = arg;
+	ctx->arg       = arg;
+	ctx->only_cell = -1;
 	for (o = 0; o < RCL_OBJ_NR; o++)
 		ctx->oids[o] = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 
@@ -2009,6 +2546,8 @@ static const struct CMUnitTest rebuild_tests[] = {
      rebuild_ec_6nodes_setup, test_teardown},
     {"REBUILD49: EC reint data loss through parity replica epoch inflation",
      rebuild_ec_reint_parity_epoch_inflation, rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD50: EC parity below a newer update after rebuild", rebuild_ec_parity_below_newer,
+     rebuild_ec_8nodes_setup, test_teardown},
 };
 
 int

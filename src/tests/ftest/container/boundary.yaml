@@ -36,7 +36,7 @@ container:
   execute_io:
     run_time: 10
     rank: 1
-    obj_classs: "OC_RP_3G1"
+    obj_classs: "OC_RP_4G1"
 
 boundary_test: !mux
   test_1:

@@ -831,6 +831,7 @@ enum {
 #define DAOS_FAIL_SHARD_NONEXIST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2a)
 #define DAOS_REBUILD_ADMIN_STOP_RECLAIM   (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2b)
 
+#define DAOS_DTX_LEADER_SWITCH            (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2f)
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
 #define DAOS_DTX_NONLEADER_ERROR	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x32)
@@ -902,6 +903,30 @@ enum {
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
 #define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
 #define DAOS_OBJ_EC_AGG_LEADER_DIFF	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x83)
+/**
+ * This fault makes the shard fetch replies of an EC single value race: a shard
+ * holding a record of fail_value bytes delays its bulk transfer, and every
+ * shard delays its reply after the bulk transfer. A shard holding a stale cell
+ * of an overwritten record is then handled by the client after the data of the
+ * newer record landed in the shared fetch buffer, but before the reply that
+ * exposes the record size conflict.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x84)
+/**
+ * Same as DAOS_OBJ_EC_SINGV_FETCH_RACE, and the shard holding a record of
+ * fail_value bytes fails the fetch with -DER_TIMEDOUT after its bulk transfer:
+ * its data landed in the shared fetch buffer, but the client does not get the
+ * record size it holds.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL  (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x85)
+/**
+ * Reverse of DAOS_OBJ_EC_SINGV_FETCH_RACE for the reply order: the shard holding
+ * a record of fail_value bytes transfers its data first and replies last, the
+ * other shards transfer later and reply earlier. The data of the other shards
+ * is then on top of that record in the shared fetch buffer, and their replies
+ * are handled before the reply that tells its size.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x86)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
@@ -936,6 +961,8 @@ enum {
 #define DAOS_CONT_EC_BOUNDARY_FREEZE       (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa8)
 /* Poison memory on free to expose use-after-free bugs */
 #define DAOS_MEM_PMEM_FREE_POISON          (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa9)
+/* cap the EC aggregation upper bound at the epoch given by fail_value */
+#define DAOS_CONT_EC_AGG_EPOCH_MAX         (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xaa)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xb1)
@@ -971,6 +998,13 @@ enum {
 #define DLCK_FAULT_ENGINE_JOIN             (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x109)
 #define DLCK_FAULT_POOL_PREALLOCATE        (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10a)
 #define DLCK_FAULT_POOL_PATH_ALLOC         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10b)
+#define DLCK_FAULT_POOL_NVME_HEALTH        (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10c)
+#define DLCK_FAULT_POOL_OPEN_BIO           (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10d)
+#define DLCK_FAULT_POOL_OPEN_UMEM          (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10e)
+#define DLCK_FAULT_POOL_OPEN_MAGIC         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x10f)
+#define DLCK_FAULT_POOL_OPEN_VERSION       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x110)
+#define DLCK_FAULT_POOL_OPEN_UUID          (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x111)
+#define DLCK_FAULT_CONT_DOES_NOT_EXIST     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x112)
 
 /** Pool open fault injection */
 #define DAOS_FAULT_POOL_NVME_HEALTH       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x200)
@@ -984,6 +1018,12 @@ enum {
 #define DAOS_FAULT_BTREE_FEATURES         (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x208)
 #define DAOS_FAULT_POOL_EXT_PADDING       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x209)
 #define DAOS_FAULT_POOL_EXT_RESERVED      (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20a)
+#define DAOS_FAULT_CONT_TREE_INV_CLASS     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20b)
+#define DAOS_FAULT_CONT_TREE_UNREG_CLASS   (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20c)
+#define DAOS_FAULT_CONT_TREE_FEATURES      (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20d)
+#define DAOS_FAULT_GC_TREE_INV_CLASS       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20e)
+#define DAOS_FAULT_GC_TREE_UNREG_CLASS     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x20f)
+#define DAOS_FAULT_GC_TREE_FEATURES        (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x210)
 
 /** Container open fault injection */
 #define DAOS_FAULT_CONT_DOES_NOT_EXIST     (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x300)

@@ -253,6 +253,7 @@ dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
 		buf[DTS_CFG_MAX - 1] = 0;
 }
 
+/* clang-format off */
 /**
  * List all pools created in the specified DAOS system.
  *
@@ -580,6 +581,19 @@ int
 ctl_system_reint_rank(const char *dmg_config_file, d_rank_t rank);
 
 /**
+ * Query the state of a rank in the system.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to be queried.
+ * \param state	[OUT]	Buffer for the state string, such as "joined", "stopped".
+ * \param state_len
+ *		[IN]	Size of the \a state buffer.
+ */
+int dmg_system_query_rank_state(const char *dmg_config_file, d_rank_t rank, char *state,
+				size_t state_len);
+
+/**
  * Exclude a rank from the system.
  *
  * \param dmg_config_file
@@ -604,6 +618,7 @@ ctl_system_exclude_rank(const char *dmg_config_file, d_rank_t rank);
 int
 ctl_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
 			const char *subsystems);
+/* clang-format on */
 
 const char *daos_target_state_enum_to_str(int state);
 
