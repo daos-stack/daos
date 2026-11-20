@@ -647,19 +647,6 @@ done:
 	if (rc == 0 && p_arg->result != 0)
 		rc = p_arg->result;
 
-	/* After RDMA is done, corrupt the server data */
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
-		struct bio_sglist	*fbsgl;
-		d_sg_list_t		 fsgl;
-		int			*fbuffer;
-
-		D_ERROR("csum: Corrupting data after RDMA\n");
-		fbsgl = vos_iod_sgl_at(ioh, 0);
-		bio_sgl_convert(fbsgl, &fsgl);
-		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
-		*fbuffer += 0x2;
-		d_sgl_fini(&fsgl, false);
-	}
 	return rc;
 }
 
@@ -1021,6 +1008,47 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 	recx_ep.re_rec_size = rec_size;
 
 	return daos_recx_ep_add(recov_list, &recx_ep);
+}
+
+/* Fault injection for the fetch of EC single values, see DAOS_OBJ_EC_SINGV_FETCH_RACE,
+ * DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL and DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY. Return true if
+ * the replies have to race, set \a late if this shard has to transfer its data later than
+ * the others, \a last if it has to reply later than the others, and \a fail if it has to
+ * fail the fetch after the transfer.
+ */
+static bool
+obj_fetch_singv_race(daos_iod_t *iods, uint32_t iods_nr, bool *late, bool *last, bool *fail)
+{
+	bool     singv = false;
+	bool     match = false;
+	uint32_t i;
+
+	for (i = 0; i < iods_nr; i++) {
+		if (iods[i].iod_type != DAOS_IOD_SINGLE)
+			continue;
+		singv = true;
+		if (iods[i].iod_size == daos_fail_value_get())
+			match = true;
+	}
+	if (!singv)
+		return false;
+
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE)) {
+		*late = match;
+		return true;
+	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL)) {
+		*late = match;
+		*fail = match;
+		return true;
+	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY)) {
+		*late = !match;
+		*last = match;
+		return true;
+	}
+
+	return false;
 }
 
 /** Filter and prepare for the sing value EC update/fetch */
@@ -1774,9 +1802,26 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 
 	if (rma) {
+		bool singv_race = false;
+		bool singv_late = false;
+		bool singv_last = false;
+		bool singv_fail = false;
+
+		if (obj_rpc_is_fetch(rpc))
+			singv_race = obj_fetch_singv_race(iods, iods_nr, &singv_late, &singv_last,
+							  &singv_fail);
+		/* let the shards with other record size transfer first */
+		if (singv_late)
+			dss_sleep(500);
+
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
 				       skips, ioh, NULL, iods_nr, orw->orw_bulks.ca_count, NULL);
+		/* reply after all shards' data landed in the client buffer */
+		if (rc == 0 && singv_race)
+			dss_sleep(singv_last ? 2000 : 1000);
+		if (rc == 0 && singv_fail)
+			rc = -DER_TIMEDOUT;
 		if (rc == 0) {
 			bio_iod_flush(biod);
 
@@ -1819,10 +1864,21 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
-		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK) && !rma) {
+		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 			D_ERROR("csum: Corrupting data (DISK)\n");
-			dcf_corrupt(orw->orw_sgls.ca_arrays,
-				    orw->orw_sgls.ca_count);
+			if (rma) {
+				struct bio_sglist *fbsgl;
+				d_sg_list_t        fsgl;
+				int               *fbuffer;
+
+				fbsgl = vos_iod_sgl_at(ioh, 0);
+				bio_sgl_convert(fbsgl, &fsgl);
+				fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
+				*fbuffer += 0x2;
+				d_sgl_fini(&fsgl, false);
+			} else {
+				dcf_corrupt(orw->orw_sgls.ca_arrays, orw->orw_sgls.ca_count);
+			}
 		}
 	}
 	if (obj_rpc_is_fetch(rpc) && create_map) {
@@ -2065,10 +2121,17 @@ obj_get_iods_offs(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 		return 0;
 	}
 
-	if (iod_array->oia_iod_csums != NULL)
-		(*p_csums)->ic_data = csum_info;
-	else
+	if (iod_array->oia_iod_csums != NULL) {
+		/*
+		 * The caller may pass an empty slot (*p_csums == NULL), in which case
+		 * obj_get_iods_offs_by_oid() allocates the csums array and fills in
+		 * ic_data for each entry itself, so there is nothing to seed here.
+		 */
+		if (*p_csums != NULL)
+			(*p_csums)->ic_data = csum_info;
+	} else {
 		*p_csums = NULL;
+	}
 
 	rc = obj_get_iods_offs_by_oid(uoid, iod_array, oca, dkey_hash, layout_ver, iods, offs,
 				      skips, iod_array->oia_iod_csums == NULL ? NULL : p_csums, nr);
@@ -5391,7 +5454,28 @@ out:
 			continue;
 
 		dcu = &dcsr->dcsr_update;
-		if (piods!= NULL && piods[i] != NULL && piods[i] != &local_iods[i] &&
+		if (pcsums != NULL && pcsums[i] != NULL && pcsums[i] != &local_csums[i] &&
+		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
+			struct dcs_iod_csums	*csum = pcsums[i];
+			int j;
+
+			/* csum[] was compacted alongside piods[i] by
+			 * obj_get_iods_offs_by_oid(), so the iod types have to be read
+			 * from the compacted array. Only single values own ic_data; the
+			 * array entries borrow it from the decoded RPC buffer.
+			 */
+			for (j = 0;
+			     piods != NULL && piods[i] != NULL && j < dcu->dcu_iod_array.oia_iod_nr;
+			     j++) {
+				if (piods[i][j].iod_type == DAOS_IOD_SINGLE &&
+				    csum[j].ic_data != NULL)
+					D_FREE(csum[j].ic_data);
+			}
+
+			D_FREE(csum);
+		}
+
+		if (piods != NULL && piods[i] != NULL && piods[i] != &local_iods[i] &&
 		    piods[i] != dcu->dcu_iod_array.oia_iods)
 			D_FREE(piods[i]);
 
@@ -5401,20 +5485,6 @@ out:
 
 		if (pskips != NULL && pskips[i] != NULL && pskips[i] != (uint8_t *)&local_skips[i])
 			D_FREE(pskips[i]);
-
-		if (pcsums != NULL && pcsums[i] != NULL && pcsums[i] != &local_csums[i] &&
-		    pcsums[i] != dcu->dcu_iod_array.oia_iod_csums) {
-			struct dcs_iod_csums	*csum = pcsums[i];
-			int j;
-
-			for (j = 0; j < dcu->dcu_iod_array.oia_oiod_nr; i++) {
-				if (dcu->dcu_iod_array.oia_iods[j].iod_type == DAOS_IOD_SINGLE &&
-				    csum[j].ic_data != NULL)
-					D_FREE(csum[j].ic_data);
-			}
-
-			D_FREE(csum);
-		}
 	}
 
 	if (piods != local_p_iods && piods != NULL)
