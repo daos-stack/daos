@@ -689,10 +689,19 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	}
 }
 
+// getScmPageSize returns the page size, in bytes, of the memory files of the VOS targets of the
+// engine, as reported by the engine when it became ready.
+//
+// It returns errEngineNotReady if the engine is not ready, because it may not have reported its
+// page size yet. Any other error is a failure.
 func (cs *ControlService) getScmPageSize(engineCfg *engine.Config) (uint64, error) {
 	for _, ei := range cs.harness.Instances() {
 		if ei.Index() != engineCfg.Index {
 			continue
+		}
+
+		if !ei.IsReady() {
+			return 0, errEngineNotReady
 		}
 
 		pageSize := ei.GetScmPageSize()
@@ -781,6 +790,12 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) error {
 					engineCfg.TargetCount)
 			}
 			pageSize, err := cs.getScmPageSize(engineCfg)
+			if errors.Is(err, errEngineNotReady) {
+				cs.log.Noticef("Adjusting usable size of engine %d to 0 Bytes of SCM device %q: %s",
+					engineCfg.Index, mountPath, err.Error())
+				mnt.UsableBytes = 0
+				continue
+			}
 			if err != nil {
 				return err
 			}

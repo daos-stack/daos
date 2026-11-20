@@ -449,8 +449,8 @@ func (ei *EngineInstance) setScmPageSize(pageSize uint64) {
 	ei._scmPageSize = pageSize
 }
 
-// GetScmPageSize returns the page size of the memory files of the VOS targets, as reported by the
-// engine when it became ready, or zero if it did not.
+// GetScmPageSize returns the page size, in bytes, of the memory files of the VOS targets, as
+// reported by the engine when it became ready, or zero if it did not.
 func (ei *EngineInstance) GetScmPageSize() uint64 {
 	ei.RLock()
 	defer ei.RUnlock()
