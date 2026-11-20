@@ -795,7 +795,7 @@ enum {
 static int
 mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 			 daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
-			 d_iov_t *csum_iov_fetch, struct migrate_pool_tls *tls)
+			 d_iov_t *csum_iov_fetch, daos_iom_t *iom, struct migrate_pool_tls *tls)
 {
 	struct migr_resource *res       = migr_hdl2res(&mrone->mo_data_rsh);
 	uint32_t *extra_arg = NULL;
@@ -813,7 +813,7 @@ mrone_obj_fetch_internal(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_
 	}
 	D_ASSERT(res != NULL);
 retry:
-	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL, flags, extra_arg,
+	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, iom, flags, extra_arg,
 			   csum_iov_fetch);
 	if ((rc == -DER_TIMEDOUT || rc == -DER_FETCH_AGAIN || rc == -DER_NOMEM ||
 	     rc == -DER_REBUILD_DELAY || daos_crt_network_error(rc)) &&
@@ -896,8 +896,8 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
 		flags |= DIOF_TO_LEADER;
 
-	rc = mrone_obj_fetch_internal(mrone, oh, sgls, iods, iod_num, eph,
-				      flags, csum_iov_fetch, tls);
+	rc = mrone_obj_fetch_internal(mrone, oh, sgls, iods, iod_num, eph, flags, csum_iov_fetch,
+				      NULL, tls);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -916,8 +916,8 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		csum_iov_fetch->iov_len = 0;
 		csum_iov_fetch->iov_buf = p;
 
-		rc = mrone_obj_fetch_internal(mrone, oh, sgls, iods, iod_num,
-					      eph, flags, csum_iov_fetch, tls);
+		rc = mrone_obj_fetch_internal(mrone, oh, sgls, iods, iod_num, eph, flags,
+					      csum_iov_fetch, NULL, tls);
 	}
 
 out:
@@ -1329,13 +1329,101 @@ out:
 	return rc;
 }
 
+/*
+ * A from-parity recx is recovered at its parity epoch E by reading the peer shards at E. If the
+ * range was overwritten after E, the old parity may still exist on the parity shard (e.g. EC
+ * aggregation is paused during rebuild), but a previously rebuilt peer shard only has the
+ * visible (newer) extents and nothing at E, so the recovery finds nothing and reports
+ * DER_DATA_LOSS.
+ *
+ * On DER_DATA_LOSS, re-fetch the recx at the rebuild epoch to check whether it was overwritten.
+ * The recx belongs to the rebuilding shard, so it is a degraded fetch served by the parity shard:
+ * replica extents not older than the visible parity (epoch >= E) are returned as data, the rest
+ * is reported to be recovered from parity. With DIOF_EC_IOM_NO_RECOV, the iom only maps the
+ * returned extents and no recovery is done, so the iom is exactly the data not older than the
+ * parity. If it fully covers the recx, the old parity version is invisible after rebuild and can
+ * be skipped: the newer extents are enumerated and migrated as replicas, either by this mrone or
+ * by another one (e.g. written with a different rec_version, or enumerated in another batch).
+ * Otherwise it is a real data loss.
+ *
+ * NB: a newer punch is not counted as coverage, so the range still reports DER_DATA_LOSS.
+ *
+ * @iod must be in DAOS space with a single recx.
+ *
+ * Return 1 if overwritten, 0 if not, or negative error (e.g. pool map changed during the fetch).
+ */
+static int
+migrate_recx_overwritten(struct migrate_one *mrone, daos_handle_t oh, daos_iod_t *iod)
+{
+	struct migrate_pool_tls *tls   = mrone->mo_tls;
+	daos_iom_t               iom   = {0};
+	daos_recx_t             *recx  = &iod->iod_recxs[0];
+	uint64_t                 start = recx->rx_idx;
+	uint64_t                 end   = DAOS_RECX_END(*recx);
+	uint32_t                 flags = DIOF_FOR_MIGRATION | DIOF_EC_IOM_NO_RECOV;
+	daos_size_t              size;
+	d_sg_list_t              sgl;
+	d_iov_t                  iov;
+	void                    *buf;
+	bool                     progress;
+	int                      covered = 0;
+	int                      i;
+	int                      rc;
+
+	D_ASSERT(iod->iod_nr == 1);
+	if (tls->mpt_fini)
+		return migrate_pool_tls_get_status(tls);
+
+	size = daos_iods_len(iod, 1);
+	D_ALLOC(buf, size);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	d_iov_set(&iov, buf, size);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &iov;
+	iom.iom_flags = DAOS_IOMF_DETAIL;
+	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
+		flags |= DIOF_TO_LEADER;
+
+	rc = mrone_obj_fetch_internal(mrone, oh, &sgl, iod, 1, mrone->mo_epoch, flags, NULL, &iom,
+				      tls);
+	if (rc != 0 || iod->iod_size == 0)
+		goto out;
+
+	do {
+		progress = false;
+		for (i = 0; i < min(iom.iom_nr, iom.iom_nr_out); i++) {
+			daos_recx_t *r = &iom.iom_recxs[i];
+
+			if (r->rx_idx <= start && DAOS_RECX_END(*r) > start) {
+				start    = DAOS_RECX_END(*r);
+				progress = true;
+				if (start >= end) {
+					covered = 1;
+					goto out;
+				}
+			}
+		}
+	} while (progress);
+out:
+	D_INFO(DF_RB ": " DF_UOID " recx " DF_RECX " at " DF_X64 " overwritten %d, iom_nr %u: %d",
+	       DP_RB_MRO(mrone), DP_UOID(mrone->mo_oid), DP_RECX(*recx), mrone->mo_epoch, covered,
+	       iom.iom_nr_out, rc);
+	D_FREE(iom.iom_recxs);
+	D_FREE(buf);
+	return rc != 0 ? rc : covered;
+}
+
 static int
 migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
 	int i;
 	int j;
-	int rc = 0;
+	int rc        = 0;
+	int parity_rc = 0;
 
 	/* If it is parity recxs from another replica, then let's encode it anyway */
 	for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
@@ -1344,9 +1432,18 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			daos_epoch_t fetch_eph;
 			daos_epoch_t update_eph;
 			daos_epoch_t *update_eph_p;
+			daos_iod_t    chk_iod;
+			daos_recx_t   chk_recx;
 
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
+			/* Keep the DAOS space recx for migrate_recx_overwritten(), the fetch below
+			 * may convert the recx and reset iod_size.
+			 */
+			chk_recx = iod.iod_recxs[0];
+			chk_iod  = iod;
+			chk_iod.iod_recxs = &chk_recx;
+
 			/* If the epoch is higher than EC aggregate boundary, then
 			 * it should use stable epoch to fetch the data, since
 			 * the data could be aggregated independently on parity
@@ -1373,6 +1470,21 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			rc           = __migrate_fetch_update_parity(
                             mrone, oh, &iod, fetch_eph, &update_eph_p, 1, ds_cont,
                             DIOF_FOR_MIGRATION | DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY, true);
+			if (rc == -DER_DATA_LOSS) {
+				rc = migrate_recx_overwritten(mrone, oh, &chk_iod);
+				/* Overwritten after the parity epoch, nothing to recover. */
+				if (rc == 1) {
+					rc = 0;
+					continue;
+				}
+				/* Real loss, still migrate the other recxs, then report it. */
+				if (rc == 0) {
+					DL_WARN(-DER_DATA_LOSS, DF_RB ": recx " DF_RECX " lost",
+						DP_RB_MRO(mrone), DP_RECX(chk_recx));
+					parity_rc = -DER_DATA_LOSS;
+					continue;
+				}
+			}
 			if (rc)
 				return rc;
 		}
@@ -1385,7 +1497,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 						   ds_cont, DIOF_FOR_MIGRATION, false);
 	}
 
-	return rc;
+	return rc != 0 ? rc : parity_rc;
 }
 
 static void
@@ -1751,7 +1863,8 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 {
 	int i;
 	int j;
-	int rc = 0;
+	int rc        = 0;
+	int parity_rc = 0;
 
 	if (!daos_oclass_is_ec(&mrone->mo_oca))
 		return __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods,
@@ -1768,9 +1881,17 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
 			daos_iod_t iod = mrone->mo_iods_from_parity[i];
 			daos_epoch_t fetch_eph;
+			daos_iod_t   chk_iod;
+			daos_recx_t  chk_recx;
 
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
+			/* Keep the DAOS space recx for migrate_recx_overwritten(), the fetch below
+			 * may convert the recx and reset iod_size.
+			 */
+			chk_recx = iod.iod_recxs[0];
+			chk_iod  = iod;
+			chk_iod.iod_recxs = &chk_recx;
 
 			/* If the epoch is higher than EC aggregate boundary, then
 			 * it should use stable epoch to fetch the data, since
@@ -1798,6 +1919,21 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			    DIOF_EC_RECOV_FROM_PARITY | DIOF_FOR_MIGRATION |
 				DIOF_FETCH_EPOCH_EC_AGG_BOUNDARY,
 			    ds_cont);
+			if (rc == -DER_DATA_LOSS) {
+				rc = migrate_recx_overwritten(mrone, oh, &chk_iod);
+				/* Overwritten after the parity epoch, nothing to recover. */
+				if (rc == 1) {
+					rc = 0;
+					continue;
+				}
+				/* Real loss, still migrate the other recxs, then report it. */
+				if (rc == 0) {
+					DL_WARN(-DER_DATA_LOSS, DF_RB ": recx " DF_RECX " lost",
+						DP_RB_MRO(mrone), DP_RECX(chk_recx));
+					parity_rc = -DER_DATA_LOSS;
+					continue;
+				}
+			}
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -1840,7 +1976,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		}
 	}
 out:
-	return rc;
+	return rc != 0 ? rc : parity_rc;
 }
 
 /**

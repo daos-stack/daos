@@ -223,7 +223,9 @@ struct obj_reasb_req {
 	    /* orr_fail allocated flag, recovery task's orr_fail is inherited */
 	    orr_fail_alloc                         : 1,
 	    /* The fetch data/sgl is rebuilt by EC parity rebuild */
-	    orr_recov_data                         : 1;
+	    orr_recov_data                         : 1,
+	    /* iom without the extents to be recovered, and skip recovery */
+	    orr_iom_no_recov                       : 1;
 };
 
 static inline void
