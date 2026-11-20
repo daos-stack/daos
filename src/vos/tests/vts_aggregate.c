@@ -2010,6 +2010,8 @@ aggregate_38(void **state)
 	uint64_t                i, lo, hi;
 	int                     rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	oid = dts_unit_oid_gen(0, 0);
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
