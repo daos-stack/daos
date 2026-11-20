@@ -636,20 +636,24 @@ setup_wal_io(void **state)
 
 static struct io_test_args test_args;
 
-#define MDTEST_NEMB_RSRV_CNT  4
-#define MDTEST_MAX_NEMB_CNT   3
+/** The test needs 8 usable evictable buckets to exercise the various utilization ranges. */
+#define MDTEST_USABLE_EMB_CNT 8
 #define MDTEST_SOE_RSRV_CNT   3
-#define MDTEST_MAX_EMB_CNT    11
+/** Total number of evictable buckets (usable + SOE reserved). */
+#define MDTEST_MAX_EMB_CNT    (MDTEST_USABLE_EMB_CNT + MDTEST_SOE_RSRV_CNT)
+/** Total number of non-evictable buckets. */
+#define MDTEST_MAX_NEMB_CNT   3
 #define MDTEST_MB_SIZE        (16 * 1024 * 1024UL)
-/*
- * MDTEST_MAX_EMB_CNT is the total number of evictable zones (the usable
- * evictable buckets plus the MDTEST_SOE_RSRV_CNT reserved SOEMBs). The heap
- * therefore needs MDTEST_MAX_NEMB_CNT + MDTEST_MAX_EMB_CNT zones. The umem
- * cache must additionally back the non-evictable budget, which is the nembs
- * plus the SOEMB reservation (soe_rsrv active + 1 replacement), inflated by
- * 10/8 to invert the default 80% non-evictable split.
- */
+
+/** The heap needs to accommodate both evictable and non-evictable buckets. */
 #define MDTEST_META_BLOB_SIZE ((MDTEST_MAX_NEMB_CNT + MDTEST_MAX_EMB_CNT) * MDTEST_MB_SIZE)
+/**
+ * The umem cache must back the non-evictable budget: the nembs plus the SOEMBs
+ * (reserved + 1 replacement), inflated by 10/8 to invert the default 80%
+ * non-evictable split. The trailing +1 bucket absorbs the truncation of the
+ * integer divisions (here and in the 80% split), which would otherwise leave
+ * the non-evictable budget one bucket short.
+ */
 #define MDTEST_VOS_SIZE                                                                            \
 	(((MDTEST_MAX_NEMB_CNT + MDTEST_SOE_RSRV_CNT + 1) * 10 / 8 + 1) * MDTEST_MB_SIZE)
 #define MDTEST_DATA_BLOB_SIZE MDTEST_VOS_SIZE
@@ -1593,7 +1597,8 @@ wal_mb_utilization_tests(void **state)
 	uint32_t                  nemb_max, emb_max, soe_rsrv, soemb_cnt = 0;
 	int                       n_30_75 = 0, n_0_30 = 0, n_75_90 = 0, n_90 = 0;
 	uint32_t                  id;
-	int                       i, n_init, rc;
+	uint32_t                  i, n_init;
+	int                       rc;
 
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	umm  = vos_cont2umm(cont);
@@ -1603,19 +1608,25 @@ wal_mb_utilization_tests(void **state)
 	 * the non-evictable budget, so nemb_max == MDTEST_MAX_NEMB_CNT. emb_max
 	 * reports the usable evictable buckets (the reserved SOEMBs excluded), so
 	 * the total number of evictable zones is emb_max + soe_rsrv, which equals
-	 * MDTEST_MAX_EMB_CNT. The test needs 8 usable evictable buckets to
-	 * exercise the various utilization ranges.
+	 * MDTEST_MAX_EMB_CNT.
 	 */
 	rc = umempobj_get_mb_limits(umm->umm_pool, &nemb_max, &emb_max, &soe_rsrv);
 	assert_rc_equal(rc, 0);
 	print_message("MB limits: nemb_max=%u emb_max=%u soe_rsrv=%u\n", nemb_max, emb_max,
 		      soe_rsrv);
-	assert_true(nemb_max == MDTEST_MAX_NEMB_CNT);
-	assert_true(soe_rsrv == MDTEST_SOE_RSRV_CNT);
-	assert_true(emb_max + soe_rsrv == MDTEST_MAX_EMB_CNT);
-	assert_true(emb_max == 8);
+	assert_int_equal(nemb_max, MDTEST_MAX_NEMB_CNT);
+	assert_int_equal(soe_rsrv, MDTEST_SOE_RSRV_CNT);
+	assert_int_equal(emb_max + soe_rsrv, MDTEST_MAX_EMB_CNT);
+	assert_int_equal(emb_max, MDTEST_USABLE_EMB_CNT);
 
-	n_init = (int)emb_max - 1;
+	/*
+	 * ainfo[] layout: [0, n_init) are the buckets created here,
+	 * [n_init, n_init + soe_rsrv) are the initial SOEMBs populated below and
+	 * ainfo[n_init + soe_rsrv] is the new bucket created later. One usable
+	 * bucket is left uncreated here so the test can verify that the allocator
+	 * creates a new bucket once the 30%-75% and 0%-30% ranges are exhausted.
+	 */
+	n_init = emb_max - 1;
 	for (i = 0; i < n_init; i++) {
 		/* Create an MB and fill it with allocs */
 		ainfo[i].mb_id       = umem_allot_mb_evictable(umm, 0);
@@ -1660,8 +1671,9 @@ wal_mb_utilization_tests(void **state)
 	 */
 	rc = umempobj_get_soemb_ids(umm->umm_pool, soemb_ids, MDTEST_SOE_RSRV_CNT, &soemb_cnt);
 	assert_rc_equal(rc, 0);
-	assert_true(soemb_cnt == soe_rsrv);
-	for (i = 0; i < (int)soemb_cnt; i++) {
+	assert_int_equal(soemb_cnt, soe_rsrv);
+	for (i = 0; i < soemb_cnt; i++) {
+		/* The SOEMBs follow the n_init buckets created above in ainfo[]. */
 		bkt              = &ainfo[n_init + i];
 		bkt->mb_id       = soemb_ids[i];
 		bkt->num_allocs  = 0;
@@ -1689,12 +1701,12 @@ wal_mb_utilization_tests(void **state)
 	 */
 	rc = umempobj_get_soemb_ids(umm->umm_pool, soemb_ids, MDTEST_SOE_RSRV_CNT, &soemb_cnt);
 	assert_rc_equal(rc, 0);
-	assert_true(soemb_cnt == soe_rsrv);
+	assert_int_equal(soemb_cnt, soe_rsrv);
 
 	n_30_75 = ainfo_exclude_ids(range_30_75, n_30_75, soemb_ids, soemb_cnt);
 	n_0_30  = ainfo_exclude_ids(range_0_30, n_0_30, soemb_ids, soemb_cnt);
 	n_75_90 = ainfo_exclude_ids(range_75_90, n_75_90, soemb_ids, soemb_cnt);
-	assert_true(n_30_75 == 2);
+	assert_int_equal(n_30_75, 2);
 
 	/* Verify that the bucket returned by the allocator belongs to the
 	 * expected utilization range rather than being a specific bucket id.
@@ -1728,12 +1740,12 @@ wal_mb_utilization_tests(void **state)
 	/* Next is to create a new memory bucket. */
 	id = umem_allot_mb_evictable(umm, 0);
 	print_message("obtained id %d, expect a new bucket\n", id);
-	assert_true(id != 0);
+	assert_int_not_equal(id, UMEM_DEFAULT_MBKT_ID);
 	assert_null(ainfo_find(range_30_75, n_30_75, id));
 	assert_null(ainfo_find(range_0_30, n_0_30, id));
 	assert_null(ainfo_find(range_75_90, n_75_90, id));
 	assert_null(ainfo_find(range_90, n_90, id));
-	bkt  = &ainfo[n_init + (int)soemb_cnt];
+	bkt  = &ainfo[n_init + soemb_cnt];
 	*bkt = (struct bucket_alloc_info){.mb_id = id};
 	alloc_bucket_to_full(umm, bkt, checkpoint_fn, &arg->ctx.tc_po_hdl);
 	range_90[n_90++] = bkt;
@@ -1811,8 +1823,7 @@ wal_mb_emb_evicts_emb(void **state)
 		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	}
 out:
-	// MAX allocatable EMB's apart from SOEMBB
-	assert_true(i == MDTEST_MAX_EMB_CNT - MDTEST_SOE_RSRV_CNT + 1);
+	assert_int_equal(i, MDTEST_USABLE_EMB_CNT + 1);
 
 	/* Validate and free all allocations in evictable MBs */
 	for (j = 0; j < i; j++)
@@ -1851,8 +1862,7 @@ wal_mb_nemb_evicts_emb(void **state)
 		alloc_bucket_to_full(umm, &ainfo[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	}
 out:
-	// Now MAX EMB's has SOEMB also. Hence it should be subtracted.
-	assert_true(i == MDTEST_MAX_EMB_CNT - MDTEST_SOE_RSRV_CNT + 1);
+	assert_int_equal(i, MDTEST_USABLE_EMB_CNT + 1);
 
 	/* Fill non-evictable buckets. */
 	ainfo[0].mb_id       = 0;
@@ -1902,7 +1912,7 @@ wal_mb_nemb_pct(void **state)
 	ainfo[0].allow_spill = 0;
 	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	rc = umempobj_get_mb_limits(umm->umm_pool, &nemb_max, &emb_max, &soe_rsrv);
-	assert_true(rc == 0);
+	assert_rc_equal(rc, 0);
 	/*
 	 * The SOEMBs (soe_rsrv active + 1 replacement) are carved out of the 40%
 	 * non-evictable cache budget, so the non-evictable heap size is what is
@@ -1914,8 +1924,8 @@ wal_mb_nemb_pct(void **state)
 	assert_true(rc == 0);
 	print_message("nemb space utilization is %lu max is %lu exp %lu\n", cur_allocated, maxsz,
 		      exp_ne_sz);
-	assert_true(maxsz == exp_ne_sz);
-	assert_true(maxsz == nemb_max * MDTEST_MB_SIZE);
+	assert_int_equal(maxsz, exp_ne_sz);
+	assert_int_equal(maxsz, nemb_max * MDTEST_MB_SIZE);
 	assert_true(cur_allocated <= maxsz);
 
 	/* Reopen pool after setting DAOS_MD_ON_SSD_NEMB_PCT to 80%
@@ -1967,7 +1977,7 @@ nemb_unused(void **state)
 	struct vos_container    *cont;
 	struct umem_instance    *umm;
 	int                      i, j, rc;
-	int                      emb_cnt = MDTEST_MAX_EMB_CNT - MDTEST_SOE_RSRV_CNT;
+	int                      emb_cnt = MDTEST_USABLE_EMB_CNT;
 	struct bucket_alloc_info ainfo[MDTEST_MB_CNT + 1];
 	daos_size_t              maxsz, nemb_full_size, nemb_init_size, cur_allocated;
 	uint32_t                 id, found;
@@ -2024,7 +2034,7 @@ nemb_unused(void **state)
 		if (umem_cache_offisloaded(&umm->umm_pool->up_store, ainfo[j].start_umoff))
 			found++;
 	print_message("phase3: Found %d evictable MBs loaded\n", found);
-	D_ASSERT(found == (MDTEST_MB_VOS_CNT - MDTEST_NEMB_RSRV_CNT - 2));
+	D_ASSERT(found == (MDTEST_MB_VOS_CNT - MDTEST_MAX_NEMB_CNT - MDTEST_SOE_RSRV_CNT));
 
 	for (i = 1; i <= emb_cnt; i++)
 		free_bucket_by_pct(umm, &ainfo[i], 100, checkpoint_fn, &arg->ctx.tc_po_hdl);
@@ -2084,7 +2094,7 @@ nemb_unused(void **state)
 			found++;
 
 	print_message("phase7: Found %d evictable MBs loaded\n", found);
-	D_ASSERT((found == (MDTEST_MB_VOS_CNT - MDTEST_NEMB_RSRV_CNT - 2)));
+	D_ASSERT(found == (MDTEST_MB_VOS_CNT - MDTEST_MAX_NEMB_CNT - MDTEST_SOE_RSRV_CNT));
 
 	alloc_bucket_to_full(umm, &ainfo[0], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	rc = umempobj_get_mbusage(umm->umm_pool, 0, &cur_allocated, &maxsz);
@@ -2202,7 +2212,7 @@ nemb_spill_test(void **state)
 	assert_true(cur_allocated < maxsz);
 
 	/*
-	 * alloc_from_bucket() passes a single bucket to use (ubr_bkt_max == 1), so once that
+	 * umem_alloc_from_bucket() passes a single bucket to use (ubr_bkt_max == 1), so once that
 	 * evictable bucket is full the allocation spills over to the non-evictable (NEMB)
 	 * buckets rather than to SOE buckets. After the spill the non-evictable utilization
 	 * should be near full.
@@ -2400,7 +2410,7 @@ wal_umempobj_block_reuse_internal(void **state, int restart)
 	int                      free_num[MDTEST_MB_CNT + 1];
 	struct bucket_alloc_info ainfo[MDTEST_MB_CNT + 1];
 	int                      i, j, cnt, rc, num, total_frees;
-	int                      emb_cnt = MDTEST_MAX_EMB_CNT - MDTEST_SOE_RSRV_CNT;
+	int                      emb_cnt = MDTEST_USABLE_EMB_CNT;
 	struct umem_pin_handle  *p_hdl;
 	struct umem_cache_range  rg = {0};
 	uint64_t                 space_used_before, space_used_after;
@@ -3012,8 +3022,7 @@ p2_fill_test(void **state)
 	uint64_t		ne_used, ne_init;
 	uint32_t                 soemb_ids[MDTEST_SOE_RSRV_CNT], soemb_cnt;
 	int			i, rc, obj_cnt = 0;
-	// With SOEMB redesign MAX EMB count has the soemb also included.
-	int                      emb_cnt = MDTEST_MAX_EMB_CNT - MDTEST_SOE_RSRV_CNT;
+	int                      emb_cnt = MDTEST_USABLE_EMB_CNT;
 
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
@@ -3270,9 +3279,9 @@ wal_no_soemb_spill_test(void **state)
 	/* Fill 2 explicit buckets to ENOMEM so the capped request has no room. */
 	for (i = 0; i < 2; i++) {
 		ainfo[i].mb_id = umem_allot_mb_evictable(umm, 0);
-		assert_true(ainfo[i].mb_id != 0);
+		assert_int_not_equal(ainfo[i].mb_id, UMEM_DEFAULT_MBKT_ID);
 		if (i == 1)
-			assert_false(ainfo[i].mb_id == ainfo[0].mb_id);
+			assert_int_not_equal(ainfo[i].mb_id, ainfo[0].mb_id);
 		ainfo[i].num_allocs  = 0;
 		ainfo[i].start_umoff = UMOFF_NULL;
 		ainfo[i].alloc_size  = 512 * 1024;
@@ -3322,9 +3331,11 @@ wal_no_soemb_spill_test(void **state)
  * that, the oldest SOEMB is dropped and bkt_max shrinks. The test ends when the
  * request falls to NEMB (the bkt_cnt == bkt_max case itself is covered by WAL44).
  */
+/** Number of candidate EMBs depopulated to the different usage bands. */
 #define WAL45_NCAND   4
-#define WAL45_NEXP    4
-#define WAL45_BKT_MAX 8
+/** Number of SOEMB promotions expected, in order */
+#define WAL45_NEXP    WAL45_NCAND
+/**Sliding window of bucket ids to be used in bucket array passed as argument to the request. */
 #define WAL45_BKT_WIN 3
 static void
 wal_soemb_spill_order_test(void **state)
@@ -3358,28 +3369,30 @@ wal_soemb_spill_order_test(void **state)
 	/* Step 1: identify the spill-over buckets pinned at pool open. */
 	rc = umempobj_get_soemb_ids(umm->umm_pool, prev_ids, MDTEST_SOE_RSRV_CNT, &prev_cnt);
 	assert_rc_equal(rc, 0);
-	assert_true(prev_cnt == MDTEST_SOE_RSRV_CNT);
+	assert_int_equal(prev_cnt, MDTEST_SOE_RSRV_CNT);
 
 	/* Step 2: fill the candidate EMBs to 100%, one at a time so each gets a distinct zone. */
 	for (i = 0; i < WAL45_NCAND; i++) {
 		cand[i].mb_id = umem_allot_mb_evictable(umm, 0);
-		assert_true(cand[i].mb_id != 0);
+		assert_int_not_equal(cand[i].mb_id, UMEM_DEFAULT_MBKT_ID);
 		assert_false(id_in_list(cand[i].mb_id, prev_ids, (int)prev_cnt));
 		for (j = 0; j < i; j++)
-			assert_false(cand[i].mb_id == cand[j].mb_id);
+			assert_int_not_equal(cand[i].mb_id, cand[j].mb_id);
 		cand[i].start_umoff = UMOFF_NULL;
 		cand[i].alloc_size  = alloc_size;
 		alloc_bucket_to_full(umm, &cand[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
 	}
 
-	/* Use up the remaining EMB zones so the 75-90% candidate is reachable via force pick. */
+	/* Use up the remaining EMB zones so the 75-90% candidate is reachable via force pick.
+	 * Leave one EMB zone free for the fresh active EMB.
+	 */
 	rc = umempobj_get_mb_limits(umm->umm_pool, &nemb_max, &emb_max, &soe_rsrv);
 	assert_rc_equal(rc, 0);
 	n_filler = (int)emb_max - WAL45_NCAND - 1;
 	assert_true(n_filler >= 0 && n_filler <= MDTEST_MAX_EMB_CNT);
 	for (i = 0; i < n_filler; i++) {
 		filler[i].mb_id = umem_allot_mb_evictable(umm, 0);
-		assert_true(filler[i].mb_id != 0);
+		assert_int_not_equal(filler[i].mb_id, UMEM_DEFAULT_MBKT_ID);
 		filler[i].start_umoff = UMOFF_NULL;
 		filler[i].alloc_size  = alloc_size;
 		alloc_bucket_to_full(umm, &filler[i], checkpoint_fn, &arg->ctx.tc_po_hdl);
@@ -3387,14 +3400,21 @@ wal_soemb_spill_order_test(void **state)
 
 	/* Step 3: a fresh active EMB to drive the spill; this takes the last free zone. */
 	target = umem_allot_mb_evictable(umm, 0);
-	assert_true(target != 0);
+	assert_int_not_equal(target, UMEM_DEFAULT_MBKT_ID);
 	assert_false(id_in_list(target, prev_ids, (int)prev_cnt));
 	for (i = 0; i < WAL45_NCAND; i++)
-		assert_false(target == cand[i].mb_id);
+		assert_int_not_equal(target, cand[i].mb_id);
 	for (i = 0; i < n_filler; i++)
-		assert_false(target == filler[i].mb_id);
+		assert_int_not_equal(target, filler[i].mb_id);
 
-	/* Step 4: depopulate the candidates to 15%, 50%, 0% and 80% utilization. */
+	/*
+	 * Step 4: depopulate the candidates to 15%, 50%, 0% and 80% utilization.
+	 * SOEMB promotion order depends on the byte usage band of each candidate,
+	 * so free until the byte usage reaches the target. free_bucket_by_pct()
+	 * is not used as it frees a percentage of the allocation count; a "full"
+	 * bucket is below 100% byte usage, so it would undershoot the target and
+	 * could cross a band boundary (e.g. 80% falling below the 75% boundary).
+	 */
 	for (i = 0; i < WAL45_NCAND; i++) {
 		/* Free from the list head until byte usage reaches the target. */
 		rg.cr_off  = umem_get_mb_base_offset(umm, cand[i].mb_id);
@@ -3431,7 +3451,8 @@ wal_soemb_spill_order_test(void **state)
 	bkt_ids[0]        = target;
 	req.ubr_bkt_ids   = bkt_ids;
 	req.ubr_bkt_cnt   = 1;
-	req.ubr_bkt_max   = WAL45_BKT_MAX;
+	/* Allow the object to spread over up to all the usable EMBs before falling to NEMB. */
+	req.ubr_bkt_max   = emb_max;
 	req.ubr_bkt_flags = 0;
 
 	/* Step 5: populate the target with spill on until the request falls to NEMB. */
@@ -3454,7 +3475,10 @@ wal_soemb_spill_order_test(void **state)
 		rc = umempobj_get_soemb_ids(umm->umm_pool, cur_ids, MDTEST_SOE_RSRV_CNT, &cur_cnt);
 		assert_rc_equal(rc, 0);
 
-		/* 5b.ii: checked before the NEMB exit so the last demotion's promotion is seen. */
+		/*
+		 * 5b: record newly promoted SOEMBs and check the promotion order. Done
+		 * before the NEMB exit (5c) so the last demotion's promotion is seen.
+		 */
 		n_new = 0;
 		for (i = 0; i < (int)cur_cnt; i++) {
 			if (!id_in_list(cur_ids[i], prev_ids, (int)prev_cnt))
@@ -3472,16 +3496,16 @@ wal_soemb_spill_order_test(void **state)
 		memcpy(prev_ids, cur_ids, sizeof(cur_ids[0]) * cur_cnt);
 		prev_cnt = cur_cnt;
 
-		/* 5b: not a SOEMB, so it must be NEMB with the bucket list exhausted. */
+		/* 5c: not a SOEMB, so it must be NEMB with the bucket list exhausted. */
 		if (!id_in_list(mb_id, cur_ids, (int)cur_cnt)) {
 			print_message("Spill to NEMB: mb_id=%u bkt_cnt=%u bkt_max=%u\n", mb_id,
 				      req.ubr_bkt_cnt, req.ubr_bkt_max);
-			assert_true(mb_id == UMEM_DEFAULT_MBKT_ID);
-			assert_true(req.ubr_bkt_cnt == req.ubr_bkt_max);
+			assert_int_equal(mb_id, UMEM_DEFAULT_MBKT_ID);
+			assert_int_equal(req.ubr_bkt_cnt, req.ubr_bkt_max);
 			break;
 		}
 
-		/* 5b.i: spilled to a SOEMB, carry it in the next request. */
+		/* 5d: spilled to a SOEMB, carry it in the next request. */
 		print_message("Spill to SOEMB %u, bkt_cnt=%u bkt_max=%u\n", mb_id, req.ubr_bkt_cnt,
 			      req.ubr_bkt_max);
 		/*
@@ -3511,7 +3535,6 @@ wal_soemb_spill_order_test(void **state)
 }
 #undef WAL45_NCAND
 #undef WAL45_NEXP
-#undef WAL45_BKT_MAX
 #undef WAL45_BKT_WIN
 
 static const struct CMUnitTest wal_tests[] = {

@@ -446,6 +446,8 @@ soemb_fini(struct soemb_rt *smbrt, struct umem_store *store)
 {
 	int i;
 
+	D_ASSERT(!smbrt->promote_busy);
+
 	for (i = 0; i < SOEMB_ACTIVE_CNT; i++) {
 		if (smbrt->svec[i].mb == NULL)
 			continue;
@@ -453,8 +455,6 @@ soemb_fini(struct soemb_rt *smbrt, struct umem_store *store)
 		smbrt->svec[i].mb  = NULL;
 		smbrt->svec[i].pin = NULL;
 	}
-
-	D_ASSERT(!smbrt->promote_busy);
 }
 
 static void
@@ -746,7 +746,8 @@ heap_touch_umem_cache(struct palloc_heap *heap, void *addr, size_t size)
 
 /*
  * The active evictable MB and the active SOEMBs are being allocated into and
- * are kept out of the usage queues; they are requeued on retire/demote.
+ * are kept out of the usage queues. The active evictable MB is requeued when
+ * heap_get_evictable_mb() replaces it; an SOEMB is requeued when it is demoted.
  */
 static inline bool
 heap_mbrt_ismb_active(struct palloc_heap *heap, struct mbrt *mb)

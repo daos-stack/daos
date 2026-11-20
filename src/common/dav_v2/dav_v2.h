@@ -318,11 +318,8 @@ struct dav_heap_mb_limits {
  *
  * \param[in]           pop             pool handle
  * \param[out]          lim             mb limits
- *
- * \return   0, success
- *         < 0, error and errno is set to appropriate value.
  */
-int
+void
 dav_get_heap_mb_limits_v2(dav_obj_t *pop, struct dav_heap_mb_limits *lim);
 
 /**
@@ -333,11 +330,8 @@ dav_get_heap_mb_limits_v2(dav_obj_t *pop, struct dav_heap_mb_limits *lim);
  * \param[out]          ids             array to receive the SOEMB ids
  * \param[in]           max_ids         capacity of \p ids
  * \param[out]          count           number of ids written
- *
- * \return   0, success
- *         < 0, error and errno is set to appropriate value.
  */
-int
+void
 dav_get_soemb_ids_v2(dav_obj_t *pop, uint32_t *ids, uint32_t max_ids, uint32_t *count);
 
 /**

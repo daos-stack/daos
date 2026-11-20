@@ -657,10 +657,10 @@ umempobj_get_mbusage(struct umem_pool *ph_p, uint32_t mb_id, daos_size_t *curr_a
  *  non-evictable and evictable memory buckets and the reserved SOEMB count.
  *
  *  \param	ph_p[IN]		Pointer to the persistent object.
- *  \param	nemb_max[IN|OUT]	Max non-evictable memory buckets.
- *  \param	emb_max[IN|OUT]		Max usable evictable memory buckets
+ *  \param	nemb_max[OUT]		Max non-evictable memory buckets.
+ *  \param	emb_max[OUT]		Max usable evictable memory buckets
  *					(excludes the reserved SOEMBs).
- *  \param	soe_rsrv[IN|OUT]	Reserved SOEMB count.
+ *  \param	soe_rsrv[OUT]		Reserved SOEMB count.
  *
  *  \return	zero on success and non-zero on failure.
  */
@@ -678,16 +678,13 @@ umempobj_get_mb_limits(struct umem_pool *ph_p, uint32_t *nemb_max, uint32_t *emb
 		rc = -DER_INVAL;
 		break;
 	case DAOS_MD_BMEM_V2:
-		rc = dav_get_heap_mb_limits_v2((dav_obj_t *)ph_p->up_priv, &lim);
-		if (rc == 0) {
-			*nemb_max = lim.dhml_nemb_max;
-			*emb_max  = lim.dhml_emb_max;
-			*soe_rsrv = lim.dhml_soe_rsrv;
-		} else
-			rc = daos_errno2der(errno);
+		dav_get_heap_mb_limits_v2((dav_obj_t *)ph_p->up_priv, &lim);
+		*nemb_max = lim.dhml_nemb_max;
+		*emb_max  = lim.dhml_emb_max;
+		*soe_rsrv = lim.dhml_soe_rsrv;
 		break;
 	default:
-		D_ASSERTF(0, "bad daos_md_backend %d\n", ph_p->up_store.store_type);
+		D_ASSERTF(0, "invalid pool store type %d\n", ph_p->up_store.store_type);
 		break;
 	}
 
@@ -716,12 +713,10 @@ umempobj_get_soemb_ids(struct umem_pool *ph_p, uint32_t *ids, uint32_t max_ids, 
 		rc = -DER_INVAL;
 		break;
 	case DAOS_MD_BMEM_V2:
-		rc = dav_get_soemb_ids_v2((dav_obj_t *)ph_p->up_priv, ids, max_ids, count);
-		if (rc)
-			rc = daos_errno2der(errno);
+		dav_get_soemb_ids_v2((dav_obj_t *)ph_p->up_priv, ids, max_ids, count);
 		break;
 	default:
-		D_ASSERTF(0, "bad daos_md_backend %d\n", ph_p->up_store.store_type);
+		D_ASSERTF(0, "invalid pool store type %d\n", ph_p->up_store.store_type);
 		break;
 	}
 
