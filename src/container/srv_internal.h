@@ -56,6 +56,13 @@ dsm_tls_get()
 	return tls;
 }
 
+/* The container does not exist or is being destroyed, expected if racing with a destroy */
+static inline bool
+cont_gone_rc(int rc)
+{
+	return rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING;
+}
+
 extern bool ec_agg_disabled;
 
 struct rank_eph {
