@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2024, Intel Corporation */
+/*
+ * Copyright 2015-2024 Intel Corporation.
+ * Copyright 2026 Hewlett Packard Enterprise Development LP
+ */
 
 /*
  * heap_layout.h -- internal definitions for heap layout
@@ -84,6 +87,7 @@ enum chunk_type {
 
 /* zone header bit flags */
 #define ZONE_EVICTABLE_MB 0x0001
+/* Obsolete: SOEMBs are now pinned evictable zones; bit kept reserved. */
 #define ZONE_SOE_MB       0x0002
 
 struct chunk {
