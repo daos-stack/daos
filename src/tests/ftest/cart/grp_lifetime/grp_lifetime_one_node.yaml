@@ -1,6 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-
 ENV:
   default:
     - D_LOG_MASK: "WARN,RPC=DEBUG"
@@ -10,12 +7,12 @@ env_D_PROVIDER: !mux
     D_PROVIDER: "sm"
   ofi_tcp:
     D_PROVIDER: "ofi+tcp"
-hosts: !mux
+hosts:
   hosts_1:
     config: one_node
     test_servers: 1
 timeout: 600
-tests: !mux
+tests:
   grp_lifetime:
     name: grp_lifetime
     test_servers_bin: crt_launch

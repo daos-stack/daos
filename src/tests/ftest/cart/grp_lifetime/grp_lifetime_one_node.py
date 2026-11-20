@@ -15,7 +15,7 @@ class CartGrpLifetimeTest(CartTest):
     def test_cart_grp_lifetime(self):
         """Test CaRT RPC outliving secondary group destroy.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=cart,grp_lifetime,one_node,memcheck
         :avocado: tags=CartGrpLifetimeTest,test_cart_grp_lifetime
