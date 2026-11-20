@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -180,6 +180,9 @@ func (ei *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
 	engineSock := ei.getDrpcSocket()
+	if engineSock == "" {
+		return nil // the engine never reported a socket
+	}
 
 	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
