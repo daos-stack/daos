@@ -89,7 +89,8 @@ struct ds_pool {
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_disable_rebuild : 1,
-	    sp_disable_dtx_resync : 1, sp_incr_reint : 1, sp_hdl_fetched : 1;
+	    sp_disable_dtx_resync : 1, sp_incr_reint : 1, sp_hdl_fetched : 1,
+	    sp_retry_dtx_resync : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -121,6 +122,10 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	/* Highest stable epoch of the rebuilds seen by this engine, set by the rebuild IV and never
+	 * reset. Updates at or below it are rejected, see check_update_rebuild_race(), and EC
+	 * aggregation rounds below it check for newer updates, see agg_stripe_has_newer().
+	 */
 	daos_epoch_t             sp_rebuild_epoch;
 };
 
