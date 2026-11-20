@@ -679,10 +679,10 @@ pipeline {
                defaultValue: 'ci_fi_vm1',
                description: 'Label to use for Fault Injection (FI) tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
-               defaultValue: 'nodes_5 && nvme && pmem',
+               defaultValue: 'nodes_5 && nvme && pmem && ofed',
                description: 'Label to use for the Functional Hardware Medium stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
-               defaultValue: 'nodes_5 && nvme',
+               defaultValue: 'nodes_5 && nvme && ofed',
                description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_PROVIDER_LABEL',
                defaultValue: 'nodes_5 && nvme && pmem && ofed',
@@ -694,8 +694,11 @@ pipeline {
                defaultValue: 'ci_vmd5',
                description: 'Label to use for the Functional Hardware Medium VMD stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
-               defaultValue: 'nodes_9 && pmem',
-               description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
+               defaultValue: 'nodes_9 && pmem && nvme && ofed',
+               description: 'Label to use for 9 node Functional Hardware Large stages')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL',
+               defaultValue: 'nodes_9 && nvme && ofed',
+               description: 'Label to use for 9 node Functional Hardware Large MD on SSD stages')
         string(name: 'FUNCTIONAL_CLUSTER_BOX_MEDIUM_LABEL',
                defaultValue: 'cluster_box',
                description: 'Label to use for the Functional Cluster Box stages')

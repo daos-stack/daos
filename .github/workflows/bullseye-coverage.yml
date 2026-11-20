@@ -528,7 +528,7 @@ jobs:
                 SIZE="MEDIUM"
             elif [[ '${{ matrix.stage }}' = Large* ]]; then
                 LABEL=${{ env.CP_HW_LARGE_LABEL &&
-                          env.CP_HW_LARGE_LABEL || 'nodes_9 && pmem' }}
+                          env.CP_HW_LARGE_LABEL || 'nodes_9 && nvme && pmem' }}
                 STAGE_TAGS+=",large"
                 SIZE="LARGE"
             fi
