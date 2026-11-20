@@ -375,9 +375,10 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 	if (rc > 0) /** value no longer exists */
 		return 0;
 
-	ras_notify_event(RAS_POOL_CORRUPTION_DETECTED, "Data corruption detected",
-			 RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
-			 &ctx->sc_pool_uuid, sc_cont_uuid(ctx), NULL, NULL, NULL);
+	ras_notify_eventf(RAS_POOL_CORRUPTION_DETECTED, RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL,
+			  NULL, NULL, &ctx->sc_pool_uuid, sc_cont_uuid(ctx),
+			  &ctx->sc_cur_oid.id_pub, NULL, NULL,
+			  "Data corruption detected for object " DF_UOID, DP_UOID(ctx->sc_cur_oid));
 	sc_m_pool_corr_inc(ctx);
 	rc = sc_mark_corrupt(ctx);
 
@@ -389,9 +390,9 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 		rc = 0;
 	}
 	ctx->sc_pool_tgt_corrupted_detected++;
-	D_ERROR("[tgt_id: %d] Checksum scrubber found corruption. %d so far.\n",
-		ctx->sc_dmi->dmi_tgt_id,
-		ctx->sc_pool_tgt_corrupted_detected);
+	D_ERROR(
+	    "[tgt_id: %d] Checksum scrubber found corruption for object " DF_UOID ". %d so far.\n",
+	    ctx->sc_dmi->dmi_tgt_id, DP_UOID(ctx->sc_cur_oid), ctx->sc_pool_tgt_corrupted_detected);
 	if (sc_should_evict(ctx)) {
 		D_ERROR("[tgt_id: %d] Corruption threshold reached. %d >= %d\n",
 			ctx->sc_dmi->dmi_tgt_id, ctx->sc_pool_tgt_corrupted_detected,
@@ -417,6 +418,7 @@ static int
 sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 {
 	daos_key_t		 chunk_iov = {0};
+	struct dcs_csum_info     orig_csums;
 	uint8_t			*csum_buf = NULL;
 	daos_recx_t		*recx;
 	daos_size_t		 rec_len;
@@ -437,6 +439,16 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 	csum_nr = daos_recx_calc_chunks(*recx, rec_len, chunksize);
 	csum_len = daos_csummer_get_csum_len(sc_csummer(ctx));
 
+	/* Stored csums point into the evtree record, which may be freed while yielding below */
+	orig_csums         = *ctx->sc_csum_to_verify;
+	orig_csums.cs_csum = NULL;
+	if (orig_csums.cs_buf_len > 0) {
+		D_ALLOC(orig_csums.cs_csum, orig_csums.cs_buf_len);
+		if (orig_csums.cs_csum == NULL)
+			return -DER_NOMEM;
+		memcpy(orig_csums.cs_csum, ctx->sc_csum_to_verify->cs_csum, orig_csums.cs_buf_len);
+	}
+
 	/** Create a buffer to calculate the checksum into */
 	D_ALLOC(csum_buf, csum_len);
 
@@ -452,7 +464,10 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		if (sc_cont_is_stopping(ctx))
 			D_GOTO(done, rc = 0);
 
-		orig_csum = ci_idx2csum(ctx->sc_csum_to_verify, i);
+		rc = vos_iter_validate(ctx->sc_vos_iter_handle);
+		if (rc != 0)
+			D_GOTO(done, rc = rc > 0 ? 0 : rc);
+		orig_csum    = ci_idx2csum(&orig_csums, i);
 		rec_in_chunk = sc_get_rec_in_chunk_at_idx(ctx, i);
 
 		/** set an iov with just the data for the current chunk */
@@ -471,8 +486,9 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		match = daos_csummer_csum_compare(sc_csummer(ctx), orig_csum, csum_buf, csum_len);
 
 		if (!match) {
-			D_ERROR("Corruption found for chunk #%d of recx: "DF_RECX", epoch: %lu\n",
-				i, DP_RECX(*recx), ctx->sc_epoch);
+			D_ERROR("Corruption found for chunk #%d of recx: " DF_RECX ", epoch: %lu"
+				", object " DF_UOID "\n",
+				i, DP_RECX(*recx), ctx->sc_epoch, DP_UOID(ctx->sc_cur_oid));
 
 			rc = sc_handle_corruption(ctx);
 
@@ -488,6 +504,7 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 
 done:
 	D_FREE(csum_buf);
+	D_FREE(orig_csums.cs_csum);
 
 	return rc;
 }
