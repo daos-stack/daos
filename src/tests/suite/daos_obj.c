@@ -2615,378 +2615,6 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 	assert_rc_equal(rc, 0);
 }
 
-/**
- * Basic test to insert a few large and small records in different transactions,
- * discard one of the transactions and commit the rest, then verify records both
- * prior to and after the discarded transaction.
- */
-static void
-tx_discard(void **state)
-{
-	/*
-	 * FIXME: This obsolete epoch model transaction API test have been
-	 * broken by online aggregation, needs be removed or updated as per
-	 * new transaction model.
-	 */
-	print_message("Skip obsolete test\n");
-	skip();
-#if 0
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	struct ioreq	 req;
-	const int	 nakeys = 4;
-	const size_t	 nakeys_strlen = 4 /* "9999" */;
-	const char	 dkey[] = "tx_discard dkey";
-	const char	*akey_fmt = "tx_discard akey%d";
-	char		*akey[nakeys];
-	char		*rec[nakeys];
-	daos_size_t	 rec_size[nakeys];
-	int		 rx_nr[nakeys];
-	daos_off_t	 offset[nakeys];
-	char		*rec_nvme;
-	char		*rec_scm;
-	char		*val[nakeys];
-	daos_size_t	 val_size[nakeys];
-	char		*rec_verify;
-	daos_handle_t	 th[3];
-	int		 i, t;
-	int		 rc;
-
-	par_barrier(PAR_COMM_WORLD);
-
-	D_ALLOC(rec_nvme, IO_SIZE_NVME);
-	assert_non_null(rec_nvme);
-	dts_buf_render(rec_nvme, IO_SIZE_NVME);
-	D_ALLOC(rec_scm, IO_SIZE_SCM);
-	assert_non_null(rec_scm);
-	dts_buf_render(rec_scm, IO_SIZE_SCM);
-
-	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
-
-	/** Prepare buffers for a fixed set of d-keys and a-keys. */
-	for (i = 0; i < nakeys; i++) {
-		D_ALLOC(akey[i], strlen(akey_fmt) + nakeys_strlen + 1);
-		assert_non_null(akey[i]);
-		sprintf(akey[i], akey_fmt, i);
-		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
-		assert_non_null(rec[i]);
-		offset[i] = i * 20;
-		val[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
-		assert_non_null(val[i]);
-		if (i % 2 == 0)
-			val_size[i] = IO_SIZE_NVME;
-		else
-			val_size[i] = IO_SIZE_SCM;
-	}
-
-	/** Write three timestamps to same set of d-key and a-keys. */
-	for (t = 0; t < 3; t++) {
-		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_success(rc);
-
-		print_message("writing to transaction %d\n", t);
-		for (i = 0; i < nakeys; i++) {
-			if (i % 2 == 0) {
-				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
-				rec_size[i] = IO_SIZE_NVME;
-			} else {
-				memcpy(rec[i], rec_scm, IO_SIZE_SCM);
-				rec_size[i] = IO_SIZE_SCM;
-			}
-			rec[i][0] = i + '0'; /* akey */
-			rec[i][1] = t + '0'; /*  tx handle */
-			rx_nr[i] = 1;
-			print_message("\takey[%d], val(%d):'%c%c'\n", i,
-				      (int)rec_size[i], rec[i][0], rec[i][1]);
-		}
-		insert(dkey, nakeys, (const char **)akey, rec_size, rx_nr,
-		       offset, (void **)rec, th[t], &req);
-		par_barrier(PAR_COMM_WORLD);
-	}
-
-	for (t = 0; t < 3; t++) {
-		/** Discard second timestamp. */
-		if (t == 1) {
-			print_message("aborting transaction %d.\n", t);
-			rc = daos_tx_abort(th[t], NULL);
-			assert_success(rc);
-		} else {
-			print_message("committing transaction %d.\n", t);
-			rc = daos_tx_commit(th[t], NULL);
-			assert_success(rc);
-		}
-		par_barrier(PAR_COMM_WORLD);
-	}
-
-	/** Check the three transactions. */
-	for (t = 0; t < 3; t++) {
-		print_message("verifying transaction %d\n", t);
-		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-		       (void **)val, val_size, th[t], &req, false);
-		for (i = 0; i < nakeys; i++) {
-			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
-					    IO_SIZE_SCM, 1);
-			assert_non_null(rec_verify);
-			if (i % 2 == 0)
-				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
-			else
-				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
-
-			if (t == 1) { /* discarded */
-				rec_verify[0] = i + '0'; /*akey*/
-				rec_verify[1] = t - 1 + '0'; /*previous tx*/
-			} else { /* intact */
-				rec_verify[0] = i + '0';
-				rec_verify[1] = t + '0';
-			}
-			assert_int_equal(req.iod[i].iod_size,
-					 strlen(rec_verify) + 1);
-			print_message("\takey[%d], val(%d):'%c%c'\n",
-				      i, (int)req.iod[i].iod_size, val[i][0],
-				      val[i][1]);
-			assert_memory_equal(val[i], rec_verify,
-					    req.iod[i].iod_size);
-			D_FREE(rec_verify);
-		}
-		rc = daos_tx_close(th[t], NULL);
-		assert_success(rc);
-	}
-
-	/** Close and reopen the container and the obj. */
-	par_barrier(PAR_COMM_WORLD);
-	close_reopen_coh_oh(arg, &req, oid);
-
-	/** Verify record is the same as the last committed transaction. */
-	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
-	print_message("verifying transaction after container re-open\n");
-	for (i = 0; i < nakeys; i++) {
-		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
-				    IO_SIZE_SCM, 1);
-		assert_non_null(rec_verify);
-		if (i % 2 == 0)
-			memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
-		else
-			memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
-
-		rec_verify[0] = i + '0';
-		rec_verify[1] = 2 + '0';
-		assert_int_equal(req.iod[i].iod_size,
-				 strlen(rec_verify) + 1);
-		print_message("\takey[%d], val(%d):'%c%c'\n", i,
-			      (int)req.iod[i].iod_size, val[i][0], val[i][1]);
-		assert_memory_equal(val[i], rec_verify,
-				    req.iod[i].iod_size);
-		D_FREE(rec_verify);
-	}
-
-	for (i = 0; i < nakeys; i++) {
-		D_FREE(val[i]);
-		D_FREE(akey[i]);
-		D_FREE(rec[i]);
-	}
-	D_FREE(rec_nvme);
-	D_FREE(rec_scm);
-
-	ioreq_fini(&req);
-	par_barrier(PAR_COMM_WORLD);
-#endif
-}
-
-/**
- * Basic test to insert a few large and small records at different transactions,
- * commit only the first few TXs, and verify that all TXs remain after
- * container close and non-committed TXs were successfully discarded.
- */
-static void
-tx_commit(void **state)
-{
-	/*
-	 * FIXME: This obsolete epoch model transaction API test have been
-	 * broken by online aggregation, needs be removed or updated as per
-	 * new transaction model.
-	 */
-	print_message("Skip obsolete test\n");
-	skip();
-#if 0
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	struct ioreq	 req;
-	const int	 nakeys = 4;
-	const size_t	 nakeys_strlen = 4 /* "9999" */;
-	char		 dkey[] = "tx_commit dkey";
-	const char	*akey_fmt = "tx_commit akey%d";
-	char		*akey[nakeys];
-	char		*rec[nakeys];
-	daos_size_t	 rec_size[nakeys];
-	int		 rx_nr[nakeys];
-	daos_off_t	 offset[nakeys];
-	char		*rec_nvme;
-	char		*rec_scm;
-	char		*val[nakeys];
-	daos_size_t	 val_size[nakeys];
-	char		*rec_verify;
-	daos_handle_t	 th[3];
-	int		 i, t;
-	int		 rc;
-
-	par_barrier(PAR_COMM_WORLD);
-
-	D_ALLOC(rec_nvme, IO_SIZE_NVME);
-	assert_non_null(rec_nvme);
-	dts_buf_render(rec_nvme, IO_SIZE_NVME);
-	D_ALLOC(rec_scm, IO_SIZE_SCM);
-	assert_non_null(rec_scm);
-	dts_buf_render(rec_scm, IO_SIZE_SCM);
-
-	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
-
-	/** Prepare buffers for a fixed set of d-keys and a-keys. */
-	for (i = 0; i < nakeys; i++) {
-		D_ALLOC(akey[i], strlen(akey_fmt) + nakeys_strlen + 1);
-		assert_non_null(akey[i]);
-		sprintf(akey[i], akey_fmt, i);
-		rec[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
-		assert_non_null(rec[i]);
-		offset[i] = i * 20;
-		val[i] = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
-		assert_non_null(val[i]);
-		if (i % 2 == 0)
-			val_size[i] = IO_SIZE_NVME;
-		else
-			val_size[i] = IO_SIZE_SCM;
-	}
-
-	/** Write at 3 different txs to same set of d-key and a-keys. */
-	for (t = 0; t < 3; t++) {
-		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_success(rc);
-		print_message("writing to transaction %d\n", t);
-		for (i = 0; i < nakeys; i++) {
-			if (i % 2 == 0) {
-				memcpy(rec[i], rec_nvme, IO_SIZE_NVME);
-				rec_size[i] = IO_SIZE_NVME;
-			} else {
-				memcpy(rec[i], rec_scm, IO_SIZE_SCM);
-				rec_size[i] = IO_SIZE_SCM;
-			}
-			rec[i][0] = i + '0'; /* akey */
-			rec[i][1] = t + '0'; /* tx handle */
-			rx_nr[i] = 1;
-			print_message("\takey[%d], val(%d):'%c%c'\n", i,
-				      (int)rec_size[i], rec[i][0], rec[i][1]);
-		}
-		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
-			rx_nr, offset, (void **)rec, th[t], &req);
-		par_barrier(PAR_COMM_WORLD);
-	}
-
-	/** Check the three transactions. */
-	for (t = 0; t < 3; t++) {
-		print_message("verifying transaction %d\n", t);
-		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-		       (void **)val, val_size, th[t], &req, false);
-		for (i = 0; i < nakeys; i++) {
-			rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME :
-					    IO_SIZE_SCM, 1);
-			assert_non_null(rec_verify);
-			if (i % 2 == 0)
-				memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
-			else
-				memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
-
-			rec_verify[0] = i + '0'; /* akey */
-			rec_verify[1] = t + '0'; /* tx handle*/
-			assert_int_equal(req.iod[i].iod_size,
-					 strlen(rec_verify) + 1);
-			assert_memory_equal(val[i], rec_verify,
-					    req.iod[i].iod_size);
-			D_FREE(rec_verify);
-		}
-	}
-
-	par_barrier(PAR_COMM_WORLD);
-
-	/** Commit only the first 2 transactions */
-	for (t = 0; t < 3; t++) {
-		if (t != 2) {
-			print_message("committing transaction %d\n", t);
-			rc = daos_tx_commit(th[t], NULL);
-			assert_success(rc);
-		} else {
-			print_message("aborting transaction %d\n", t);
-			rc = daos_tx_abort(th[t], NULL);
-			assert_success(rc);
-		}
-		rc = daos_tx_close(th[t], NULL);
-		assert_success(rc);
-		par_barrier(PAR_COMM_WORLD);
-	}
-
-	/** Close and reopen the container and the obj */
-	close_reopen_coh_oh(arg, &req, oid);
-
-	/** enumerate. */
-	{
-		daos_anchor_t	anchor;
-		int		found = 0;
-
-		memset(&anchor, 0, sizeof(anchor));
-		while (!daos_anchor_is_eof(&anchor)) {
-			uint32_t		n = 1;
-			daos_key_desc_t		kd;
-			char			*buf[64];
-
-			rc = enumerate_akey(DAOS_TX_NONE, dkey, &n, &kd,
-					    &anchor, buf, sizeof(buf), &req);
-			assert_success(rc);
-			found += n;
-		}
-		assert_int_equal(found, nakeys);
-	}
-
-	/**
-	 * Check data after container close. Last tx was not committed and
-	 * should be discarded, therefore data should be from transaction 2.
-	 */
-	print_message("verifying transaction after container re-open\n");
-	lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
-	t = 1;
-	for (i = 0; i < nakeys; i++) {
-		rec_verify = calloc(i % 2 == 0 ? IO_SIZE_NVME : IO_SIZE_SCM, 1);
-		assert_non_null(rec_verify);
-		if (i % 2 == 0)
-			memcpy(rec_verify, rec_nvme, IO_SIZE_NVME);
-		else
-			memcpy(rec_verify, rec_scm, IO_SIZE_SCM);
-
-		rec_verify[0] = i + '0';
-		rec_verify[1] = t + '0';
-		assert_int_equal(req.iod[i].iod_size, strlen(rec_verify) + 1);
-		print_message("\trank %d, akey[%d], val(%d):'%c%c'\n",
-			      arg->myrank, i, (int)req.iod[i].iod_size,
-			      val[i][0], val[i][1]);
-		assert_memory_equal(val[i], rec_verify,
-				    req.iod[i].iod_size);
-		D_FREE(rec_verify);
-	}
-
-	for (i = 0; i < nakeys; i++) {
-		D_FREE(val[i]);
-		D_FREE(akey[i]);
-		D_FREE(rec[i]);
-	}
-	D_FREE(rec_nvme);
-	D_FREE(rec_scm);
-
-	ioreq_fini(&req);
-	par_barrier(PAR_COMM_WORLD);
-#endif
-}
-
 static void
 io_nospace(void **state)
 {
@@ -3516,112 +3144,6 @@ io_obj_key_query(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("all good\n");
-}
-
-/**
- * Simple test to trigger the blob unmap callback. This is done by inserting
- * a few NVMe records, deleting some of the NVMe records by discarding one of
- * the transactions, waiting a long enough time for the free
- * extents to expire, and then inserting another record to trigger the callback.
- */
-static void
-blob_unmap_trigger(void **state)
-{
-	/*
-	 * FIXME: obsolete tx_abort can't be used for deleting committed data
-	 * anymore, need to figure out a new way to trigger blob unmap.
-	 */
-	print_message("Skip obsolete test\n");
-	skip();
-#if 0
-	daos_obj_id_t	 oid;
-	test_arg_t	*arg = *state;
-	struct ioreq	 req;
-	char		*update_buf;
-	char		*fetch_buf;
-	char		*enum_buf;
-	char		 dkey[5] = "dkey";
-	char		 akey[20];
-	int		 nvme_recs = 1;
-	daos_handle_t	 th[3];
-	int		 i, t;
-	int		 rc;
-
-	par_barrier(PAR_COMM_WORLD);
-
-	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	/* Tx discard only currently supports DAOS_IOD_SINGLE type */
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
-
-	D_ALLOC(fetch_buf, IO_SIZE_NVME);
-	assert_non_null(fetch_buf);
-	D_ALLOC(update_buf, IO_SIZE_NVME);
-	assert_non_null(update_buf);
-	dts_buf_render(update_buf, IO_SIZE_NVME);
-	D_ALLOC(enum_buf, 512);
-	assert_non_null(enum_buf);
-
-	/**
-	 * Insert a few NVMe records. Write all three transactions at different
-	 * akeys and the same dkey.
-	 */
-	for (t = 0; t < 3; t++) {
-		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_success(rc);
-
-		for (i = 0; i < nvme_recs; i++) {
-			sprintf(akey, "blob_unmap_akey%d", i);
-			print_message("insert dkey:'%s', akey:'%s', tx:%d\n",
-				      dkey, akey, t);
-			insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME,
-				      th[t], &req);
-			/* Verify record was inserted */
-			memset(fetch_buf, 0, IO_SIZE_NVME);
-			lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME,
-				      th[t], &req);
-			assert_memory_equal(update_buf, fetch_buf,
-					    IO_SIZE_NVME);
-		}
-		par_barrier(PAR_COMM_WORLD);
-	}
-
-	/* Discard the NVMe records (Discard second tx) */
-	print_message("Discarding second transaction\n");
-	rc = daos_tx_abort(th[1], NULL);
-	assert_success(rc);
-	rc = daos_tx_close(th[1], NULL);
-	assert_success(rc);
-
-	par_barrier(PAR_COMM_WORLD);
-
-	/* Wait for >= VEA_MIGRATE_INTVL */
-	print_message("Wait for free extents to expire (15 sec)\n");
-	sleep(15);
-
-	/* Insert another NVMe record, will trigger free extent migration */
-	sprintf(akey, "blob_unmap akey%d", nvme_recs);
-	print_message("insert dkey:'%s', akey:'%s'\n", dkey, akey);
-	rc = daos_tx_open(arg->coh, &th[1], NULL);
-	assert_success(rc);
-	insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME, th[1], &req);
-	/* Verify record was inserted */
-	memset(fetch_buf, 0, IO_SIZE_NVME);
-	lookup_single(dkey, akey, 0, fetch_buf, IO_SIZE_NVME, th[1], &req);
-	assert_memory_equal(update_buf, fetch_buf, IO_SIZE_NVME);
-
-	print_message("Blob unmap callback triggered\n");
-
-	for (t = 0; t < 3; t++) {
-		rc = daos_tx_close(th[t], NULL);
-		assert_success(rc);
-	}
-
-	D_FREE(enum_buf);
-	D_FREE(fetch_buf);
-	D_FREE(update_buf);
-	ioreq_fini(&req);
-	par_barrier(PAR_COMM_WORLD);
-#endif
 }
 
 static void
@@ -5356,120 +4878,88 @@ io_57(void **state)
 	reintegrate_single_pool_rank(arg, 0, false);
 }
 
+/* Historical --subtests indexes are permanent, including these retired slots. */
+enum {
+	IO_RETIRED_TX_DISCARD = 16,
+	IO_RETIRED_TX_COMMIT  = 17,
+	IO_RETIRED_BLOB_UNMAP = 32,
+	IO_RETIRED_COUNT      = 3,
+};
+
 static const struct CMUnitTest io_tests[] = {
-	{ "IO1: simple update/fetch/verify",
-	  io_simple, async_disable, test_case_teardown},
-	{ "IO2: simple update/fetch/verify (async)",
-	  io_simple, async_enable, test_case_teardown},
-	{ "IO3: i/o with variable rec size",
-	  io_var_rec_size, async_disable, test_case_teardown},
-	{ "IO4: i/o with variable rec size(async)",
-	  io_var_rec_size, async_enable, test_case_teardown},
-	{ "IO5: i/o with variable dkey size",
-	  io_var_dkey_size, async_enable, test_case_teardown},
-	{ "IO6: i/o with variable akey size",
-	  io_var_akey_size, async_disable, test_case_teardown},
-	{ "IO7: i/o with variable index",
-	  io_var_idx_offset, async_enable, test_case_teardown},
-	{ "IO8: variable size record overwrite",
-	  io_overwrite, async_enable, test_case_teardown},
-	{ "IO9: simple enumerate",
-	  enumerate_simple, async_disable, test_case_teardown},
-	{ "IO10: simple punch",
-	  punch_simple, async_disable, test_case_teardown},
-	{ "IO11: multiple record update/fetch/verify",
-	  io_manyrec, async_disable, test_case_teardown},
-	{ "IO12: complex update/fetch/verify",
-	  io_complex, async_disable, test_case_teardown},
-	{ "IO13: basic byte array with record size fetching",
-	  basic_byte_array, async_disable, test_case_teardown},
-	{ "IO14: timeout simple update",
-	  io_simple_update_timeout, async_disable, test_case_teardown},
-	{ "IO15: timeout simple fetch",
-	  io_simple_fetch_timeout, async_disable, test_case_teardown},
-	{ "IO16: timeout on 1 shard simple update",
-	  io_simple_update_timeout_single, async_disable, test_case_teardown},
-	{ "IO17: transaction discard",
-	  tx_discard, async_disable, test_case_teardown},
-	{ "IO18: transaction commit",
-	  tx_commit, async_disable, test_case_teardown},
-	{ "IO19: no space", io_nospace, async_disable, test_case_teardown},
-	{ "IO20: fetch size with NULL sgl",
-	  fetch_size, async_disable, test_case_teardown},
-	{ "IO21: io crt error",
-	  io_simple_update_crt_error, async_disable, test_case_teardown},
-	{ "IO22: io crt error (async)",
-	  io_simple_update_crt_error, async_enable, test_case_teardown},
-	{ "IO23: io crt req create timeout (sync)",
-	  io_simple_update_crt_req_error, async_disable, test_case_teardown},
-	{ "IO24: io crt req create timeout (async)",
-	  io_simple_update_crt_req_error, async_enable, test_case_teardown},
-	{ "IO25: Read from unwritten records",
-	  read_empty_records, async_disable, test_case_teardown},
-	{ "IO26: Read from large unwritten records",
-	  read_large_empty_records, async_disable, test_case_teardown},
-	{ "IO27: written records repeatedly",
-	  write_record_multiple_times, async_disable, test_case_teardown},
-	{ "IO28: echo fetch/update",
-	  echo_fetch_update, async_disable, test_case_teardown},
-	{ "IO29: basic object key query testing",
-	  io_obj_key_query, async_disable, test_case_teardown},
-	{ "IO30: shard target idx change cause retry",
-	  tgt_idx_change_retry, async_enable, test_case_teardown},
-	{ "IO31: fetch when all replicas unavailable",
-	  fetch_replica_unavail, async_enable, test_case_teardown},
-	{ "IO32: update with overlapped recxs",
-	  update_overlapped_recxs, async_enable, test_case_teardown},
-	{ "IO33: trigger blob unmap",
-	  blob_unmap_trigger, async_disable, test_case_teardown},
-	{ "IO34: punch then lookup",
-	  punch_then_lookup, async_disable, test_case_teardown},
-	{ "IO35: split update fetch",
-	  split_sgl_update_fetch, async_disable, test_case_teardown},
-	{ "IO36: trigger server pool map refresh",
-	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
-	{ "IO37: Fetch existing and nonexistent akeys in single fetch call",
-	  fetch_mixed_keys, async_disable, test_case_teardown},
-	{ "IO38: force capability IV fetch",
-	  io_capa_iv_fetch, async_disable, test_case_teardown},
-	{ "IO39: Update with invalid sg and record",
-	  io_invalid, async_disable, test_case_teardown},
-	{ "IO40: Record count after punch/enumeration",
-	  punch_enum_then_verify_record_count, async_disable,
-	  test_case_teardown},
-	{ "IO41: IO Rewritten data fetch and validate pool size",
-	  io_rewritten_array_with_mixed_size, async_disable,
-	  test_case_teardown},
-	{ "IO42: IO fetch from an alternative node after first try failed",
-	  io_fetch_retry_another_replica, async_disable,
-	  test_case_teardown},
-	{ "IO43: Object class selection",
-	  oclass_auto_setting, async_disable, test_case_teardown},
-	{ "IO44: INT dkey/akey checks",
-	  invalid_int_key_setting, async_disable, test_case_teardown},
-	{ "IO45: enum recxs with aggregation",
-	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
-	{ "IO46: tx convert",
-	  io_tx_convert, async_disable, test_case_teardown},
-	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
-	{ "IO48: oit_list_filter", oit_list_filter, async_disable, test_case_teardown},
-	{ "IO49: oit_list_filter async", oit_list_filter, async_enable, test_case_teardown},
-	{ "IO50: collective punch object - OC_SX",
-	  io_50, NULL, test_case_teardown},
-	{ "IO51: collective punch object - OC_EC_2P1G2",
-	  io_51, NULL, test_case_teardown},
-	{ "IO52: collective punch object - OC_EC_4P1GX",
-	  io_52, NULL, test_case_teardown},
-	{ "IO53: collective object query - OC_SX",
-	  io_53, async_disable, test_case_teardown},
-	{ "IO54: collective object query - OC_EC_2P1G2",
-	  io_54, async_disable, test_case_teardown},
-	{ "IO55: collective object query - OC_EC_4P1GX",
-	  io_55, async_disable, test_case_teardown},
-	{ "IO56: collective object query with sparse ranks",
-	  io_56, async_disable, test_case_teardown},
-	{ "IO57: collective object query with rank_0 excluded",
-	  io_57, rebuild_sub_rf1_setup, test_teardown},
+    {"IO1: simple update/fetch/verify", io_simple, async_disable, test_case_teardown},
+    {"IO2: simple update/fetch/verify (async)", io_simple, async_enable, test_case_teardown},
+    {"IO3: i/o with variable rec size", io_var_rec_size, async_disable, test_case_teardown},
+    {"IO4: i/o with variable rec size(async)", io_var_rec_size, async_enable, test_case_teardown},
+    {"IO5: i/o with variable dkey size", io_var_dkey_size, async_enable, test_case_teardown},
+    {"IO6: i/o with variable akey size", io_var_akey_size, async_disable, test_case_teardown},
+    {"IO7: i/o with variable index", io_var_idx_offset, async_enable, test_case_teardown},
+    {"IO8: variable size record overwrite", io_overwrite, async_enable, test_case_teardown},
+    {"IO9: simple enumerate", enumerate_simple, async_disable, test_case_teardown},
+    {"IO10: simple punch", punch_simple, async_disable, test_case_teardown},
+    {"IO11: multiple record update/fetch/verify", io_manyrec, async_disable, test_case_teardown},
+    {"IO12: complex update/fetch/verify", io_complex, async_disable, test_case_teardown},
+    {"IO13: basic byte array with record size fetching", basic_byte_array, async_disable,
+     test_case_teardown},
+    {"IO14: timeout simple update", io_simple_update_timeout, async_disable, test_case_teardown},
+    {"IO15: timeout simple fetch", io_simple_fetch_timeout, async_disable, test_case_teardown},
+    {"IO16: timeout on 1 shard simple update", io_simple_update_timeout_single, async_disable,
+     test_case_teardown},
+    /* IO17 (tx_discard), selector 16, retired; do not reuse. */
+    /* IO18 (tx_commit), selector 17, retired; do not reuse. */
+    {"IO19: no space", io_nospace, async_disable, test_case_teardown},
+    {"IO20: fetch size with NULL sgl", fetch_size, async_disable, test_case_teardown},
+    {"IO21: io crt error", io_simple_update_crt_error, async_disable, test_case_teardown},
+    {"IO22: io crt error (async)", io_simple_update_crt_error, async_enable, test_case_teardown},
+    {"IO23: io crt req create timeout (sync)", io_simple_update_crt_req_error, async_disable,
+     test_case_teardown},
+    {"IO24: io crt req create timeout (async)", io_simple_update_crt_req_error, async_enable,
+     test_case_teardown},
+    {"IO25: Read from unwritten records", read_empty_records, async_disable, test_case_teardown},
+    {"IO26: Read from large unwritten records", read_large_empty_records, async_disable,
+     test_case_teardown},
+    {"IO27: written records repeatedly", write_record_multiple_times, async_disable,
+     test_case_teardown},
+    {"IO28: echo fetch/update", echo_fetch_update, async_disable, test_case_teardown},
+    {"IO29: basic object key query testing", io_obj_key_query, async_disable, test_case_teardown},
+    {"IO30: shard target idx change cause retry", tgt_idx_change_retry, async_enable,
+     test_case_teardown},
+    {"IO31: fetch when all replicas unavailable", fetch_replica_unavail, async_enable,
+     test_case_teardown},
+    {"IO32: update with overlapped recxs", update_overlapped_recxs, async_enable,
+     test_case_teardown},
+    /* IO33 (blob_unmap_trigger), selector 32, retired; do not reuse. */
+    {"IO34: punch then lookup", punch_then_lookup, async_disable, test_case_teardown},
+    {"IO35: split update fetch", split_sgl_update_fetch, async_disable, test_case_teardown},
+    {"IO36: trigger server pool map refresh", io_pool_map_refresh_trigger, async_disable,
+     test_case_teardown},
+    {"IO37: Fetch existing and nonexistent akeys in single fetch call", fetch_mixed_keys,
+     async_disable, test_case_teardown},
+    {"IO38: force capability IV fetch", io_capa_iv_fetch, async_disable, test_case_teardown},
+    {"IO39: Update with invalid sg and record", io_invalid, async_disable, test_case_teardown},
+    {"IO40: Record count after punch/enumeration", punch_enum_then_verify_record_count,
+     async_disable, test_case_teardown},
+    {"IO41: IO Rewritten data fetch and validate pool size", io_rewritten_array_with_mixed_size,
+     async_disable, test_case_teardown},
+    {"IO42: IO fetch from an alternative node after first try failed",
+     io_fetch_retry_another_replica, async_disable, test_case_teardown},
+    {"IO43: Object class selection", oclass_auto_setting, async_disable, test_case_teardown},
+    {"IO44: INT dkey/akey checks", invalid_int_key_setting, async_disable, test_case_teardown},
+    {"IO45: enum recxs with aggregation", enum_recxs_with_aggregation, async_disable,
+     test_case_teardown},
+    {"IO46: tx convert", io_tx_convert, async_disable, test_case_teardown},
+    {"IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
+    {"IO48: oit_list_filter", oit_list_filter, async_disable, test_case_teardown},
+    {"IO49: oit_list_filter async", oit_list_filter, async_enable, test_case_teardown},
+    {"IO50: collective punch object - OC_SX", io_50, NULL, test_case_teardown},
+    {"IO51: collective punch object - OC_EC_2P1G2", io_51, NULL, test_case_teardown},
+    {"IO52: collective punch object - OC_EC_4P1GX", io_52, NULL, test_case_teardown},
+    {"IO53: collective object query - OC_SX", io_53, async_disable, test_case_teardown},
+    {"IO54: collective object query - OC_EC_2P1G2", io_54, async_disable, test_case_teardown},
+    {"IO55: collective object query - OC_EC_4P1GX", io_55, async_disable, test_case_teardown},
+    {"IO56: collective object query with sparse ranks", io_56, async_disable, test_case_teardown},
+    {"IO57: collective object query with rank_0 excluded", io_57, rebuild_sub_rf1_setup,
+     test_teardown},
 };
 
 int
@@ -5504,14 +4994,78 @@ obj_setup(void **state)
 int
 run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	int rc = 0;
 	char oclass[MAX_OBJ_CLASS_NAME_LEN + 1] = {0};
 	char buf[32];
+	int *selected       = NULL;
+	int  selected_count = 0;
+	int  alloc_rc       = 0;
+	int  rc             = 0;
+	int  rc_reduce;
+	int  i;
 
 	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(io_tests);
-		sub_tests = NULL;
+		sub_tests      = NULL;
+	} else {
+		D_ALLOC_ARRAY(selected, sub_tests_size);
+		if (selected == NULL)
+			alloc_rc = -DER_NOMEM;
+		rc = par_allreduce(PAR_COMM_WORLD, &alloc_rc, &rc_reduce, 1, PAR_INT, PAR_MIN);
+		if (rc != 0) {
+			if (rank == 0)
+				print_message("Failed to synchronize I/O subtest selection: %d\n",
+					      rc);
+			goto out;
+		}
+		if (rc_reduce != 0) {
+			if (rank == 0)
+				print_message("Failed allocating I/O subtest selection\n");
+			rc = rc_reduce;
+			goto out;
+		}
+
+		for (i = 0; i < sub_tests_size; i++) {
+			int         index         = sub_tests[i];
+			int         retired_delta = 0;
+			const char *retired       = NULL;
+
+			if (index == IO_RETIRED_TX_DISCARD)
+				retired = "IO17 (tx_discard)";
+			else if (index == IO_RETIRED_TX_COMMIT)
+				retired = "IO18 (tx_commit)";
+			else if (index == IO_RETIRED_BLOB_UNMAP)
+				retired = "IO33 (blob_unmap_trigger)";
+
+			if (retired != NULL) {
+				if (rank == 0)
+					print_message("Warning: I/O subtest %d, %s, is retired\n",
+						      index, retired);
+				continue;
+			}
+			if (index < 0 || (size_t)index >= ARRAY_SIZE(io_tests) + IO_RETIRED_COUNT) {
+				if (rank == 0)
+					print_message("No subtest %d\n", index);
+				continue;
+			}
+
+			/* Translate historical indexes to the compacted io_tests array. */
+			if (index > IO_RETIRED_TX_DISCARD)
+				retired_delta++;
+			if (index > IO_RETIRED_TX_COMMIT)
+				retired_delta++;
+			if (index > IO_RETIRED_BLOB_UNMAP)
+				retired_delta++;
+			selected[selected_count++] = index - retired_delta;
+		}
+
+		if (selected_count == 0) {
+			if (rank == 0)
+				print_message("No I/O subtests will run\n");
+			goto out;
+		}
+		sub_tests      = selected;
+		sub_tests_size = selected_count;
 	}
 
 	if (dt_obj_class != OC_UNKNOWN) {
@@ -5521,10 +5075,11 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	snprintf(buf, sizeof(buf), "DAOS_IO%s", oclass);
 	buf[sizeof(buf) - 1] = 0;
 
-	rc = run_daos_sub_tests(buf, io_tests,
-				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
+	rc = run_daos_sub_tests(buf, io_tests, ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 
+out:
+	D_FREE(selected);
 	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
