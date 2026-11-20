@@ -1539,6 +1539,7 @@ func TestControl_SystemCleanup(t *testing.T) {
 
 func TestControl_System_checkSystemErase(t *testing.T) {
 	for name, tc := range map[string]struct {
+		sys          string
 		uErr, expErr error
 		members      []*mgmtpb.SystemMember
 	}{
@@ -1553,6 +1554,9 @@ func TestControl_System_checkSystemErase(t *testing.T) {
 			uErr: system.ErrRaftUnavail,
 		},
 		"empty membership": {},
+		"non-empty system name propagated to query": {
+			sys: "daos_nonstd",
+		},
 		"rank not stopped": {
 			members: []*mgmtpb.SystemMember{
 				{Rank: 0, State: system.MemberStateStopped.String()},
@@ -1583,8 +1587,21 @@ func TestControl_System_checkSystemErase(t *testing.T) {
 					&mgmtpb.SystemQueryResp{Members: tc.members}),
 			})
 
-			err := checkSystemErase(test.Context(t), mi)
+			err := checkSystemErase(test.Context(t), mi, tc.sys)
 			test.CmpErr(t, tc.expErr, err)
+
+			if tc.uErr == nil {
+				if len(mi.SentReqs) != 1 {
+					t.Fatalf("expected 1 request to be sent, got %d", len(mi.SentReqs))
+				}
+				queryReq, ok := mi.SentReqs[0].(*SystemQueryReq)
+				if !ok {
+					t.Fatalf("expected *SystemQueryReq, got %T", mi.SentReqs[0])
+				}
+				if diff := cmp.Diff(tc.sys, queryReq.Sys); diff != "" {
+					t.Fatalf("unexpected system name in query request (-want, +got):\n%s\n", diff)
+				}
+			}
 		})
 	}
 }

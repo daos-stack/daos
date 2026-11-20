@@ -149,19 +149,30 @@ func (ei *EngineInstance) start(ctx context.Context) (chan *engine.RunnerExitInf
 	return ch, errors.Wrap(err, "runner Start")
 }
 
-var errExitedBeforeReady = errors.New("engine exited before it was ready")
+// exitBeforeReadyError is returned by waitReady when the engine process exits before sending its
+// ready notification.
+type exitBeforeReadyError struct {
+	pid int
+	err error
+}
 
-// waitReady awaits ready signal from I/O Engine before starting
+func (e *exitBeforeReadyError) Error() string {
+	return fmt.Sprintf("pid %d exited before ready: %s", e.pid, e.err)
+}
+
+func (e *exitBeforeReadyError) Unwrap() error {
+	return e.err
+}
+
+// waitReady awaits ready signal from I/O Engine, or its exit if that comes first, before starting
 // management service on MS replicas immediately so other instances can join.
-// I/O Engine modules are then loaded. An engine that exits first is handled
-// here, as the run loop only watches for exits once this returns.
-func (ei *EngineInstance) waitReady(ctx context.Context, exitCh chan *engine.RunnerExitInfo) error {
+// I/O Engine modules are then loaded.
+func (ei *EngineInstance) waitReady(ctx context.Context, runnerExitCh engine.RunnerExitChan) error {
 	select {
 	case <-ctx.Done(): // propagated harness exit
 		return ctx.Err()
-	case exit := <-exitCh:
-		ei.handleExit(ctx, exit.PID, exit.Error)
-		return errExitedBeforeReady
+	case runnerExit := <-runnerExitCh:
+		return &exitBeforeReadyError{pid: runnerExit.PID, err: runnerExit.Error}
 	case ready := <-ei.awaitDrpcReady():
 		if err := ei.finishStartup(ctx, ready); err != nil {
 			return err
@@ -219,7 +230,9 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 	if exitErr == nil && !ei.stopRequested.Load() {
 		exitErr = errors.New("exited without a stop request")
 	}
-	ei.setExitErr(exitErr)
+	ei.Lock()
+	ei._lastErr = exitErr
+	ei.Unlock()
 
 	details := []string{fmt.Sprintf("instance %d", engineIdx)}
 	if exitPid != 0 {
@@ -284,19 +297,38 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 	}
 
 	ei.stopRequested.SetFalse()
+
+	// A ready notification still queued here came from an engine that has since exited.
+	select {
+	case <-ei.drpcReady:
+		ei.log.Debugf("instance %d: discarding stale ready notification", ei.Index())
+	default:
+	}
+
 	runnerExitChan, err := ei.start(ctx)
 	if err != nil {
 		return
 	}
 	ei.waitDrpc.SetTrue()
 
-	return runnerExitChan, ei.waitReady(ctx, runnerExitChan)
+	if err = ei.waitReady(ctx, runnerExitChan); err != nil {
+		var exitErr *exitBeforeReadyError
+		if errors.As(err, &exitErr) {
+			// The runner closes the channel after its single send; it must not reach the loop.
+			return nil, err
+		}
+		return runnerExitChan, err
+	}
+
+	return runnerExitChan, nil
 }
 
 // requestStart makes a request to (re-)start the engine, and blocks
 // until the request is received.
 func (ei *EngineInstance) requestStart(ctx context.Context) {
-	ei.setExitErr(nil)
+	ei.Lock()
+	ei._lastErr = nil
+	ei.Unlock()
 	select {
 	case <-ctx.Done():
 	case ei.startRequested <- true:
@@ -327,8 +359,11 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 
 				runnerExitCh, err = ei.startRunner(ctx)
 				if err != nil {
-					runnerExitCh = nil
-					if err != errExitedBeforeReady {
+					var exitErr *exitBeforeReadyError
+					if errors.As(err, &exitErr) {
+						ei.log.Errorf("instance %d exited before signalling ready: %s", ei.Index(), exitErr.err)
+						ei.handleExit(ctx, exitErr.pid, exitErr.err)
+					} else {
 						ei.log.Errorf("runner exited without starting process: %+v", err)
 						ei.handleExit(ctx, 0, err)
 					}

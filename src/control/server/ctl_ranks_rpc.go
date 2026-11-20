@@ -376,7 +376,7 @@ func (svc *ControlService) StartEngines(ctx context.Context, req *ctlpb.StartEng
 	}
 
 	pollFn := func(e Engine) bool {
-		return e.IsStarted() || e.isAwaitingFormat() || e.getExitErr() != nil
+		return e.IsStarted() || e.isAwaitingFormat() || e.lastErr() != nil
 	}
 	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
 		return nil, errors.Wrap(err, "waiting for engines to start")
@@ -388,7 +388,7 @@ func (svc *ControlService) StartEngines(ctx context.Context, req *ctlpb.StartEng
 			Index: ei.Index(),
 			State: strings.ToLower(ei.LocalState().String()),
 		}
-		if err := ei.getExitErr(); err != nil {
+		if err := ei.lastErr(); err != nil {
 			res.State = strings.ToLower(system.MemberStateErrored.String())
 			res.Error = err.Error()
 		}

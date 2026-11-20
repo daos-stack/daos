@@ -925,7 +925,7 @@ func TestServer_CtlSvc_StartEngines(t *testing.T) {
 				srv.onAwaitStart = func() {}
 				srv.waitStart.Store(tc.instancesHeld)
 				srv.waitFormat.Store(tc.instancesAwaitFormat)
-				srv.setExitErr(tc.staleExitErr)
+				srv._lastErr = tc.staleExitErr
 				if !tc.instancesAwaitFormat {
 					srv.setSuperblock(&Superblock{UUID: test.MockUUID(int32(i))})
 				}

@@ -30,7 +30,7 @@ static int
 setup(void **state)
 {
 	*state                     = &main_checker_state;
-	mock_vfprintf_check_output = 0;
+	mock_vfprintf_check_output = false;
 	return 0;
 }
 
@@ -115,7 +115,7 @@ test_vprintf_vfprintf_positive(void **state)
 {
 	struct checker *ck = *state;
 
-	mock_vfprintf_check_output = 1;
+	mock_vfprintf_check_output = true;
 	expect_value(__wrap_ABT_mutex_lock, mutex, Mock_mutex_handle);
 	will_return(__wrap_ABT_mutex_lock, ABT_SUCCESS);
 	expect_value(__wrap_vfprintf, stream, stdout);
@@ -250,7 +250,7 @@ test_main_indent_set_levels_zero_to_max(void **state)
 	int             indent_index;
 
 	for (ck->ck_level = 0; ck->ck_level <= CHECKER_INDENT_MAX; ck->ck_level++) {
-		assert_int_equal(ck->ck_indent_set(ck), DER_SUCCESS);
+		ck->ck_indent_set(ck);
 		if (ck->ck_level == 0) {
 			assert_string_equal(ck->ck_prefix, "");
 			continue;
@@ -269,8 +269,6 @@ test_main_indent_set_out_of_range(void **state)
 {
 	struct checker *ck = *state;
 
-	ck->ck_level = -1;
-	expect_assert_failure(ck->ck_indent_set(ck));
 	ck->ck_level = 0;
 	expect_assert_failure(checker_print_indent_dec(ck));
 

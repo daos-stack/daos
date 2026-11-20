@@ -1992,12 +1992,12 @@ func (svc *mgmtSvc) eraseLocalEngines() error {
 // fanout request targeting every rank except the leader and its replica peers (which
 // erase and restart themselves; see eraseLocalEngines()/eraseReplicas()). Must be called
 // before the raft DB is stopped, as rank/host resolution needs it.
-func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fanoutRequest, *fanoutResponse, error) {
-	svc.log.Trace("gathering MS replica peer addresses")
-	peers, err := svc.sysdb.PeerAddrs()
+func (svc *mgmtSvc) getPeersAndFanout() ([]string, *fanoutRequest, *fanoutResponse, error) {
+	selfAddr, err := svc.sysdb.ReplicaAddr()
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	peers := svc.sysdb.PeerReplicas()
 	svc.log.Tracef("found %d MS replica peer(s): %v", len(peers), peers)
 
 	svc.log.Trace("preparing fanout request")
@@ -2006,16 +2006,7 @@ func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fan
 		return nil, nil, nil, err
 	}
 
-	selfAddr, err := svc.sysdb.ReplicaAddr()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	selfAndPeerHosts := make([]string, 0, len(peers)+1)
-	selfAndPeerHosts = append(selfAndPeerHosts, selfAddr.String())
-	for _, peer := range peers {
-		selfAndPeerHosts = append(selfAndPeerHosts, peer.String())
-	}
-
+	selfAndPeerHosts := append([]string{selfAddr.String()}, peers...)
 	excludeRanks, _, err := svc.membership.CheckHosts(strings.Join(selfAndPeerHosts, ","),
 		build.DefaultControlPort)
 	if err != nil {
@@ -2031,21 +2022,25 @@ func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fan
 
 // eraseReplicas sends erase requests to all MS replica peers, each of which erases its
 // own DB/engines synchronously before acking, then restarts itself.
-func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) error {
+func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []string) error {
 	svc.log.Trace("sending erase request to MS replica peers")
 
 	for _, peer := range peers {
-		svc.log.Tracef("sending erase RPC to peer %s", peer.String())
+		svc.log.Tracef("sending erase RPC to peer %s", peer)
 		peerReq := new(control.SystemEraseReq)
-		peerReq.AddHost(peer.String())
+		peerReq.AddHost(peer)
+		// Explicitly set the system name rather than relying on svc.rpcClient's
+		// configured default, so the forwarded request is correctly scoped even if
+		// that default is ever left unset.
+		peerReq.SetSystem(svc.sysdb.SystemName())
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
 			// A connection error here can't be distinguished from "peer never
 			// received the request", so treat it as a hard failure rather than
 			// assuming the peer erased itself.
-			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer.String())
+			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer)
 		}
-		svc.log.Tracef("peer %s acknowledged erase request", peer.String())
+		svc.log.Tracef("peer %s acknowledged erase request", peer)
 	}
 
 	return nil
@@ -2085,7 +2080,7 @@ func (svc *mgmtSvc) eraseNonReplicaEngines(ctx context.Context, fanReq *fanoutRe
 
 // eraseAllEngines runs on the leader to coordinate the erase across replicas and engines.
 func (svc *mgmtSvc) eraseAllEngines(ctx context.Context) (*mgmtpb.SystemEraseResp, error) {
-	peers, fanReq, fanResp, err := svc.getPeersAndFanout(ctx)
+	peers, fanReq, fanResp, err := svc.getPeersAndFanout()
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to determine path to self")
 	}
@@ -2149,9 +2144,9 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 	return nil
 }
 
-// execControlPlaneRestart drains the gRPC server via GracefulStop() (falling back to a
-// forced Stop() after svc.gracefulStopTimeout), then exec()s to restart the control
-// plane process.
+// execControlPlaneRestart drains the gRPC server via GracefulStop(), falling back to
+// exec()ing to restart the control plane process after svc.gracefulStopTimeout if the
+// drain hasn't completed by then.
 func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 	scheduledAt := time.Now()
 
@@ -2166,9 +2161,12 @@ func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 		svc.log.Debugf("System Erase: gRPC server drained cleanly after %s [role=%s]",
 			time.Since(scheduledAt), leaderStr)
 	case <-time.After(svc.gracefulStopTimeout):
-		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
+		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, proceeding to exec anyway [role=%s]",
 			svc.gracefulStopTimeout, leaderStr)
-		svc.grpcServer.Stop()
+		// No forced Stop() fallback: it shares GracefulStop()'s lock/condvar, so it
+		// couldn't force anything independently; exec() below tears down the
+		// listeners/connections via the kernel regardless.
+		dumpGoroutineStacks(svc.log, "GracefulStop() timed out")
 	}
 
 	svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",

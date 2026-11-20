@@ -477,6 +477,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			if len(e.Replicas) > 0 {
 				req.SetHostList(e.Replicas)
 			}
+		case *system.ErrReplicaNoEngine:
+			// The replica has indicated that it does not have a running
+			// engine to service the request. We can retry the request on
+			// one of the other replicas.
+			if len(e.Replicas) > 0 {
+				req.SetHostList(e.Replicas)
+			}
 		default:
 			// As long as the outer context hasn't timed out, we
 			// should always retry an inner timeout.

@@ -80,6 +80,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		vosEnv             string
 		enableHotplug      bool
 		busidRange         string
+		hotplugRanges      []string
 		accelEngine        string
 		accelOptMask       storage.AccelOptionBits
 		rpcSrvEnable       bool
@@ -132,8 +133,57 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetHotplugBusidRange,
-					Params: &HotplugBusidRangeParams{
-						Begin: 138, End: 143,
+					Params: &HotplugFilterParams{
+						{Domain: 0, Begin: 0x8a, End: 0x8f},
+					},
+				},
+			},
+		},
+		"multiple controllers; hotplug enabled; hotplug range specified; non-zero pci domain": {
+			class:         storage.ClassNvme,
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			enableHotplug: true,
+			hotplugRanges: []string{"0001:8a-8f"},
+			expBdevCfgs:   multiCtrlrConfs(0, true),
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetHotplugBusidRange,
+					Params: &HotplugFilterParams{
+						{Domain: 0x0001, Begin: 0x8a, End: 0x8f},
+					},
+				},
+			},
+		},
+		"multiple controllers; hotplug enabled; multiple ranges on the same pci domain": {
+			class:         storage.ClassNvme,
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			enableHotplug: true,
+			hotplugRanges: []string{"0001:00-07", "0001:70-7f"},
+			expBdevCfgs:   multiCtrlrConfs(0, true),
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetHotplugBusidRange,
+					Params: &HotplugFilterParams{
+						{Domain: 0x0001, Begin: 0x00, End: 0x07},
+						{Domain: 0x0001, Begin: 0x70, End: 0x7f},
+					},
+				},
+			},
+		},
+		"multiple controllers; hotplug and vmd enabled": {
+			class:         storage.ClassNvme,
+			enableVmd:     true,
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			enableHotplug: true,
+			expBdevCfgs:   multiCtrlrConfs(0, true),
+			expExtraSubsystems: []*SpdkSubsystem{
+				{
+					Name: "vmd",
+					Configs: []*SpdkSubsystemConfig{
+						{
+							Method: storage.ConfVmdEnable,
+							Params: &VmdEnableParams{},
+						},
 					},
 				},
 			},
@@ -274,6 +324,10 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					DeviceRoles: storage.BdevRolesFromBits(tc.devRoles),
 				},
 			}
+			for _, hr := range tc.hotplugRanges {
+				cfg.Bdev.HotplugRanges = append(cfg.Bdev.HotplugRanges,
+					storage.MustNewBdevHotplugRange(hr))
+			}
 			if tc.class != "" {
 				cfg.Class = tc.class
 			}
@@ -313,8 +367,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				return
 			}
 
-			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(test.Context(t), log,
-				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
+			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(log,
+				&engineConfig.Storage, tc.enableVmd)
 
 			gotCfg, gotErr := newSpdkConfig(log, writeReq)
 			test.CmpErr(t, tc.expErr, gotErr)

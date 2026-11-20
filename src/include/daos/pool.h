@@ -214,8 +214,9 @@ int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
 			    struct rsvc_client *cli, pthread_mutex_t *cli_lock,
 			    struct dc_mgmt_sys *sys,
 			    crt_endpoint_t *ep);
-int dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version,
-				    tse_sched_t *sched, tse_task_t **task);
+int
+dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, d_rank_t hint_rank,
+				tse_sched_t *sched, tse_task_t **task);
 void dc_pool_abandon_map_refresh_task(tse_task_t *task);
 
 int

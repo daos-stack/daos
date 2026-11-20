@@ -505,6 +505,35 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			},
 			expErr: errors.New("max retries"),
 		},
+		"request to replica without an engine is redirected to its peers": {
+			timeout: 5 * time.Second,
+			req: &testRequest{
+				HostList: []string{"host01:10001"},
+				toMS:     true,
+				rpcFn: func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+					if cc.Target() == "host01:10001" {
+						return nil, &system.ErrReplicaNoEngine{Replicas: nonLeaderReplicas[1:]}
+					}
+					return defaultMessage, nil
+				},
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "host05:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host07:10001",
+						Message: defaultMessage,
+					},
+					{
+						Addr:    "host09:10001",
+						Message: defaultMessage,
+					},
+				},
+			},
+		},
 		"request to non-replicas eventually discovers at least one replica": {
 			req: &testRequest{
 				HostList: nonReplicaHosts,

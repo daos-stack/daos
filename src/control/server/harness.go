@@ -47,7 +47,7 @@ type Engine interface {
 	requestStart(context.Context)
 	isAwaitingFormat() bool
 	isAwaitingStart() bool
-	getExitErr() error
+	lastErr() error
 	getSuperblock() *Superblock
 
 	// These methods should probably be replaced by callbacks.

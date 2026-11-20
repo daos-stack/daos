@@ -84,7 +84,7 @@ type EngineInstance struct {
 	_drpcSocket      string
 	_cancelCtx       context.CancelFunc
 	_superblock      *Superblock
-	_exitErr         error
+	_lastErr         error // populated when harness receives signal
 	_lastHealthStats map[string]*ctlpb.BioHealthResp
 	// Guard against closing storageReady more than once for the current start attempt. Reset
 	// to false each time a new channel is created.
@@ -186,19 +186,6 @@ func (ei *EngineInstance) LocalState() system.MemberState {
 	}
 }
 
-// getExitErr returns why the engine last exited; requestStart clears it.
-func (ei *EngineInstance) getExitErr() error {
-	ei.RLock()
-	defer ei.RUnlock()
-	return ei._exitErr
-}
-
-func (ei *EngineInstance) setExitErr(err error) {
-	ei.Lock()
-	defer ei.Unlock()
-	ei._exitErr = err
-}
-
 // setIndex sets the server index assigned by the harness.
 func (ei *EngineInstance) setIndex(idx uint32) {
 	ei.runner.GetConfig().Index = idx
@@ -221,6 +208,9 @@ func (ei *EngineInstance) removeSocket() error {
 	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
 	engineSock := ei.getDrpcSocket()
+	if engineSock == "" {
+		return nil // the engine never reported a socket
+	}
 
 	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
