@@ -132,24 +132,21 @@ def run_build_test(self, cache_mode, il_lib=None):
             f'scons -C {build_dir} --jobs {build_jobs} install --implicit-deps-unchanged',
             f'daos filesystem query {mount_dir}']
     for cmd in cmds:
-        command = '{} {}'.format(preload_cmd, cmd)
         # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
         timeout = 10 * 60
         if cmd.startswith('scons'):
             timeout = build_time * 60
         elif cmd.endswith('install.sh -y'):
             timeout *= 2
-        self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
-        start = time.time()
-        result = run_remote(
-            self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
-        elapsed = time.time() - start
-        (minutes, seconds) = divmod(elapsed, 60)
-        self.log.info(
-            'Command %s completed in %d:%02d (%d%% of timeout)',
-            command, minutes, seconds, elapsed / timeout * 100)
+        result = __run_command(self, preload_cmd, cmd, timeout)
         if result.passed:
             continue
+        if result.timeout and cmd.startswith('git'):
+            self.log.info('Retrying command due to timeout')
+            result = __run_command(self, preload_cmd, cmd, timeout)
+            if result.passed:
+                continue
+            self.log.info('Retrying command failed')
 
         self.log.info('Failure detected - debug information:')
         fail_type = 'Failure to build'
@@ -168,6 +165,30 @@ def run_build_test(self, cache_mode, il_lib=None):
             self.fail(f'{fail_type} over dfuse in mode {cache_mode}')
 
     self.log.info('Test passed')
+
+
+def __run_command(self, preload_cmd, cmd, timeout):
+    """Run a command with a preload command and a timeout.
+
+    Args:
+        self (object): The test class instance.
+        preload_cmd (str): The command to preload before running the main command.
+        cmd (str): The command to run.
+        timeout (int): The timeout for the command in seconds.
+
+    Returns:
+        CommandResult: groups of command results from the same hosts with the same return status
+    """
+    command = f'{preload_cmd} {cmd}'
+    self.log_step(f"Running '{cmd}' with a {timeout}s timeout")
+    start = time.time()
+    result = run_remote(self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
+    elapsed = time.time() - start
+    (minutes, seconds) = divmod(elapsed, 60)
+    self.log.info(
+        'Command %s completed in %d:%02d (%d%% of timeout)',
+        command, minutes, seconds, elapsed / timeout * 100)
+    return result
 
 
 def __get_daos_build_checkout(self):
