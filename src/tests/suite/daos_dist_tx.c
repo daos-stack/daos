@@ -3285,6 +3285,7 @@ dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool 
 	struct ioreq  req;
 	uint64_t      idx   = 0;
 	int           rx_nr = 1;
+	d_rank_t      kill_rank;
 	d_rank_t      rank;
 	int           rc;
 	bool          done = false;
@@ -3315,7 +3316,7 @@ dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool 
 		insert_single(dkey, akey, idx, wbuf, size, DAOS_TX_NONE, &req);
 
 		/* Get the rank to be killed, that is DTX leader for next update. */
-		rank = get_rank_by_oid_shard(arg, oid, 0);
+		kill_rank = get_rank_by_oid_shard(arg, oid, 0);
 
 		if (spec_leader)
 			/* Client will resend twice: the 1st one will get spec_leader info. */
@@ -3335,28 +3336,41 @@ dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool 
 		/* The async update should not complete since DTX leader is blocked by fail_loc. */
 		assert_false(done);
 
-		print_message("Exclude rank %d to trigger rebuild ...\n", rank);
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, rank);
+		print_message("Exclude rank %d to trigger rebuild ...\n", kill_rank);
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc,
+				 kill_rank);
 
 		print_message("Wait async update to complete ...\n");
 		insert_wait(&req);
 
-		daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc, rank);
+		daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc,
+				  kill_rank);
 
-		/* Reset fail_loc will make DTX resync to go ahead. */
+		/*
+		 * Reset fail_loc to make DTX resync can go ahead.
+		 *
+		 * Note that rank_0 is the one to send collective MGMT_PARAMS_SET RPC, but it
+		 * maybe the kill_rank. So let's reset fail_loc for each rank one by one.
+		 */
 		print_message("Reset test environment.\n");
-		if (spec_leader)
-			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		for (rank = 0; rank < arg->srv_nnodes; rank++) {
+			if (rank != kill_rank) {
+				if (spec_leader)
+					daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_VALUE,
+							      0, 0, NULL);
+				daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC, 0, 0,
+						      NULL);
+			}
+		}
 		daos_fail_loc_set(0);
 
 		print_message("Verifying data ...\n");
 		lookup_single(dkey, akey, idx, rbuf, size, DAOS_TX_NONE, &req);
 		assert_memory_equal(wbuf, rbuf, size);
 
-		print_message("Reintegrate rank %d ...\n", rank);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank,
-					  -1);
+		print_message("Reintegrate rank %d ...\n", kill_rank);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  kill_rank, -1);
 		assert_success(rc);
 		test_rebuild_wait(&arg, 1);
 
