@@ -419,10 +419,11 @@ typedef int (*test_teardown_cb_t)(void **state);
  * Collective across PAR_COMM_WORLD. Use the boolean check for optional subcases;
  * the macro skips the whole cmocka test at its call site when prerequisites are not met.
  */
-bool test_runable(test_arg_t *arg, unsigned int required_nodes);
-#define test_runable_or_skip(arg, required_nodes)                                                  \
+bool
+test_runnable(test_arg_t *arg, unsigned int required_nodes);
+#define test_runnable_or_skip(arg, required_nodes)                                                 \
 	do {                                                                                       \
-		if (!test_runable((arg), (required_nodes)))                                        \
+		if (!test_runnable((arg), (required_nodes)))                                       \
 			skip();                                                                    \
 	} while (0)
 

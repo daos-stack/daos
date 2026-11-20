@@ -2360,7 +2360,7 @@ dfs_test_readdir(void **state)
 
 	print_message("Running readdir test with OC_SX dir..\n");
 	dfs_test_readdir_internal(state, OC_SX);
-	if (test_runable(arg, 3)) {
+	if (test_runnable(arg, 3)) {
 		print_message("Running readdir test with OC_RP_3GX dir..\n");
 		dfs_test_readdir_internal(state, OC_RP_3GX);
 	}

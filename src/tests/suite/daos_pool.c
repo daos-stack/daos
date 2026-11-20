@@ -2243,7 +2243,7 @@ pool_map_refreshes_common(void **state, bool fall_back)
 		skip();
 	}
 
-	test_runable_or_skip(arg, 2);
+	test_runnable_or_skip(arg, 2);
 
 	rebuild_single_pool_target(arg, rank, tgt, false);
 

@@ -139,7 +139,7 @@ vc_without_inconsistency(void **state, daos_iod_type_t iod_type)
 	struct ioreq	 req;
 	int		 rc;
 
-	test_runable_or_skip(arg, dts_vc_replica_cnt);
+	test_runnable_or_skip(arg, dts_vc_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
@@ -176,7 +176,7 @@ vc_3(void **state)
 
 	print_message("misc single and array value without inconsistency\n");
 
-	test_runable_or_skip(arg, dts_vc_replica_cnt);
+	test_runnable_or_skip(arg, dts_vc_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 
@@ -205,7 +205,7 @@ vc_4(void **state)
 
 	print_message("verify with different rec\n");
 
-	test_runable_or_skip(arg, dts_vc_replica_cnt);
+	test_runnable_or_skip(arg, dts_vc_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
@@ -233,7 +233,7 @@ vc_test_lost_data(void **state, int type)
 	struct ioreq	 req;
 	int		 rc;
 
-	test_runable_or_skip(arg, dts_vc_replica_cnt);
+	test_runnable_or_skip(arg, dts_vc_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -304,7 +304,7 @@ vc_8(void **state)
 
 	print_message("verify with lost replica\n");
 
-	test_runable_or_skip(arg, dts_vc_replica_cnt);
+	test_runnable_or_skip(arg, dts_vc_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -342,7 +342,7 @@ vc_9(void **state)
 
 	print_message("verify with different dkey\n");
 
-	test_runable_or_skip(arg, dts_vc_replica_cnt);
+	test_runnable_or_skip(arg, dts_vc_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -365,7 +365,7 @@ vc_10(void **state)
 
 	print_message("OBJ_SYNC RPC retry\n");
 
-	test_runable_or_skip(arg, dts_vc_replica_cnt);
+	test_runnable_or_skip(arg, dts_vc_replica_cnt);
 
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	arg->fail_loc = DAOS_OBJ_SYNC_RETRY | DAOS_FAIL_SOME;

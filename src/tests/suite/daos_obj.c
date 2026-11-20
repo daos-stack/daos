@@ -3116,7 +3116,7 @@ tgt_idx_change_retry(void **state)
 	 */
 
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	if (!arg0->async) {
 		if (arg->myrank == 0)
@@ -3259,7 +3259,7 @@ fetch_replica_unavail(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
@@ -3853,7 +3853,7 @@ io_pool_map_refresh_trigger(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	/* needs at lest 2 targets */
-	test_runable_or_skip(arg, 2);
+	test_runnable_or_skip(arg, 2);
 
 	/* Choose an rank other than leader */
 	test_get_leader(arg, &leader);
@@ -4057,7 +4057,7 @@ io_capa_iv_fetch(void **state)
 	d_rank_t	leader;
 
 	/* needs at lest 2 targets */
-	test_runable_or_skip(arg, 2);
+	test_runnable_or_skip(arg, 2);
 
 	test_get_leader(arg, &leader);
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -4183,7 +4183,7 @@ io_fetch_retry_another_replica(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	/* needs at lest 2 targets */
-	test_runable_or_skip(arg, 2);
+	test_runnable_or_skip(arg, 2);
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0,
 				arg->myrank);
@@ -5172,7 +5172,7 @@ io_50(void **state)
 
 	print_message("Collective punch object - OC_SX\n");
 
-	test_runable_or_skip(arg, 2);
+	test_runnable_or_skip(arg, 2);
 
 	obj_coll_punch(arg, OC_SX);
 }
@@ -5184,7 +5184,7 @@ io_51(void **state)
 
 	print_message("Collective punch object - OC_EC_2P1G2\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	obj_coll_punch(arg, OC_EC_2P1G2);
 }
@@ -5196,7 +5196,7 @@ io_52(void **state)
 
 	print_message("Collective punch object - OC_EC_4P1GX\n");
 
-	test_runable_or_skip(arg, 5);
+	test_runnable_or_skip(arg, 5);
 
 	obj_coll_punch(arg, OC_EC_4P1GX);
 }
@@ -5301,7 +5301,7 @@ io_53(void **state)
 
 	print_message("Collective object query - OC_SX\n");
 
-	test_runable_or_skip(arg, 2);
+	test_runnable_or_skip(arg, 2);
 
 	obj_coll_query(arg, OC_SX, false);
 }
@@ -5313,7 +5313,7 @@ io_54(void **state)
 
 	print_message("Collective object query - OC_EC_2P1G2\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	obj_coll_query(arg, OC_EC_2P1G2, false);
 }
@@ -5325,7 +5325,7 @@ io_55(void **state)
 
 	print_message("Collective object query - OC_EC_4P1GX\n");
 
-	test_runable_or_skip(arg, 5);
+	test_runnable_or_skip(arg, 5);
 
 	obj_coll_query(arg, OC_EC_4P1GX, false);
 }
@@ -5337,7 +5337,7 @@ io_56(void **state)
 
 	print_message("Collective object query with sparse ranks\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	obj_coll_query(arg, OC_RP_3GX, true);
 }
@@ -5349,7 +5349,7 @@ io_57(void **state)
 
 	print_message("Collective object query with rank_0 excluded\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	rebuild_single_pool_rank(arg, 0, false);
 	obj_coll_query(arg, OC_EC_2P1GX, false);

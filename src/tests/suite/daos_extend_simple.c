@@ -37,7 +37,7 @@ extend_dkeys(void **state)
 
 	T_BEGIN();
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
@@ -78,7 +78,7 @@ extend_akeys(void **state)
 
 	T_BEGIN();
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
@@ -119,7 +119,7 @@ extend_indexes(void **state)
 
 	T_BEGIN();
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
@@ -162,7 +162,7 @@ extend_large_rec(void **state)
 
 	T_BEGIN();
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	memset(buffer, 'a', 5000);
 	for (i = 0; i < OBJ_NR; i++) {
@@ -200,7 +200,7 @@ extend_objects(void **state)
 
 	T_BEGIN();
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, OC_S1, 0, 0, arg->myrank);

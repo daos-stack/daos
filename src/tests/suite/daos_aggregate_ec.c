@@ -847,7 +847,7 @@ test_all_ec_agg(void **statep)
 	test_arg_t		*arg = *statep;
 	struct ec_agg_test_ctx	 ctx = { 0 };
 
-	test_runable_or_skip(arg, 5);
+	test_runnable_or_skip(arg, 5);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	setup_ec_agg_tests(statep, &ctx);
@@ -893,7 +893,7 @@ fetch_snap_with_agg(void **statep)
 	bool			 snap_higher = false;
 	int			 rc;
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	FAULT_INJECTION_REQUIRED();
 

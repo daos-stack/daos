@@ -32,7 +32,7 @@ upgrade_ec_parity_rotate(void **state)
 	int		i;
 	int		rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	if (arg->myrank == 0) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -99,7 +99,7 @@ upgrade_ec_parity_rotate_single_dkey(void **state)
 	char		buf[10];
 	int		rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	if (arg->myrank == 0) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,

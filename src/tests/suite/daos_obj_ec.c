@@ -97,7 +97,7 @@ ec_dkey_list_punch(void **state)
 	char		*dkeys[10000];
 	int		i;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -195,7 +195,7 @@ ec_akey_list_punch(void **state)
 	int		num_akey;
 	int		i;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -287,7 +287,7 @@ ec_rec_list_punch(void **state)
 	daos_recx_t	recx;
 	char		data[16];
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -533,7 +533,7 @@ ec_partial_update_agg(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	data = (char *)malloc(EC_CELL_SIZE);
@@ -596,7 +596,7 @@ ec_cross_cell_partial_update_agg(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	data = (char *)malloc(update_size);
@@ -650,7 +650,7 @@ ec_full_partial_update_agg(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -728,7 +728,7 @@ ec_partial_full_update_agg(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -920,7 +920,7 @@ ec_fail_agg_internal(void **state, unsigned fail_loc)
 	char		*data;
 	char		*verify_data;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	data = (char *)malloc(EC_CELL_SIZE);
@@ -987,7 +987,7 @@ ec_singv_array_mixed_io(void **state)
 	int		 i, rc;
 	daos_size_t	 size = 131071;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -1092,7 +1092,7 @@ ec_full_stripe_snapshot(void **state)
 	char		*verify_data;
 	int		i;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -1150,7 +1150,7 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -1340,7 +1340,7 @@ ec_singv_overwrite_oc(void **state, unsigned int ec_oc)
 	int		 i, rc;
 	daos_size_t	 size;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
@@ -1468,7 +1468,7 @@ ec_singv_overwrite(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	ec_singv_overwrite_oc(state, OC_EC_2P1G1);
 	ec_singv_overwrite_oc(state, OC_EC_2P1G2);
@@ -1640,7 +1640,7 @@ ec_singv_diff_size_fetch(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	print_message("test OC_EC_2P1G1, small singv 511B\n");
 	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 511, 0);
@@ -1824,7 +1824,7 @@ ec_singv_stale_shard_fetch(void **state)
 	char          co_str_nocsum[37];
 	int           rc;
 
-	if (!test_runable(arg, 6))
+	if (!test_runnable(arg, 6))
 		return;
 
 	/* The checksum of the fetched data is only verified if checksum is enabled for the
@@ -1910,7 +1910,7 @@ ec_cond_fetch(void **state)
 	uint64_t         fail_val;
 	bool             degraded_test = false;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -2082,7 +2082,7 @@ ec_data_recov(void **state)
 	uint16_t	 shard[2];
 	uint64_t	 fail_val;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -2182,7 +2182,7 @@ ec_multi_singv_overwrite(void **state)
 	size_t		 new_len[3];
 	int		 i, rc;
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	for (i = 0; i < 3; i++) {
 		buf[i] = NULL;
@@ -2275,7 +2275,7 @@ ec_multi_array(void **state)
 	daos_recx_t	 recx[3];
 	int		 i, rc;
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	for (i = 0; i < 3; i++) {
 		buf[i] = NULL;
@@ -2386,7 +2386,7 @@ ec_few_partial_stripe_aggregation(void **state)
 	char		*data;
 	daos_recx_t	recx;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
@@ -2431,7 +2431,7 @@ ec_rec_parity_list(void **state)
 	uint64_t	start = UINT64_MAX;
 	uint64_t	end = 0;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	data = (char *)malloc(stripe_size);
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
@@ -2500,7 +2500,7 @@ ec_update_2akeys(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -2608,7 +2608,7 @@ ec_dkey_enum_fail(void **state)
 	int		i;
 	int		rc;
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -2661,7 +2661,7 @@ ec_single_stripe_nvme_io(void **state)
 	daos_recx_t	recx;
 	int		i;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -2709,7 +2709,7 @@ ec_two_stripes_nvme_io(void **state)
 	daos_recx_t	recx;
 	int		i;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -2765,7 +2765,7 @@ ec_three_stripes_nvme_io(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -2828,7 +2828,7 @@ ec_full_partial_punch_agg(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
@@ -2929,7 +2929,7 @@ ec_fetch_iom(void **state)
 	char         *buf;
 	int           i, rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	buf_len = EC_IOM_EXT_NR * EC_IOM_EXT_SIZE;
 	D_ALLOC(buf, buf_len);
@@ -3088,7 +3088,7 @@ ec_fetch_multi_iom(void **state)
 	char         *buf;
 	int           i, rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	buf_len = EC_IOM_EXT_NR * EC_IOM_EXT_SIZE;
 	D_ALLOC(buf, buf_len);
@@ -3440,7 +3440,7 @@ ec_clone_punched_stripe(void **state)
 	int                    i;
 	int                    rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	D_ALLOC(data, stripe_size);
 	assert_non_null(data);
@@ -3498,7 +3498,7 @@ ec_clone_sparse_stripe(void **state)
 	int                    i;
 	int                    rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	D_ALLOC(data, stripe_size);
 	assert_non_null(data);
@@ -3564,7 +3564,7 @@ ec_clone_random(void **state)
 	int                    i;
 	int                    rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	env  = getenv("DAOS_CLONE_TEST_SEED");
 	seed = env != NULL ? atoi(env) : (unsigned int)time(NULL);
@@ -3651,7 +3651,7 @@ clone_epoch_skew(void **state)
 	int                    i;
 	int                    rc;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	D_ALLOC(data, len);
 	assert_non_null(data);

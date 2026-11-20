@@ -226,12 +226,12 @@ dfs_test_cond(void **state)
 		print_message("Testing with RF 0 ...\n");
 	test_cond_helper(arg, DAOS_PROP_CO_REDUN_RF0);
 
-	if (test_runable(arg, 2)) {
+	if (test_runnable(arg, 2)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 1 ...\n");
 		test_cond_helper(arg, DAOS_PROP_CO_REDUN_RF1);
 	}
-	if (test_runable(arg, 3)) {
+	if (test_runnable(arg, 3)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 2 ...\n");
 		test_cond_helper(arg, DAOS_PROP_CO_REDUN_RF2);
@@ -394,7 +394,7 @@ dfs_test_ec_short_read(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	test_runable_or_skip(arg, 6);
+	test_runnable_or_skip(arg, 6);
 
 	/* less than 1 EC stripe */
 	dfs_test_short_read_internal(state, OC_EC_4P2G1,
@@ -923,12 +923,12 @@ dfs_test_create_atomicity(void **state)
 	}
 	atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF0);
 
-	if (test_runable(arg, 2)) {
+	if (test_runnable(arg, 2)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 1 ...\n");
 		atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF1);
 	}
-	if (test_runable(arg, 3)) {
+	if (test_runnable(arg, 3)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 2 ...\n");
 		atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF2);

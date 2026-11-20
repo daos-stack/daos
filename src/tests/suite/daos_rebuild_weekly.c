@@ -136,7 +136,7 @@ rebuild_ec_agg_on_excluded_tgt(void **state)
 	int           s, c, rc, bad = 0;
 
 	print_message("BEGIN %s\n", __FUNCTION__);
-	if (!test_runable(arg, 8))
+	if (!test_runnable(arg, 8))
 		return;
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);

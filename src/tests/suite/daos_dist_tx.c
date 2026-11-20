@@ -43,7 +43,7 @@ dtx_0(void **state)
 	 */
 	print_message("DTX0: SV fetch against EC obj\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	MUST(daos_tx_open(arg->coh, &th, 0, NULL));
 
@@ -211,7 +211,7 @@ dtx_5(void **state)
 
 	print_message("DTX5: Multiple small SV update on multiple EC objs\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	dtx_update_multiple_objs(arg, DAOS_IOD_SINGLE, 1 << 8, OC_EC_2P1G1);
 }
@@ -223,7 +223,7 @@ dtx_6(void **state)
 
 	print_message("DTX6: Multiple large EV update on multiple EC objs\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	dtx_update_multiple_objs(arg, DAOS_IOD_ARRAY, 1 << 16, OC_EC_2P1G1);
 }
@@ -818,7 +818,7 @@ dtx_18(void **state)
 
 	print_message("DTX18: Spread read time-stamp when commit\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	arg->async = 0;
 	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
@@ -899,7 +899,7 @@ dtx_19(void **state)
 
 	print_message("DTX19: misc rep and EC object update in same TX.\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	MUST(daos_tx_open(arg->coh, &th, DAOS_TF_ZERO_COPY, NULL));
 	arg->async = 0;
@@ -1021,7 +1021,7 @@ dtx_20(void **state)
 
 	print_message("DTX20: atomicity - either all done or none done\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0, 0);
 
@@ -1117,7 +1117,7 @@ dtx_21(void **state)
 
 	print_message("DTX21: TX atomicity - internal transaction.\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, &oid, &req, &oc, &type, NULL, 1, 0, 0);
 
@@ -1223,7 +1223,7 @@ dtx_22(void **state)
 
 	print_message("DTX22: TX isolation - invisible partial modification\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	if (arg->myrank == 0)
 		dtx_init_oid_req_akey(arg, oids, reqs, ocs, types,
@@ -1319,7 +1319,7 @@ dtx_23(void **state)
 
 	print_message("DTX23: server start epoch - refuse TX with old epoch\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0, 0);
 
@@ -1387,7 +1387,7 @@ dtx_24(void **state)
 
 	print_message("DTX24: async batched commit\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	print_message("Transactional update something\n");
 
@@ -1458,7 +1458,7 @@ dtx_25(void **state)
 
 	print_message("DTX25: uncertain status check - committable\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0)
@@ -1526,7 +1526,7 @@ dtx_26(void **state)
 
 	print_message("DTX26: uncertain status check - non-committable\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	par_barrier(PAR_COMM_WORLD);
 	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
@@ -1605,7 +1605,7 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort,
 	int		 i;
 	int		 rc;
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	par_barrier(PAR_COMM_WORLD);
 	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
@@ -1837,7 +1837,7 @@ dtx_29(void **state)
 
 	print_message("DTX29: uncertain status check - fetch re-entry\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
 			      DTX_NC_CNT, 0);
@@ -1971,7 +1971,7 @@ dtx_30(void **state)
 
 	print_message("DTX30: uncertain status check - enumeration re-entry\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0, 0);
 
@@ -2072,7 +2072,7 @@ dtx_31(void **state)
 
 	print_message("DTX31: uncertain status check - punch re-entry\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
 			      DTX_NC_CNT, 0);
@@ -2138,7 +2138,7 @@ dtx_32(void **state)
 
 	print_message("DTX32: uncertain status check - update re-entry\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
 			      IOREQ_SG_IOD_NR, 0);
@@ -2213,7 +2213,7 @@ dtx_33(void **state)
 
 	print_message("DTX33: uncertain status check - query key re-entry\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0,
 			      DAOS_OT_MULTI_UINT64);
@@ -2326,7 +2326,7 @@ dtx_34(void **state)
 
 	print_message("DTX34: uncertain status check - CPD RPC re-entry\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
 			      DTX_NC_CNT, 0);
@@ -2417,7 +2417,7 @@ dtx_35(void **state)
 
 	print_message("DTX35: resync during reopen container\n");
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, akeys, 2,
 			      DTX_NC_CNT, 0);
@@ -2524,7 +2524,7 @@ dtx_36(void **state)
 
 	print_message("DTX36: resync - DTX entry for read only ops\n");
 
-	test_runable_or_skip(arg, 7);
+	test_runnable_or_skip(arg, 7);
 
 	/* Obj1 has more redundancy groups than obj2. If the TX reads
 	 * from multiple redundancy groups of obj1 and only writes to
@@ -2642,7 +2642,7 @@ dtx_37(void **state)
 
 	print_message("DTX37: resync - leader failed during prepare\n");
 
-	test_runable_or_skip(arg, 7);
+	test_runnable_or_skip(arg, 7);
 
 	dtx_init_oid_req_akey(arg, &oid, &req, &oc, &type, akeys, 1,
 			      DTX_NC_CNT, 0);
@@ -2774,7 +2774,7 @@ dtx_38(void **state)
 
 	print_message("DTX38: resync - lost whole redundancy groups\n");
 
-	test_runable_or_skip(arg, 7);
+	test_runnable_or_skip(arg, 7);
 
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &rdg_verify);
 	if (!rdg_verify)
@@ -2944,7 +2944,7 @@ dtx_39(void **state)
 
 	print_message("DTX39: not restar the transaction with fixed epoch\n");
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	if (arg->myrank == 0) {
 		daos_obj_id_t	oid;
@@ -3176,7 +3176,7 @@ dtx_43(void **state)
 
 	print_message("DTX43: engine restarted quickly without pool map change\n");
 
-	if (!test_runable(arg, 3))
+	if (!test_runnable(arg, 3))
 		skip();
 
 	arg->async = 0;
@@ -3364,7 +3364,7 @@ dtx_44(void **state)
 
 	print_message("DTX44: leader switch - resend update with same leader\n");
 
-	if (!test_runable(arg, 4))
+	if (!test_runnable(arg, 4))
 		skip();
 
 	dtx_leader_switch(state, OC_RP_3G1, DAOS_IOD_SINGLE, false);
@@ -3377,7 +3377,7 @@ dtx_45(void **state)
 
 	print_message("DTX45: leader switch - resend update with spec leader\n");
 
-	if (!test_runable(arg, 7))
+	if (!test_runnable(arg, 7))
 		skip();
 
 	dtx_leader_switch(state, OC_EC_4P2G1, DAOS_IOD_ARRAY, true);

@@ -41,7 +41,7 @@ drain_dkeys(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -109,7 +109,7 @@ cont_open_in_drain(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -166,7 +166,7 @@ drain_akeys(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -220,7 +220,7 @@ drain_indexes(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -282,7 +282,7 @@ drain_snap_update_keys(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -360,7 +360,7 @@ drain_snap_punch_keys(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
@@ -449,7 +449,7 @@ drain_multiple(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -518,7 +518,7 @@ drain_large_rec(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
@@ -569,7 +569,7 @@ drain_objects(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	for (i = 0; i < OBJ_NR; i++) {
@@ -598,7 +598,7 @@ drain_fail_and_retry_objects(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	for (i = 0; i < OBJ_NR; i++) {
@@ -637,7 +637,7 @@ drain_then_exclude(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 4);
+	test_runnable_or_skip(arg, 4);
 
 	T_BEGIN();
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1GX, 0, 0, arg->myrank);
@@ -836,7 +836,7 @@ dfs_drain_extend(void **state)
 
 	FAULT_INJECTION_REQUIRED();
 
-	test_runable_or_skip(arg, 3);
+	test_runnable_or_skip(arg, 3);
 
 	T_BEGIN();
 	attr.da_props = daos_prop_alloc(2);
