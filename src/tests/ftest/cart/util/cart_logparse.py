@@ -498,6 +498,9 @@ class LogIter():
         self.file_corrupt = False
 
         self.bz2 = False
+        # Track whether the logfile ended without a trailing newline.
+        # This is common when a process is terminated abruptly (e.g. SIGKILL).
+        self.truncated_eof = False
 
         # Force check encoding for smaller files.
         stbuf = os.stat(fname)
@@ -561,6 +564,7 @@ class LogIter():
         index = 0
         for line in self._fd:
             index += 1
+            self.truncated_eof = not line.endswith('\n')
             if not LogLine.is_valid(line):
                 self._data.append(LogRaw(line))
             else:
@@ -582,6 +586,7 @@ class LogIter():
         position = 0
         for line in self._fd:
             index += 1
+            self.truncated_eof = not line.endswith('\n')
             if not LogLine.is_valid(line):
                 position += len(line)
                 continue
