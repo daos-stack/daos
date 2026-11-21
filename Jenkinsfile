@@ -30,6 +30,40 @@ job_status_internal = [:]
 @Field
 Map<String, Boolean> runStage = [:]
 
+// Scratch PR safety guard; remove before merging.
+boolean isGoCandidateScratch() {
+    return env.BRANCH_NAME == 'PR-17434'
+}
+
+boolean isGoCandidateEnabled() {
+    if (!isGoCandidateScratch() || params.CI_GO_CANDIDATE_VALIDATION != true) {
+        return false
+    }
+    if (env.CHANGE_TARGET != 'master' ||
+            params.CI_PR_REPOS != 'go-build-toolchain@PR-32:7') {
+        error('Go candidate validation requires master and go-build-toolchain@PR-32:7')
+    }
+    return true
+}
+
+void verifyGoCandidateBinaries() {
+    if (isGoCandidateEnabled()) {
+        sh label: 'Verify Go binary provenance', script: '''#!/usr/bin/env bash
+            set -euo pipefail
+            for name in daos daos_agent daos_server daos_server_helper ddb dmg; do
+                binary="/opt/daos/bin/$name"
+                info="$(GOTOOLCHAIN=local /usr/bin/go version -m "$binary")"
+                printf '%s\\n' "$info"
+                IFS= read -r first <<< "$info"
+                if [[ "$first" != "$binary: go1.26.10" ]]; then
+                    echo "Unexpected Go build version for $binary" >&2
+                    exit 1
+                fi
+            done
+        '''
+    }
+}
+
 String bashName(String name) {
     return name.replaceAll('[^a-zA-Z0-9]', '_')
 }
@@ -363,6 +397,10 @@ List<String> getStageNameSkipPragmas(String stageName) {
 // Initialize the runStage map with the current state of the build parameters and any commit
 // pragmas related to skipping/running stages. Should only be called once per build.
 void setupRunStage() {
+    if (isGoCandidateScratch()) {
+        isGoCandidateEnabled()
+        return
+    }
     pragmasToEnv()
     update_default_commit_pragmas()
     updateRunStage()
@@ -372,6 +410,10 @@ void setupRunStage() {
 // Ensure the runStage map is initialized before checking the stage state - required to support
 // the Jenkins Restart from Stage option.
 Boolean shouldStageRun(String name) {
+    if (isGoCandidateScratch()) {
+        return isGoCandidateEnabled() &&
+               (name in ['Build', 'Build on EL 9', 'Unit Tests', 'Unit Test', 'NLT'])
+    }
     if (!runStage) {
         setupRunStage()
     }
@@ -540,6 +582,9 @@ pipeline {
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Build RPM and DEB packages, Skip unit tests.')
+        booleanParam(name: 'CI_GO_CANDIDATE_VALIDATION',
+                     defaultValue: false,
+                     description: 'Scratch PR only: validate Go build 7 on EL9 VMs.')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
@@ -712,6 +757,9 @@ pipeline {
 
     stages {
         stage('Prepare') {
+            when {
+                expression { !isGoCandidateScratch() || isGoCandidateEnabled() }
+            }
             parallel {
                 stage('Set Description') {
                     steps {
@@ -820,6 +868,48 @@ pipeline {
                     }
                     steps {
                         script {
+                            if (isGoCandidateEnabled()) {
+                                sh label: 'Install pinned Go candidate', script: '''#!/usr/bin/env bash
+                                    set -euo pipefail
+                                    repo='go-build-toolchain:PR-32:7'
+                                    package='golang-0:1.26.10-1.daos.el9.x86_64'
+                                    base='https://jenkins-3.daos.hpc.amslabs.hpecorp.net/job/daos-stack/job'
+                                    url="$base/go-build-toolchain/job/PR-32/7/artifact/artifacts/el9/"
+                                    url+='golang-1.26.10-1.daos.el9.x86_64.rpm'
+                                    checksum='49bedfe6bff25a6104464c2cb7a2bc53c41852583413c8d1b2d0e39919377097'
+                                    query='[%{FILENAMES} %{FILEDIGESTS}\\n]'
+                                    candidate="$(mktemp)"
+                                    trap 'rm -f "$candidate"' EXIT
+                                    curl -k -fsSL "$url" -o "$candidate"
+                                    printf '%s  %s\\n' "$checksum" "$candidate" | sha256sum -c -
+                                    expected_digest="$(rpm -qp --qf "$query" "$candidate" |
+                                        awk '$1 == "/usr/bin/go" {print $2}')"
+                                    if [[ ! "$expected_digest" =~ ^[[:xdigit:]]{64}$ ]]; then
+                                        echo 'Candidate RPM has no valid Go binary digest' >&2
+                                        exit 1
+                                    fi
+                                    sudo dnf -y install 'dnf-command(versionlock)'
+                                    sudo dnf -y --allowerasing --disablerepo='*' --enablerepo="$repo" install "$package"
+                                    sudo dnf -y --disablerepo='*' --enablerepo="$repo" reinstall "$package"
+                                    printf '%s  %s\\n' "$expected_digest" /usr/bin/go | sha256sum -c -
+                                    candidate_files="$(rpm -qp --qf "$query" "$candidate")"
+                                    installed_files="$(rpm -qf --qf "$query" /usr/bin/go)"
+                                    if [[ "$candidate_files" != "$installed_files" ]]; then
+                                        echo 'Installed Go RPM differs from archived candidate' >&2
+                                        exit 1
+                                    fi
+                                    rpm -Vf /usr/bin/go
+                                    sudo dnf versionlock add "$package"
+                                    locks="$(sudo dnf -q versionlock list)"
+                                    printf '%s\\n' "$locks"
+                                    grep -Fx 'golang-0:1.26.10-1.daos.el9.*' <<< "$locks"
+                                    if grep -E '^golang-' <<< "$locks" |
+                                            grep -Fxv 'golang-0:1.26.10-1.daos.el9.*'; then
+                                        echo 'Unexpected Go version lock' >&2
+                                        exit 1
+                                    fi
+                                '''
+                            }
                             sh label: 'Collect dependency RPMs built into the image',
                                script: '''
                                        set -- /home/daos/rpms/deps/*.rpm
@@ -833,9 +923,13 @@ pipeline {
                                            stash_files: 'ci/test_files_to_stash.txt',
                                            build_deps: 'no',
                                            stash_opt: true,
+                                           prebuild: isGoCandidateEnabled() ?
+                                               'export DAOS_GO_CANDIDATE_VALIDATION=1 GOTOOLCHAIN=local' : '',
                                            scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' TARGET_TYPE=release'))
+                                                      ' TARGET_TYPE=release' +
+                                                      (isGoCandidateEnabled() ? ' GO_BIN=/usr/bin/go' : '')))
+                            verifyGoCandidateBinaries()
                             sh label: 'Build DAOS RPMs',
                                 script: "DAOS_RELVAL='${env.DAOS_RELVAL}'" +
                                     ' utils/build/build_packages.sh --rpm-suffix=el9' +
@@ -846,9 +940,13 @@ pipeline {
                             job_step_update(
                                 sconsBuild(parallel_build: true,
                                            build_deps: 'no',
+                                           prebuild: isGoCandidateEnabled() ?
+                                               'export DAOS_GO_CANDIDATE_VALIDATION=1 GOTOOLCHAIN=local' : '',
                                            scons_exe: 'utils/build/build_daos.sh',
                                            scons_args: sconsArgs() +
-                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release'))
+                                                      ' BUILD_GO_VALGRIND=1 TARGET_TYPE=release' +
+                                                      (isGoCandidateEnabled() ? ' GO_BIN=/usr/bin/go' : '')))
+                            verifyGoCandidateBinaries()
                             sh label: 'Stash valgrind install tree for NLT',
                                 script: 'tar -C / -cf opt-daos-valgrind.tar opt/daos'
                             stash(name: 'opt-daos-valgrind', includes: 'opt-daos-valgrind.tar')
@@ -944,7 +1042,8 @@ pipeline {
                         expression { shouldStageRun('Unit Test') }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                        label(isGoCandidateScratch() ? 'ci_vm1' :
+                              cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL))
                     }
                     steps {
                             job_step_update(
@@ -992,7 +1091,7 @@ pipeline {
                         expression { shouldStageRun('NLT') }
                     }
                     agent {
-                        label params.CI_NLT_1_LABEL
+                        label(isGoCandidateScratch() ? 'ci_nlt_vm1' : params.CI_NLT_1_LABEL)
                     }
                     steps {
                         // NLT memchecks the valgrind-tagged build, not the shared -race one.
@@ -1245,7 +1344,7 @@ pipeline {
         stage('Test Storage Prep on EL 9') {
             when {
                 beforeAgent true
-                expression { params.CI_STORAGE_PREP_LABEL != '' }
+                expression { !isGoCandidateScratch() && params.CI_STORAGE_PREP_LABEL != '' }
             }
             agent {
                 label params.CI_STORAGE_PREP_LABEL

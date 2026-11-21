@@ -101,4 +101,17 @@ SCONS_ARGS+=("$@")
 echo "Building DAOS using scons with args:"
 echo "${SCONS_ARGS[*]}"
 
+if [[ "${DAOS_GO_CANDIDATE_VALIDATION:-}" == "1" ]]; then
+    expected='golang-0:1.26.10-1.daos.el9.x86_64'
+    owner="$(rpm -qf --qf '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' /usr/bin/go)"
+    repo="$(dnf repoquery --installed --qf '%{from_repo}' "${expected}")"
+    version="$(GOTOOLCHAIN=local /usr/bin/go version)"
+    printf 'Go owner: %s\nGo repository: %s\nGo version: %s\n' "$owner" "$repo" "$version"
+    if [[ "$owner" != "$expected" || "$repo" != 'go-build-toolchain:PR-32:7' ||
+          "$version" != 'go version go1.26.10 linux/amd64' ]]; then
+        echo 'Go candidate verification failed' >&2
+        exit 1
+    fi
+fi
+
 scons "${SCONS_ARGS[@]}"
