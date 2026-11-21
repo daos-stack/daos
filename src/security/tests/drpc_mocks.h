@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,6 +49,9 @@ void mock_drpc_call_teardown(void);
 /* Convenience methods to initialize mocks */
 void pack_get_cred_resp_in_drpc_call_resp_body(Auth__GetCredResp *resp);
 void pack_validate_resp_in_drpc_call_resp_body(Auth__ValidateCredResp *resp);
+
+void
+		    pack_node_cert_resp_in_drpc_call_resp_body(Auth__ValidateNodeCertResp *resp);
 
 /* Convenience methods to free mocks */
 void free_drpc_call_msg_body(void);
