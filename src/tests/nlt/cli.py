@@ -13,6 +13,7 @@ import resource
 import sys
 import traceback
 
+from .config import setup_sanitizers
 from .fault_injection import server_fi
 from .posix_tests import PosixTests
 from .reporting import WarningsFactory
@@ -113,6 +114,8 @@ Tests are:
         sys.exit(1)
 
     # Run this only after the argument checks above, so invalid arguments do not start a server.
+    setup_sanitizers(args.class_name)
+
     if args.server_fi:
         server_fi(args)
         return

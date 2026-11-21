@@ -18,7 +18,7 @@ from os.path import join
 from types import NoneType
 
 from .base import get_inc_id
-from .config import get_base_env
+from .config import get_base_env, sanitizer_reports, set_sanitizer_env
 from .logging_utils import log_test
 
 
@@ -118,6 +118,9 @@ class ValgrindHelper():
     This helps setup the command line required, and
     performs log modification after the fact to assist
     Jenkins in locating the source code.
+
+    For a sanitizer (ASan) build there is no wrapper, the options are set in the
+    environment by add_memcheck_env() instead.
     """
 
     def __init__(self, conf, logid=None):
@@ -127,6 +130,7 @@ class ValgrindHelper():
         self.use_valgrind = True
         self.full_check = True
         self._xml_file = None
+        self._san_log = None
         self._logid = logid
 
         # Repo root, three levels above this package (src/tests/nlt/ -> src/tests/ -> src/ -> root).
@@ -137,7 +141,7 @@ class ValgrindHelper():
 
     def get_cmd_prefix(self):
         """Return the command line prefix"""
-        if not self.use_valgrind:
+        if not self.use_valgrind or self.conf.sanitizers:
             return []
 
         if not self._logid:
@@ -171,15 +175,30 @@ class ValgrindHelper():
         return cmd
 
     def add_memcheck_env(self, env):
-        """Disable Go async preemption for a command run under memcheck."""
+        """Set up the environment for a command run under the memory checker."""
         if not self.use_valgrind:
+            return
+        if self.conf.sanitizers:
+            if not self._logid:
+                self._logid = get_inc_id()
+            self._san_log = os.path.abspath(join(self.conf.tmp_dir or '.',
+                                                 f'dnt_asan.{self._logid}'))
+            set_sanitizer_env(env, self._san_log, leaks=self.full_check)
             return
         godebug = env.get('GODEBUG')
         env['GODEBUG'] = f'{godebug},asyncpreemptoff=1' if godebug else 'asyncpreemptoff=1'
 
+    def found_errors(self, returncode):
+        """Return True if the memory checker reported errors for the command"""
+        if not self.use_valgrind:
+            return False
+        if self._san_log and sanitizer_reports(self._san_log):
+            return True
+        return returncode == 42
+
     def convert_xml(self):
         """Modify the xml file"""
-        if not self.use_valgrind:
+        if not self.use_valgrind or self.conf.sanitizers:
             return
         with open(self._xml_file, 'r') as fd:
             with open(f'{self._xml_file}.xml', 'w') as ofd:
@@ -321,10 +340,10 @@ def run_daos_cmd(conf,
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
     # in a single test run.
-    if valgrind_hdl.use_valgrind and rc.returncode == 42:
-        print("Valgrind errors detected")
+    if valgrind_hdl.found_errors(rc.returncode):
+        print(f'{conf.memcheck_tool} errors detected')
         print(rc)
-        conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
+        conf.wf.add_test_case(' '.join(cmd), failure=f'{conf.memcheck_tool} errors', output=rc)
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
