@@ -31,6 +31,7 @@ pool:
 
 container:
   type: POSIX
+  properties: rd_fac:1
 
 ior:
   api: "DFS"

@@ -27,6 +27,7 @@ pool:
 
 container:
   type: POSIX
+  properties: rd_fac:0
 
 ior: &ior_base
   client_processes:
