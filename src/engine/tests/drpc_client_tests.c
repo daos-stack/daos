@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +30,7 @@
 const char	*dss_socket_dir = "/my/fake/path";
 char		*drpc_listener_socket_path = "/fake/listener.sock";
 char		 dss_hostname[DSS_HOSTNAME_MAX_LEN] = "foo-host";
+unsigned int             dss_sec_xs_nr                      = 1;
 
 /* DAOS internal globals - arbitrary values okay */
 uint32_t	dss_tgt_offload_xs_nr = 3;

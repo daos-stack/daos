@@ -437,19 +437,22 @@ struct dss_module {
 
 enum dss_xs_type {
 	/** current xstream */
-	DSS_XS_SELF	= -1,
+	DSS_XS_SELF = -1,
 	/** operations need to access VOS */
-	DSS_XS_VOS	= 0,
+	DSS_XS_VOS = 0,
 	/** forward/dispatch IO request for TX coordinator */
-	DSS_XS_IOFW	= 1,
+	DSS_XS_IOFW = 1,
 	/** EC/checksum/compress computing offload */
-	DSS_XS_OFFLOAD	= 2,
+	DSS_XS_OFFLOAD = 2,
 	/** pool service, RDB, drpc handler */
-	DSS_XS_SYS	= 3,
+	DSS_XS_SYS = 3,
 	/** SWIM operations */
-	DSS_XS_SWIM	= 4,
+	DSS_XS_SWIM = 4,
 	/** drpc listener */
-	DSS_XS_DRPC	= 5,
+	DSS_XS_DRPC = 5,
+	/** secondary cart context */
+	DSS_XS_SEC = 6,
+	DSS_XS_MAX = 7,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
