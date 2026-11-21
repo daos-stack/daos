@@ -85,7 +85,13 @@ func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method,
 		req.SetSvcRanks(rl)
 	}
 
-	return svc.harness.CallDrpc(ctx, method, req)
+	dResp, err := svc.harness.CallDrpc(ctx, method, req)
+	if fault.IsFaultCode(err, code.ServerDataPlaneNotStarted) {
+		// This replica cannot service a pool request without an engine,
+		// so the client should retry on another replica.
+		return nil, &system.ErrReplicaNoEngine{Replicas: svc.sysdb.PeerReplicas()}
+	}
+	return dResp, err
 }
 
 // resolvePoolID implements a handler for resolving a user-friendly Pool ID into
@@ -351,19 +357,15 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 
 	labelExists := false
 	var poolLabel string
-	for _, prop := range req.GetProperties() {
-		if prop.Number != daos.PoolPropertyLabel {
-			continue
-		}
+	if labelProp, found := mgmtpb.FindPoolProperty(req.GetProperties(), daos.PoolPropertyLabel); found {
+		poolLabel = labelProp.GetStrval()
 
-		poolLabel = prop.GetStrval()
-		if poolLabel == "" {
-			break
-		}
-
-		labelExists = true
-		if _, err := svc.sysdb.FindPoolServiceByLabel(poolLabel); err == nil {
-			return nil, FaultPoolDuplicateLabel(poolLabel)
+		if poolLabel != "" {
+			labelExists = true
+			// Check if the pool label already exists
+			if _, err := svc.sysdb.FindPoolServiceByLabel(poolLabel); err == nil {
+				return nil, FaultPoolDuplicateLabel(poolLabel)
+			}
 		}
 	}
 
@@ -506,22 +508,19 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	}
 
 	// Check if the requested redundancy factor can be met with the number of supplied fault domains.
-	for _, prop := range req.GetProperties() {
-		if prop.GetNumber() == uint32(daos.PoolPropertyRedunFac) {
-			rdFac := int(prop.GetNumval())
-			// Since the redundancy factor is specified, it is assumed that a fault‑domain level must exist.
-			level, err := svc.membership.FaultDomainLevel()
-			if err != nil {
-				return nil, err
-			}
-			domainNr, err := svc.membership.DomainNr(level, req.Ranks...)
-			if err != nil {
-				return nil, err
-			}
-			if rdFac+1 > domainNr {
-				return nil, FaultPoolTooFewFaultDomains(rdFac, domainNr)
-			}
-			break
+	if rdFacProp, found := mgmtpb.FindPoolProperty(req.GetProperties(), daos.PoolPropertyRedunFac); found {
+		rdFac := int(rdFacProp.GetNumval())
+		// Since the redundancy factor is specified, it is assumed that a fault‑domain level must exist.
+		level, err := svc.membership.FaultDomainLevel()
+		if err != nil {
+			return nil, err
+		}
+		domainNr, err := svc.membership.DomainNr(level, req.Ranks...)
+		if err != nil {
+			return nil, err
+		}
+		if rdFac+1 > domainNr {
+			return nil, FaultPoolTooFewFaultDomains(rdFac, domainNr)
 		}
 	}
 

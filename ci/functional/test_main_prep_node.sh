@@ -26,6 +26,7 @@ cn=$(echo "$STAGE_NAME" | sed 's/[^a-zA-Z0-9_]/_/g' | sed 's/__*/_/g')
 result=0
 mail_message=''
 mail_type='warning'
+mail_severity='WARNING'
 nl="
 "
 
@@ -55,7 +56,7 @@ function do_mail {
     fi
     # shellcheck disable=SC2059
     build_info="BUILD_URL = $BUILD_URL$nl STAGE = $STAGE_NAME$nl$nl"
-    mail -s "Hardware check $mail_type after reboot!" \
+    mail -s "$mail_severity: Hardware check $mail_type after reboot!" \
          -r "$DAOS_DEVOPS_EMAIL" "$OPERATIONS_EMAIL" \
          <<< "$build_info$mail_message"
     set -x
@@ -525,6 +526,7 @@ echo "$junit_xml" > "./hardware_prep_node_results.xml"
 
 if [ "$testfails" -gt 0 ]; then
     mail_type='failed'
+    mail_severity='ERROR'
 fi
 do_mail
 

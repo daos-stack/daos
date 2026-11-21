@@ -687,6 +687,8 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	/* The rect is copied into the anchor, so keep its padding deterministic */
+	memset(&rect, 0, sizeof(rect));
 	if (evt_iter_is_sorted(iter)) {
 		*entry = *evt_ent_array_get(iter->it_entries, iter->it_index);
 		evt_ent2rect(&rect, entry);
