@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,14 +31,15 @@ import (
 
 func serverTLSConfig(cfg *TransportConfig) *tls.Config {
 	return &tls.Config{
-		ClientAuth:               tls.RequireAndVerifyClientCert,
-		Certificates:             []tls.Certificate{*cfg.tlsKeypair},
-		ClientCAs:                cfg.caPool,
-		MinVersion:               tls.VersionTLS12,
-		MaxVersion:               tls.VersionTLS12,
-		PreferServerCipherSuites: true,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{*cfg.tlsKeypair},
+		ClientCAs:    cfg.caPool,
+		MinVersion:   tls.VersionTLS12,
+		MaxVersion:   tls.VersionTLS12,
 		CipherSuites: []uint16{
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // deprecated
 		},
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			opts := x509.VerifyOptions{
@@ -49,7 +51,11 @@ func serverTLSConfig(cfg *TransportConfig) *tls.Config {
 				opts.Intermediates.AddCert(cert)
 			}
 			_, err := cs.PeerCertificates[0].Verify(opts)
-			return err
+			if err != nil {
+				return err
+			}
+
+			return nil
 		},
 	}
 }
@@ -58,13 +64,14 @@ const ServerCommonName = "server"
 
 func clientTLSConfig(cfg *TransportConfig) *tls.Config {
 	return &tls.Config{
-		Certificates:             []tls.Certificate{*cfg.tlsKeypair},
-		RootCAs:                  cfg.caPool,
-		MinVersion:               tls.VersionTLS12,
-		MaxVersion:               tls.VersionTLS12,
-		PreferServerCipherSuites: true,
+		Certificates: []tls.Certificate{*cfg.tlsKeypair},
+		RootCAs:      cfg.caPool,
+		MinVersion:   tls.VersionTLS12,
+		MaxVersion:   tls.VersionTLS12,
 		CipherSuites: []uint16{
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384, // deprecated
 		},
 		// InsecureSkipVerify disables the default verifier and instead
 		// uses our customer verifier which effectively does the same thing.

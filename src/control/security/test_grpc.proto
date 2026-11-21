@@ -1,0 +1,16 @@
+//
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package security;
+
+option  go_package = "./security";
+
+message HelloReq { string name = 1; }
+
+message HelloResp { string greeting = 1; }
+
+service TestGrpcSvc { rpc Hello(HelloReq) returns (HelloResp); }
