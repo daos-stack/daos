@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,7 +24,8 @@ const (
 	MaxUserOnlyKeyPerm os.FileMode = 0400
 	MaxGroupKeyPerm    os.FileMode = 0440
 	MaxCertPerm        os.FileMode = 0664
-	MaxDirPerm         os.FileMode = 0750
+	// Others may read a cert directory but not write to it, or they could plant a cert.
+	MaxDirPerm os.FileMode = 0755
 )
 
 type badPermsError struct {

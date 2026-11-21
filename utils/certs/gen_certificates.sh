@@ -1,6 +1,7 @@
 #!/bin/bash
 # /*
 #  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -178,18 +179,14 @@ function generate_server_cert () {
 
 function populate_clients_dir () {
     mkdir -p                      "${CLIENTS}"
-    chmod 755                     "${CLIENTS}"
+    chmod 700                     "${CLIENTS}"
     chown daos_server.daos_server "${CLIENTS}"
-    cp "${CERTS}/admin.crt"       "${CLIENTS}/admin.crt"
-    chown daos_server.daos_server "${CLIENTS}/admin.crt"
-    chmod 644                     "${CLIENTS}/admin.crt"
     cp "${CERTS}/agent.crt"       "${CLIENTS}/agent.crt"
     chown daos_server.daos_server "${CLIENTS}/agent.crt"
     chmod 644                     "${CLIENTS}/agent.crt"
 
     echo "Authorized Clients Certificate Files on DAOS Servers:
-    ${CLIENTS}/agent.crt
-    ${CLIENTS}/admin.crt"
+    ${CLIENTS}/agent.crt"
 }
 
 function cleanup () {
