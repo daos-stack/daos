@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -377,6 +378,74 @@ handle_cont_stat_query(fuse_req_t req, struct dfuse_obj_hdl *oh)
 	DFUSE_REPLY_IOCTL_SIZE(oh, req, &stat, sizeof(stat));
 }
 
+/* Check that the thread making a request runs as uid/gid.
+ *
+ * The kernel sends the caller's fsuid/fsgid with each request, except when idmapped mounts are
+ * allowed (FUSE_CAP_ALLOW_IDMAP): then it only does so for requests that create inodes and sends
+ * FUSE_INVALID_UIDGID ((uint32_t)-1) otherwise.  In that case read them from /proc, as libfuse's
+ * fuse_req_getgroups() does for supplementary groups.  The caller is blocked in ioctl() until
+ * dfuse replies, so its thread id cannot be reused in the meantime.  The pid is relative to the
+ * pid namespace of the process that mounted the filesystem: it is 0 when the caller is not in that
+ * namespace or one nested in it, and it can only be looked up in a /proc of that namespace.  This
+ * is the namespace of dfuse, unless dfuse was given a mounted /dev/fuse as /dev/fd/N by a process
+ * that may be in another one.  The caller cannot be identified otherwise.  Why a caller is refused
+ * is logged at DEBUG level.
+ */
+static bool
+caller_matches(struct dfuse_info *dfuse_info, const struct fuse_ctx *fc, uid_t uid, gid_t gid)
+{
+	char         path[64];
+	char         line[256];
+	FILE        *fp;
+	ssize_t      len;
+	unsigned int id[4];
+	bool         uid_ok = false;
+	bool         gid_ok = false;
+
+	if (fc->uid != (uid_t)-1 && fc->gid != (gid_t)-1)
+		return fc->uid == uid && fc->gid == gid;
+
+	if (dfuse_info->di_fd_mount) {
+		DFUSE_TRA_DEBUG(dfuse_info, "Callers of a /dev/fd/N mount cannot be identified");
+		return false;
+	}
+	if (fc->pid == 0) {
+		DFUSE_TRA_DEBUG(dfuse_info, "Caller is outside the pid namespace of dfuse");
+		return false;
+	}
+
+	len = readlink("/proc/self", path, sizeof(path) - 1);
+	if (len <= 0) {
+		DFUSE_TRA_DEBUG(dfuse_info, "Cannot read /proc/self: %d", errno);
+		return false;
+	}
+	path[len] = '\0';
+	if (atoi(path) != getpid()) {
+		DFUSE_TRA_DEBUG(dfuse_info, "/proc belongs to another pid namespace");
+		return false;
+	}
+
+	snprintf(path, sizeof(path), "/proc/%d/task/%d/status", fc->pid, fc->pid);
+	fp = fopen(path, "r");
+	if (fp == NULL) {
+		DFUSE_TRA_DEBUG(dfuse_info, "Cannot read %s: %d", path, errno);
+		return false;
+	}
+
+	/* Real, effective, saved and filesystem ids: the kernel would send the filesystem ones */
+	while (fgets(line, sizeof(line), fp) != NULL) {
+		if (sscanf(line, "Uid: %u %u %u %u", &id[0], &id[1], &id[2], &id[3]) == 4)
+			uid_ok = (id[3] == uid);
+		else if (sscanf(line, "Gid: %u %u %u %u", &id[0], &id[1], &id[2], &id[3]) == 4)
+			gid_ok = (id[3] == gid);
+	}
+	fclose(fp);
+
+	if (!uid_ok || !gid_ok)
+		DFUSE_TRA_DEBUG(dfuse_info, "pid %d does not run as %u:%u", fc->pid, uid, gid);
+	return uid_ok && gid_ok;
+}
+
 #ifdef FUSE_IOCTL_USE_INT
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
@@ -467,7 +536,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	uid = getuid();
 	gid = getgid();
 
-	if (fc->uid != uid || fc->gid != gid)
+	if (!caller_matches(fuse_req_userdata(req), fc, uid, gid))
 		D_GOTO(out_err, rc = EPERM);
 
 	DFUSE_TRA_DEBUG(oh, "trusted pid %d", fc->pid);

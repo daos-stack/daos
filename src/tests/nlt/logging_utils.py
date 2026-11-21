@@ -163,6 +163,7 @@ def log_test(conf,
              leak_wf=None,
              ignore_einval=False,
              ignore_busy=False,
+             ignore_no_idmap=False,
              check_read=False,
              check_write=False,
              check_fstat=False,
@@ -207,6 +208,10 @@ def log_test(conf,
 
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
+
+    # dfuse --allow-idmap logs an error when the kernel or the fuse library does not support it
+    if ignore_no_idmap:
+        lto.skip_suffixes.append(' does not support idmapped mounts')
 
     def _issue_total():
         """Findings recorded so far, used to tell whether this log produced any."""

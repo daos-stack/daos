@@ -93,6 +93,20 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
 #endif
+
+	if (dfuse_info->di_allow_idmap) {
+#ifdef FUSE_CAP_ALLOW_IDMAP
+		/* The kernel needs default_permissions for this, which dfuse always sets. The
+		 * flag is above bit 31, so it can only be set with fuse_set_feature_flag().
+		 */
+		if (fuse_set_feature_flag(conn, FUSE_CAP_ALLOW_IDMAP))
+			DFUSE_TRA_INFO(dfuse_info, "Idmapped mounts allowed");
+		else
+			DFUSE_TRA_ERROR(dfuse_info, "Kernel does not support idmapped mounts");
+#else
+		DFUSE_TRA_ERROR(dfuse_info, "Fuse library does not support idmapped mounts");
+#endif
+	}
 	dfuse_show_flags(dfuse_info, conn->capable, conn->want);
 
 	conn->time_gran            = 1;
