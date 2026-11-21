@@ -168,14 +168,14 @@ def main():
             if str(version) in ('2.0.3 Community Release', '2.0.3 Community Release',
                                 '2.2 Community Release'):
                 rv_priority = 2
-            elif str(version) in ('2.4 Community Release'):
+            elif str(version) in ('2.4 Community Release',):
                 rv_priority = 3
 
-            if str(version) in ('2.2 Community Release'):
+            if str(version) in ('2.2 Community Release',):
                 gh_label.add('release-2.2')
-            if str(version) in ('2.4 Community Release'):
+            if str(version) in ('2.4 Community Release',):
                 gh_label.add('release-2.4')
-            if str(version) in ('2.6 Community Release'):
+            if str(version) in ('2.6 Community Release',):
                 gh_label.add('release-2.6')
 
         # If a PR does not otherwise have priority then use custom values from above.
