@@ -64,6 +64,7 @@ func (ei *EngineInstance) NotifyDrpcReady(msg *srvpb.NotifyReadyReq) {
 	ei.log.Debugf("%s instance %d drpc ready: %v", build.DataPlaneName, ei.Index(), msg)
 
 	ei.setDrpcSocket(msg.DrpcListenerSock)
+	ei.setScmPageSize(msg.ScmPageSize)
 
 	go func() {
 		ei.drpcReady <- msg

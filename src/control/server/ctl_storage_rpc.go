@@ -387,7 +387,9 @@ func (cs *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*
 		return nil, err
 	}
 
-	cs.adjustScmSize(resp)
+	if err := cs.adjustScmSize(resp); err != nil {
+		return nil, errors.Wrap(err, "adjust SCM usable size")
+	}
 
 	return resp, nil
 }
@@ -687,8 +689,36 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	}
 }
 
+// getScmPageSize returns the page size, in bytes, of the memory files of the VOS targets of the
+// engine, as reported by the engine when it became ready.
+//
+// It returns errEngineNotReady if the engine is not ready, because it may not have reported its
+// page size yet. Any other error is a failure.
+func (cs *ControlService) getScmPageSize(engineCfg *engine.Config) (uint64, error) {
+	for _, ei := range cs.harness.Instances() {
+		if ei.Index() != engineCfg.Index {
+			continue
+		}
+
+		if !ei.IsReady() {
+			return 0, errEngineNotReady
+		}
+
+		pageSize := ei.GetScmPageSize()
+		if pageSize == 0 {
+			return 0, errors.Errorf("engine %d did not report the page size of the memory "+
+				"files of its targets: is its version different from the one of the "+
+				"control plane?", engineCfg.Index)
+		}
+
+		return pageSize, nil
+	}
+
+	return 0, errors.Errorf("no instance of engine %d", engineCfg.Index)
+}
+
 // Adjust the SCM available size to the real usable size.
-func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
+func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) error {
 	for _, scmNamespace := range resp.GetNamespaces() {
 		mnt := scmNamespace.GetMount()
 		mountPath := mnt.GetPath()
@@ -751,14 +781,43 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 			}
 		}
 
-		cs.log.Tracef("Removing (%s, %d bytes) of usable size from the SCM device %q: space used by the file system metadata",
-			humanize.IBytes(mdFsScmBytes), mdFsScmBytes, mountPath)
-		mnt.UsableBytes -= mdFsScmBytes
+		if engineCfg.Storage.Tiers.HasBdevRoleMeta() {
+			// With the metadata on SSD, the engine rounds up the size of the memory
+			// file of every target to a multiple of the page size it reports.  The
+			// memory files size must be aligned to the page size x target counts.
+			if engineCfg.TargetCount <= 0 {
+				return errors.Errorf("engine %d: invalid target count %d", engineCfg.Index,
+					engineCfg.TargetCount)
+			}
+			pageSize, err := cs.getScmPageSize(engineCfg)
+			if errors.Is(err, errEngineNotReady) {
+				cs.log.Noticef("Adjusting usable size of engine %d to 0 Bytes of SCM device %q: %s",
+					engineCfg.Index, mountPath, err.Error())
+				mnt.UsableBytes = 0
+				continue
+			}
+			if err != nil {
+				return err
+			}
+
+			align := uint64(engineCfg.TargetCount) * pageSize
+			alignedBytes := mnt.GetUsableBytes() - mnt.GetUsableBytes()%align
+			cs.log.Tracef("Aligning usable size of the SCM device %q down to %d targets x %s pages: %d -> %d bytes",
+				mountPath, engineCfg.TargetCount, humanize.IBytes(pageSize),
+				mnt.GetUsableBytes(), alignedBytes)
+			mnt.UsableBytes = alignedBytes
+		} else {
+			cs.log.Tracef("Removing (%s, %d bytes) of usable size from the SCM device %q: space used by the file system metadata",
+				humanize.IBytes(mdFsScmBytes), mdFsScmBytes, mountPath)
+			mnt.UsableBytes -= mdFsScmBytes
+		}
 
 		usableBytes := scmNamespace.Mount.GetUsableBytes()
 		cs.log.Debugf("Usable size of SCM device %q: %s (%d bytes)",
 			scmNamespace.Mount.GetPath(), humanize.IBytes(usableBytes), usableBytes)
 	}
+
+	return nil
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
