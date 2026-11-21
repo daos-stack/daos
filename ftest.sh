@@ -22,8 +22,10 @@ NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
+# Use localhost only as a client
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-TEST_NODES=$(IFS=","; echo "${nodes[*]:1}")
+TEST_SERVER_NODES=$(IFS=","; echo "${nodes[*]:1}")
+TEST_CLIENT_NODES=$(IFS=","; echo "${nodes[*]}")
 
 # Optional arguments for launch.py
 LAUNCH_OPT_ARGS="${3:-}"
@@ -122,15 +124,15 @@ _DAOS_NO_PROXY=${DAOS_NO_PROXY:-}
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
 if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
-    "FIRST_NODE=\"${nodes[0]}\"
-     TEST_RPMS=\"$TEST_RPMS\"
+    "TEST_RPMS=\"$TEST_RPMS\"
      DAOS_TEST_SHARED_DIR=\"${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}\"
      DAOS_BASE=\"$DAOS_BASE\"
      TEST_TAG_DIR=\"$TEST_TAG_DIR\"
      PREFIX=\"$PREFIX\"
      SETUP_ONLY=\"${SETUP_ONLY:-false}\"
      TEST_TAG_ARG=\"$TEST_TAG_ARG\"
-     TEST_NODES=\"$TEST_NODES\"
+     TEST_SERVER_NODES=\"$TEST_SERVER_NODES\"
+     TEST_CLIENT_NODES=\"$TEST_CLIENT_NODES\"
      LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
      WITH_VALGRIND=\"$WITH_VALGRIND\"
      STAGE_NAME=\"$STAGE_NAME\"
