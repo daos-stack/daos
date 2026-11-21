@@ -705,6 +705,142 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 
 /**
+ * Check whether the transport memory registration cache (libfabric MR cache, UCX rcache) is
+ * enabled for memory of type \a mem_type on the primary provider of this process. See
+ * CRT_MRC_ENABLE. A cache turned off from the environment counts as disabled: for all memory
+ * types with FI_MR_CACHE_MAX_COUNT=0, FI_MR_CACHE_MAX_SIZE=0 or UCX_RCACHE_ENABLE=n, for host
+ * memory with FI_MR_CACHE_MONITOR=disabled, and for device memory with the monitor of its
+ * type off (FI_MR_CUDA_CACHE_MONITOR_ENABLED=0, FI_MR_ROCR_CACHE_MONITOR_ENABLED=0,
+ * FI_MR_ZE_CACHE_MONITOR_ENABLED=0).
+ *
+ * \param[in] mem_type         memory type of the registrations to cache
+ *
+ * \return                     0 if enabled, -DER_UNINIT if CaRT is not initialized,
+ *                             -DER_NOTSUPPORTED if disabled, -DER_INVAL for an unknown type
+ */
+int
+crt_mr_cache_check(d_mem_type_t mem_type);
+
+/**
+ * Check whether CaRT can create bulk handles for device memory: it requested memory device
+ * support from the transport (D_MEM_DEVICE or
+ * crt_init_options_t::cio_mem_device) and Mercury provides bulk memory attributes. Otherwise
+ * bulk handles for device memory fail with -DER_NOTSUPPORTED.
+ *
+ * \return                     0 if supported, -DER_UNINIT if CaRT is not initialized,
+ *                             -DER_NOTSUPPORTED otherwise
+ */
+int
+crt_mem_device_check(void);
+
+/**
+ * Create a bulk handle on the memory of a device (e.g. a GPU), or on host memory.
+ *
+ * \param[in] crt_ctx          CRT transport context
+ * \param[in] sgl              pointer to buffer segment list
+ * \param[in] bulk_perm        bulk permission, See \ref crt_bulk_perm_t
+ * \param[in] mem_dev          optional memory type and device of the buffers, NULL for
+ *                             host memory
+ * \param[out] bulk_hdl        created bulk handle
+ *
+ * A handle for device memory is always created, and the memory registered, by the calling
+ * thread, also when the context is over its bulk quota (D_QUOTA_BULKS), where a handle for
+ * host memory is deferred until the RPC is encoded.
+ *
+ * \return                     DER_SUCCESS on success, -DER_NOTSUPPORTED for device memory
+ *                             without memory device support (see crt_mem_device_check()) or
+ *                             without Mercury bulk memory attributes, negative value on other
+ *                             errors
+ */
+int
+crt_bulk_create_with_mdev(crt_context_t crt_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+			  const d_mem_dev_t *mem_dev, crt_bulk_t *bulk_hdl);
+
+/**
+ * Register a memory region, typically a large GPU buffer pool, so that bulk handles on blocks
+ * inside it do not pay a registration each. Nothing is registered with the transport yet: the
+ * transport MR cache belongs to one context, so the region is registered on a context by
+ * crt_mem_bind(), and kept in the cache of that context until crt_mem_deregister() or the
+ * destruction of the context. Bulk handles inside the region are created as usual, with
+ * crt_bulk_create_with_mdev(); the cache finds them inside the region.
+ *
+ * \param[in] buf              start of the region
+ * \param[in] len              length of the region in bytes
+ * \param[in] mem_dev          memory type and device of the region, NULL for host memory
+ * \param[out] mh              returned handle
+ *
+ * \return                     DER_SUCCESS on success, -DER_UNINIT if CaRT is not initialized,
+ *                             -DER_NOTSUPPORTED for device memory that cannot be used at all
+ *                             (see crt_mem_device_check()), -DER_NOSYS if only the region is
+ *                             unavailable because the MR cache is disabled (see
+ *                             crt_mr_cache_check()), negative value on other errors
+ */
+int
+crt_mem_register(void *buf, size_t len, const d_mem_dev_t *mem_dev, crt_mem_handle_t *mh);
+
+/**
+ * Register the region of \a mh on \a crt_ctx, by the calling thread, unless that was tried
+ * before: a bulk handle over the whole region is created and held, which keeps the region an
+ * in-use entry of the transport MR cache. A registered region holds one slot of the bulk quota
+ * of the context (D_QUOTA_BULKS). The context must not be destroyed during the call.
+ *
+ * \param[in] mh               handle from crt_mem_register()
+ * \param[in] crt_ctx          CRT transport context
+ *
+ * \return                     DER_SUCCESS if the region is registered on the context.
+ *                             -DER_AGAIN for a host memory region if the context is over its
+ *                             bulk quota, and -DER_NOTSUPPORTED for device memory without
+ *                             memory device support; neither is remembered. Any other negative
+ *                             value from the transport is the reason why the region cannot be
+ *                             registered on the context (e.g. -DER_NOMEM for a region too large
+ *                             for the GPU BAR or the NIC): it is remembered, and later calls
+ *                             return it again.
+ */
+int
+crt_mem_bind(crt_mem_handle_t mh, crt_context_t crt_ctx);
+
+/**
+ * Deregister a region. The handle is freed on success.
+ *
+ * \param[in] mh               handle from crt_mem_register()
+ *
+ * \return                     DER_SUCCESS on success, -DER_BUSY if references taken with
+ *                             crt_mem_addref() are left, -DER_INVAL if \a mh is NULL
+ */
+int
+crt_mem_deregister(crt_mem_handle_t mh);
+
+/**
+ * Take a reference on a region for an operation in flight; crt_mem_deregister() fails while
+ * one is held.
+ *
+ * \param[in] mh               handle from crt_mem_register()
+ */
+void
+crt_mem_addref(crt_mem_handle_t mh);
+
+/**
+ * Release a reference taken with crt_mem_addref().
+ *
+ * \param[in] mh               handle from crt_mem_register()
+ */
+void
+crt_mem_decref(crt_mem_handle_t mh);
+
+/**
+ * Return the range and the memory device of a registered region.
+ *
+ * \param[in] mh               handle from crt_mem_register()
+ * \param[out] buf             optional, start of the region
+ * \param[out] len             optional, length of the region
+ * \param[out] mem_dev         optional, memory type and device of the region
+ *
+ * \return                     DER_SUCCESS on success, -DER_INVAL if \a mh is NULL
+ */
+int
+crt_mem_query(crt_mem_handle_t mh, void **buf, size_t *len, d_mem_dev_t *mem_dev);
+
+/**
  * Bind bulk handle to local context, to associate the origin address of the
  * local context to the bulk handle.
  *

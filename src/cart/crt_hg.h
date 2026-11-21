@@ -35,6 +35,10 @@
 /** number of prepost HG handles when enable pool */
 #define CRT_HG_POOL_PREPOST_NUM	(16)
 
+/** Mercury provides bulk memory attributes (HG_Bulk_create_attr()) since v2.4 */
+#define CRT_HG_HAS_BULK_ATTR                                                                       \
+	(HG_VERSION_MAJOR > 2 || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 4))
+
 /** interval at which to republish HG diagnostics as metrics */
 #define CRT_HG_TM_PUB_INTERVAL_US 1 * (1000 * 1000)
 
@@ -52,6 +56,7 @@ struct crt_rpc_priv;
 struct crt_req_hdr;
 struct crt_reply_hdr;
 struct crt_corpc_hdr;
+struct crt_bulk_mem_attr;
 
 int
 crt_proc_req_hdr(crt_proc_t proc, struct crt_req_hdr *hdr);
@@ -289,7 +294,7 @@ crt_hg_bulk_get_len(hg_bulk_t hg_bulk_hdl)
 
 int
 crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
-		   hg_bulk_t *bulk_hdl);
+		   const struct crt_bulk_mem_attr *mem_attr, hg_bulk_t *bulk_hdl);
 int
 crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int

@@ -852,6 +852,12 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	provider = ctx->cc_hg_ctx.chc_provider;
 
+	/*
+	 * Registered memory regions hold bulk handles of this context. Drop them only now that
+	 * the context is going away, and before its Mercury class does.
+	 */
+	crt_mem_ctx_fini(crt_ctx);
+
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
 		D_ERROR("crt_hg_ctx_fini failed() rc: " DF_RC "\n", DP_RC(rc));

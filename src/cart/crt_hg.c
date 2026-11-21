@@ -1968,10 +1968,37 @@ crt_hg_event_progress(struct crt_hg_context *hg_ctx, const struct timespec *dead
 	return -DER_TIMEDOUT;
 }
 
-#define CRT_HG_IOVN_STACK	(8)
+#define CRT_HG_IOVN_STACK (8)
+
+#if CRT_HG_HAS_BULK_ATTR
+static int
+crt_hg_mem_type_map(d_mem_type_t mem_type, hg_mem_type_t *hg_mem_type)
+{
+	D_ASSERT(hg_mem_type != NULL);
+
+	switch (mem_type) {
+	case D_MEM_TYPE_HOST:
+		*hg_mem_type = HG_MEM_TYPE_HOST;
+		return 0;
+	case D_MEM_TYPE_CUDA:
+		*hg_mem_type = HG_MEM_TYPE_CUDA;
+		return 0;
+	case D_MEM_TYPE_ROCM:
+		*hg_mem_type = HG_MEM_TYPE_ROCM;
+		return 0;
+	case D_MEM_TYPE_ZE:
+		*hg_mem_type = HG_MEM_TYPE_ZE;
+		return 0;
+	default:
+		D_ERROR("unsupported memory type %d\n", mem_type);
+		return -DER_INVAL;
+	}
+}
+#endif
+
 int
 crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
-		   hg_bulk_t *bulk_hdl)
+		   const struct crt_bulk_mem_attr *mem_attr, hg_bulk_t *bulk_hdl)
 {
 	void      **buf_ptrs                           = NULL;
 	void       *buf_ptrs_stack[CRT_HG_IOVN_STACK]  = {0};
@@ -2031,8 +2058,33 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl, crt_bulk_per
 			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
 	}
 
-	hg_ret =
-	    HG_Bulk_create(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs, buf_sizes, flags, &hg_bulk_hdl);
+	if (mem_attr != NULL && mem_attr->cbma_has_mem_type) {
+#if CRT_HG_HAS_BULK_ATTR
+		hg_mem_type_t       hg_mem_type;
+		struct hg_bulk_attr hg_attr = {0};
+
+		rc = crt_hg_mem_type_map(mem_attr->cbma_mem_type, &hg_mem_type);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		hg_attr.mem_type = hg_mem_type;
+		hg_attr.device   = mem_attr->cbma_device_id;
+		hg_ret = HG_Bulk_create_attr(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs, buf_sizes,
+					     flags, &hg_attr, &hg_bulk_hdl);
+#else
+		if (mem_attr->cbma_mem_type != D_MEM_TYPE_HOST) {
+			D_ERROR("Mercury has no bulk memory attributes, cannot register device "
+				"memory (type %d)\n",
+				mem_attr->cbma_mem_type);
+			D_GOTO(out, rc = -DER_NOTSUPPORTED);
+		}
+		hg_ret = HG_Bulk_create(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs, buf_sizes, flags,
+					&hg_bulk_hdl);
+#endif
+	} else {
+		hg_ret = HG_Bulk_create(hg_ctx->chc_hgcla, sgl->sg_nr, buf_ptrs, buf_sizes, flags,
+					&hg_bulk_hdl);
+	}
 	if (hg_ret == HG_SUCCESS) {
 		*bulk_hdl = hg_bulk_hdl;
 	} else {

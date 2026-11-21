@@ -10,6 +10,7 @@
  * APIs/handling.
  */
 #include <malloc.h>
+#include <strings.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include "crt_internal.h"
@@ -583,10 +584,86 @@ file_limit_bump(void)
 	D_INFO("Updated soft file descriptor limit to %lu\n", rlim.rlim_max);
 }
 
+/* per provider, as the settings of a provider are applied once per process */
+static bool           g_mr_cache_enabled[CRT_PROV_COUNT];
+static crt_provider_t g_mr_cache_prov;
+
+static bool
+mr_cache_env_off(const char *name, const char **off_vals)
+{
+	char val[16];
+	int  i;
+
+	if (d_getenv_str(val, sizeof(val), name) != 0)
+		return false;
+	for (i = 0; off_vals[i] != NULL; i++) {
+		if (strcasecmp(val, off_vals[i]) == 0)
+			return true;
+	}
+	return false;
+}
+
+int
+crt_mr_cache_check(d_mem_type_t mem_type)
+{
+	static const char *zero[]     = {"0", NULL};
+	static const char *disabled[] = {"disabled", NULL};
+	static const char *bool_off[] = {"0", "false", "no", "off", NULL};
+	static const char *ucx_off[]  = {"n", "no", "0", "off", "false", NULL};
+	const char        *monitor;
+
+	if (!crt_initialized())
+		return -DER_UNINIT;
+	if (!g_mr_cache_enabled[g_mr_cache_prov])
+		return -DER_NOTSUPPORTED;
+
+	/* The cache can also be turned off outside CaRT, or by another provider of the process */
+	if (crt_provider_is_ucx(g_mr_cache_prov))
+		return mr_cache_env_off("UCX_RCACHE_ENABLE", ucx_off) ? -DER_NOTSUPPORTED : 0;
+
+	if (mr_cache_env_off("FI_MR_CACHE_MAX_COUNT", zero) ||
+	    mr_cache_env_off("FI_MR_CACHE_MAX_SIZE", zero))
+		return -DER_NOTSUPPORTED;
+
+	/* libfabric caches a registration only if the monitor of its memory type is on */
+	switch (mem_type) {
+	case D_MEM_TYPE_HOST:
+		return mr_cache_env_off("FI_MR_CACHE_MONITOR", disabled) ? -DER_NOTSUPPORTED : 0;
+	case D_MEM_TYPE_CUDA:
+		monitor = "FI_MR_CUDA_CACHE_MONITOR_ENABLED";
+		break;
+	case D_MEM_TYPE_ROCM:
+		monitor = "FI_MR_ROCR_CACHE_MONITOR_ENABLED";
+		break;
+	case D_MEM_TYPE_ZE:
+		monitor = "FI_MR_ZE_CACHE_MONITOR_ENABLED";
+		break;
+	default:
+		return -DER_INVAL;
+	}
+	return mr_cache_env_off(monitor, bool_off) ? -DER_NOTSUPPORTED : 0;
+}
+
+int
+crt_mem_device_check(void)
+{
+	if (!crt_initialized())
+		return -DER_UNINIT;
+#if CRT_HG_HAS_BULK_ATTR
+	return crt_gdata.cg_mem_device ? 0 : -DER_NOTSUPPORTED;
+#else
+	/* a bulk handle cannot carry the memory type and device */
+	return -DER_NOTSUPPORTED;
+#endif
+}
+
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
 	uint32_t mrc_enable = 0;
+
+	if (primary)
+		g_mr_cache_prov = prov;
 
 	/* Avoid applying same settings multiple times */
 	if (g_prov_settings_applied[prov] == true)
@@ -610,6 +687,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		mrc_enable = 0;
 
 	crt_env_get(CRT_MRC_ENABLE, &mrc_enable);
+	g_mr_cache_enabled[prov] = mrc_enable != 0;
 	if (mrc_enable == 0) {
 		D_INFO("Disabling MR CACHE\n");
 		d_setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
@@ -732,6 +810,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	CRT_ENV_OPT_GET(opt, mem_device, D_MEM_DEVICE);
 	crt_gdata.cg_mem_device = mem_device;
+	if (mem_device)
+		D_INFO("Enabling heterogeneous memory device support\n");
 
 	CRT_ENV_OPT_GET(opt, progress_legacy, D_PROGRESS_LEGACY);
 	crt_gdata.cg_progress_legacy = progress_legacy;

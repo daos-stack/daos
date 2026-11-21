@@ -49,6 +49,23 @@ crt_sgl_valid(d_sg_list_t *sgl)
 	return true;
 }
 
+static void
+crt_bulk_init_mem_attr(struct crt_bulk_mem_attr *bulk_mem_attr, const d_mem_dev_t *mem_dev)
+{
+	D_ASSERT(bulk_mem_attr != NULL);
+
+	*bulk_mem_attr = (struct crt_bulk_mem_attr){
+	    .cbma_mem_type = D_MEM_TYPE_HOST,
+	};
+
+	if (mem_dev == NULL || mem_dev->md_type == D_MEM_TYPE_HOST)
+		return;
+
+	bulk_mem_attr->cbma_mem_type     = mem_dev->md_type;
+	bulk_mem_attr->cbma_device_id    = mem_dev->md_device_id;
+	bulk_mem_attr->cbma_has_mem_type = true;
+}
+
 /** check the validation of bulk descriptor */
 static inline bool
 crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
@@ -84,8 +101,8 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 }
 
 int
-crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
-		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl)
+crt_bulk_create_with_mdev(crt_context_t crt_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+			  const d_mem_dev_t *mem_dev, crt_bulk_t *bulk_hdl)
 {
 	struct crt_context *ctx;
 	struct crt_bulk    *ret_hdl  = NULL;
@@ -103,12 +120,29 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 
 	ctx = crt_ctx;
 
+	if (mem_dev != NULL && mem_dev->md_type != D_MEM_TYPE_HOST && !crt_gdata.cg_mem_device) {
+		D_ERROR("device memory (type %d) needs memory device support, see D_MEM_DEVICE\n",
+			mem_dev->md_type);
+		D_GOTO(out, rc = -DER_NOTSUPPORTED);
+	}
+
 	D_ALLOC_PTR(ret_hdl);
 	if (ret_hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	ret_hdl->refcount = 1;
+	crt_bulk_init_mem_attr(&ret_hdl->mem_attr, mem_dev);
 
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
+	if (quota_rc == -DER_QUOTA_LIMIT && ret_hdl->mem_attr.cbma_has_mem_type) {
+		/*
+		 * Never defer device memory: a deferred handle is created, and the memory
+		 * registered, by the thread that encodes the RPC, which may lack what the device
+		 * runtime needs of the registering thread (e.g. a current CUDA context). Register
+		 * it now on the caller's thread; it still counts towards the quota.
+		 */
+		record_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
+		quota_rc = 0;
+	}
 	if (quota_rc == -DER_QUOTA_LIMIT) {
 		int i;
 
@@ -137,10 +171,13 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	ret_hdl->deferred = false;
 	ret_hdl->crt_ctx  = crt_ctx;
 
-	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->hg_bulk_hdl);
+	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, &ret_hdl->mem_attr,
+				&ret_hdl->hg_bulk_hdl);
 	if (rc != 0) {
 		CRT_METRIC_INC(ctx, CM_BULK_CREATE_FAILED);
 		D_ERROR("crt_hg_bulk_create() failed, rc: " DF_RC "\n", DP_RC(rc));
+		/* no handle was created, give the quota slot back */
+		put_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 		if (ret_hdl->iovs != NULL)
 			D_FREE(ret_hdl->iovs);
 
@@ -154,6 +191,13 @@ out:
 	if (rc == 0 && bulk_hdl)
 		*bulk_hdl = ret_hdl;
 	return rc;
+}
+
+int
+crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl, crt_bulk_perm_t bulk_perm,
+		crt_bulk_t *bulk_hdl)
+{
+	return crt_bulk_create_with_mdev(crt_ctx, sgl, bulk_perm, NULL, bulk_hdl);
 }
 
 int
