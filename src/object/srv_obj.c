@@ -2672,6 +2672,18 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	rc = obj_ec_agg_src_check(rpc, ioc.ioc_coc, oer->er_src_tgt);
 	if (rc)
 		goto out;
+	/*
+	 * EC aggregation is paused during rebuild, but the request may be delayed in the network
+	 * after the sender gave up (e.g. RPC timeout), and reach here after the global EC
+	 * aggregation pause barrier, reject it to avoid racing with rebuild scan. No yield
+	 * between the check and sc_ec_agg_updates++, so the local pause wait can see it.
+	 */
+	if (ds_pool_is_rebuilding(ioc.ioc_coc->sc_pool->spc_pool)) {
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_UOID " reject EC aggregation request during rebuild",
+			DP_UOID(oer->er_oid));
+		goto out;
+	}
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oer->er_dkey;
@@ -2765,6 +2777,13 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	rc = obj_ec_agg_src_check(rpc, ioc.ioc_coc, oea->ea_src_tgt);
 	if (rc)
 		goto out;
+	/* Reject delayed EC aggregation request during rebuild, see ds_obj_ec_rep_handler() */
+	if (ds_pool_is_rebuilding(ioc.ioc_coc->sc_pool->spc_pool)) {
+		rc = -DER_OP_CANCELED;
+		DL_INFO(rc, DF_UOID " reject EC aggregation request during rebuild",
+			DP_UOID(oea->ea_oid));
+		goto out;
+	}
 	ioc.ioc_coc->sc_ec_agg_updates++;
 
 	dkey = (daos_key_t *)&oea->ea_dkey;
