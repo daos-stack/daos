@@ -9,10 +9,10 @@
 ## Unit Tests
 
 - Use the CMocka framework.
-- Always add command-line CMocka filtering in each test binary's `main(int argc, char **argv)`.
-  Guard filtering with `#if CMOCKA_FILTER_SUPPORTED`. When `argc > 1`, wrap `argv[1]` in `*`
-  wildcards and call `cmocka_set_test_filter()` before running tests. With no argument, run the
-  full suite.
+- In each CMocka test binary's `main(int argc, char **argv)`, call `dlck_ut_filter(argc, argv)`
+  from `dlck_ut.h` only when `argc > 1`. It applies a wildcard filter from the single test-name
+  argument and exits on invalid usage or when filtering is unsupported. With no argument, run the
+  full suite without calling the helper.
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
 - Separate module and header-macro tests.
@@ -36,6 +36,10 @@
 
 ## Mocking Functions
 
+- Shared per-area files provide memory, stdio, ABT mutex and checker callback mocks. Each test
+  binary compiles only the mock areas it needs and enables only its required linker wraps.
+- Tests include the headers for the mock areas they use directly; do not rely on
+  `ut_dlck_checker_mock.h` to include the required header for you.
 - CMocka tests control the behavior of mocks by populating their respective queues with values.
   All of these values have to be later consumed by the mocks. CMocka queues are maintained per
   mock.
@@ -46,6 +50,8 @@
   cleanup; omit unused values.
 - Do not hardcode values on the mock side.
 - For pointer-returning I/O mocks such as `fopen`, queue a mock-pointer or `NULL`.
+- For `d_asprintf2()`, use `EXPECT_D_ASPRINTF2(fmt, ptr, rc)` to queue the returned string and
+  output status independently.
 - For APIs returning status and an output handle, queue the handle only on success.
 - For mocks which are expected to set `errno` on error, queue an `errno` only on error.
 - Successful free APIs have to have fixed output effects, such as clearing a handle.
@@ -61,6 +67,9 @@
 - Define helpers that register CMocka `expect_*()` expectations as macros, not functions. CMocka
   records the expectation's source location, so a function helper makes unconsumed-expectation
   diagnostics point to the helper instead of the test call site.
+- Define an expectation macro only when it queues multiple coupled values or conditionally queues
+  values. Place expectation macros next to the mocks they feed.
+- Write single expectations and return values inline.
 
 ## Strict Mocks
 
@@ -72,21 +81,23 @@
 
 ## DLCK Checker Tests
 
-- Keep checker suites at the smallest useful boundary:
-  - `dlck_checker_common_ut.c` tests `ck_common_printf()` with a lightweight `ck_vprintf` callback.
-    Do not initialize main or worker state for this callback-dispatch contract.
-- `dlck_checker_main_ut.c` and `dlck_checker_worker_ut.c` compile the checker implementation
-  into separate binaries with shared `dlck_checker_ut_mock.c`.
-- Use `EXPECT_CHECKER_D_CALLOC(Dcm)` or `EXPECT_CHECKER_D_CALLOC(Dcw)` for successful payload
-  allocation; use `expect_checker_d_calloc(sizeof(payload), NULL)` for failure.
-- Reset `mock_vfprintf_check_output` in per-test setup. `__wrap_vfprintf` always checks its format.;
-  set the flag to also check rendered `va_list` output.
-- From the DAOS root, build/run a debug/gcc suite with:
+- Keep each checker suite at the smallest useful boundary. `dlck_checker_common_ut.c` tests
+  `ck_common_printf()` dispatch through `mock_ck_vprintf`; it should not initialize main or worker
+  state. `dlck_checker_main_ut.c` and `dlck_checker_worker_ut.c` compile the respective checker
+  implementations into separate binaries with only the required payloads and per-area mocks.
+- For payload allocation, use `EXPECT_D_CALLOC(1, sizeof(payload), &payload)` on success and
+  `EXPECT_D_CALLOC(1, sizeof(payload), NULL)` on failure.
+- `mock_ck_vprintf` always checks the format string. Use the `CHECK_OUTPUT` and `OUTPUT` arguments
+  of `EXPECT_MOCK_CK_VPRINTF` to optionally check the rendered callback output.
+- The stdio `vfprintf` mock always checks the format string. Use `EXPECT_VFPRINTF` to queue
+  its stream, format, `CHECK_OUTPUT` flag, `OUTPUT` string, and return value; provide `errno` on
+  failure. Set `OUTPUT` to `NULL` when `CHECK_OUTPUT` is `false`.
+- From the DAOS root, activate the Python environment configured for your DAOS development setup,
+  then build and run the affected dev/gcc test binary:
 
   ```sh
-  ./utils/build/build_daos.sh --build-deps=no BUILD_TYPE=debug \
-    build/debug/gcc/src/utils/dlck/tests/<binary>
-  build/debug/gcc/src/utils/dlck/tests/<binary>
+  ./utils/build/build_daos.sh --build-deps=no BUILD_TYPE=dev
+  ./build/dev/gcc/src/utils/dlck/tests/<binary>
   ```
 
-  - Use Python virtual environment for the `build` step.
+- Pass a fragment of a test name as the first argument to run matching tests.

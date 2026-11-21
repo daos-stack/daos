@@ -245,8 +245,6 @@ exec_one(void *arg)
 	d_list_for_each_entry(file, &xa->ctrl->files.list, link) {
 		/** do not process the given file if the target is not requested */
 		if (dlck_bitmap_isclr32(file->targets_bitmap, xa->xs->tgt_id)) {
-			/** report the progress to the main thread */
-			++xa->progress;
 			continue;
 		}
 
@@ -256,7 +254,6 @@ exec_one(void *arg)
 		if (rc != DER_SUCCESS) {
 			/** There is no point continuing without a logfile. */
 			dlck_status_set_rc(&xa->status, rc);
-			xa->progress = DLCK_XSTREAM_PROGRESS_END;
 			break;
 		}
 
@@ -266,9 +263,6 @@ exec_one(void *arg)
 
 		/** close the logfile */
 		dlck_checker_worker_fini(&ck);
-
-		/** report the progress to the main thread */
-		++xa->progress;
 	}
 }
 
