@@ -17,7 +17,8 @@ SIMPLE_TEST_SRC = ['threaded_client.c', 'dual_iface_server.c',
                    'test_no_timeout.c', 'test_ep_cred_server.c',
                    'test_ep_cred_client.c', 'no_pmix_launcher_server.c',
                    'no_pmix_launcher_client.c', 'no_pmix_group_test.c',
-                   'test_rpc_to_ghost_rank.c', 'no_pmix_corpc_errors.c']
+                   'test_rpc_to_ghost_rank.c', 'no_pmix_corpc_errors.c',
+                   'no_pmix_grp_lifetime.c']
 BASIC_SRC = 'crt_basic.c'
 IV_TESTS = ['iv_client.c', 'iv_server.c']
 # TEST_RPC_ERR_SRC = 'test_rpc_error.c'
