@@ -83,6 +83,9 @@
 
 ## DLCK Engine Batch
 
+- Keep header helper tests in `dlck_engine_macros_ut`, separate from `dlck_engine_ut`. Cover
+  first-error preservation, unsigned addition at and beyond the maximum, and status aggregation
+  including the source clearing.
 - Exercise batch initialization, execution, joining and finalization separately as well as through
   `dlck_engine_exec_all()`. The start message spans initialization and execution; joining reports
   its own result.
