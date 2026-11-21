@@ -556,7 +556,7 @@ int_extend_cb_internal(void *arg)
 		/* Extend another rank during extend */
 		print_message("extend pool " DF_UUID " rank %u\n",
 			      DP_UUID(test_arg->pool.pool_uuid), cb_arg->rank);
-		rc = dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
+		rc = ctl_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
 				     test_arg->group, &cb_arg->rank, 1);
 		assert_int_equal(rc, 0);
 	}
@@ -684,7 +684,7 @@ int_rebuild_dkeys_stop_failing(void **state)
 	}
 
 	/* Quick check that rebuild stop will return -DER_NONEXIST if nothing is rebuilding */
-	rc = dmg_pool_rebuild_stop(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+	rc = ctl_pool_rebuild_stop(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 				   false /* force */);
 	assert_int_equal(rc, -DER_NONEXIST);
 

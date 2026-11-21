@@ -112,6 +112,7 @@ bytearray
 cancelled
 cd
 centric
+cgo
 chdir
 checksum
 chgrp
@@ -219,6 +220,7 @@ getent
 getfattr
 getxattr
 gid
+goroutine
 groupadd
 groupdel
 groupname
@@ -439,6 +441,7 @@ slurmctld
 spdk
 squeue
 src
+srcnode
 srun
 ssd
 ssds
@@ -448,6 +451,8 @@ statvfs
 stddev
 stderr
 stdin
+stdint
+stdlib
 stdout
 str
 stripesize

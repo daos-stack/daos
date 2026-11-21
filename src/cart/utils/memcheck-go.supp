@@ -1,0 +1,149 @@
+# (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+#
+# SPDX-License-Identifier: BSD-2-Clause-Patent
+#
+# Shared Go-runtime memcheck suppressions for binaries and c-shared libraries
+# built with the Go "valgrind" tag (BUILD_GO_VALGRIND=1).  These rules are
+# consumed by both NLT (node_local_test.py) and run_utest.py so that any Go
+# binary or c-shared library (e.g. libdaos_control.so) tagged for valgrind
+# gets the same baseline set of suppressions without duplicating them.
+#
+# Rules here cover:
+#   - Go runtime GC / cgo malloc patterns
+#   - bytealg over-reads (golang/go#27610)
+#   - glibc / loader / NSS patterns triggered by Go cgo-TLS startup
+
+# Go runtime
+{
+   Go runtime: GC memory (valgrind integration entry point)
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect,possible,reachable
+   fun:runtime.valgrindClientRequest*
+   ...
+}
+{
+   Go runtime: persistentalloc (cgo malloc, never freed)
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_*_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:runtime.persistentalloc
+}
+{
+   Go runtime: newproc (cgo malloc, never freed)
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_*_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:runtime.newproc.abi0
+}
+{
+   Go runtime: bootstrap (cgo malloc, never freed)
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:runtime.rt0_go.abi0
+}
+# bytealg over-reads buffer ends by design; golang/go#27610
+# recommends this suppression
+{
+   golang/go#27610: bytealg indexbytebody over-read
+   Memcheck:Addr8
+   ...
+   fun:indexbytebody
+}
+{
+   golang/go#27610: bytealg indexbytebody over-read
+   Memcheck:Addr16
+   ...
+   fun:indexbytebody
+}
+{
+   golang/go#27610: bytealg indexbytebody over-read
+   Memcheck:Addr32
+   ...
+   fun:indexbytebody
+}
+{
+   golang/go#27610: bytealg indexbytebody over-read
+   Memcheck:Cond
+   ...
+   fun:indexbytebody
+}
+
+# glibc / loader / NSS
+{
+   glibc: per-thread TLS (dtv)
+   Memcheck:Leak
+   match-leak-kinds: possible,reachable
+   fun:calloc
+   ...
+   fun:_dl_allocate_tls
+   ...
+   fun:pthread_create*
+   ...
+}
+{
+   glibc: dl_init
+   Memcheck:Leak
+   ...
+   fun:_dl_init
+}
+{
+   glibc: dl_open
+   Memcheck:Leak
+   ...
+   fun:_dl_open
+}
+{
+   glibc: dl_fini
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fini
+   ...
+}
+{
+   glibc: dlerror_run
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dlerror_run
+   ...
+}
+{
+   glibc: dl_fixup
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_fixup
+   ...
+}
+{
+   glibc: getpwnam_r (NSS)
+   Memcheck:Leak
+   fun:*alloc
+   ...
+   fun:getpwnam_r*
+}
+{
+   glibc: getpwuid_r (NSS)
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:getpwuid_r*
+}
+{
+   glibc: localtime / tz data
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:__tz_convert
+}

@@ -391,8 +391,7 @@ rebuild_destroy_pool_cb(void *data)
 				     0, 0, NULL);
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
 				      0, 0, NULL);
-		rc = dmg_pool_destroy(dmg_config_file, arg->pool.pool_uuid,
-				      NULL, true);
+		rc = ctl_pool_destroy(dmg_config_file, arg->pool.pool_uuid, NULL, true);
 		if (rc) {
 			print_message("failed to destroy pool"DF_UUIDF" %d\n",
 				      DP_UUID(arg->pool.pool_uuid), rc);
@@ -938,7 +937,7 @@ rebuild_multiple_tgts(void **state)
 
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
-				rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
 						      arg->group, rank, -1);
 				assert_success(rc);
 				if (++fail_cnt >= 2)
@@ -964,7 +963,7 @@ rebuild_multiple_tgts(void **state)
 	/* Add back the target if it is not being killed */
 	if (arg->myrank == 0) {
 		for (i = 0; i < 2; i++) {
-			rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 						  exclude_ranks[i], -1);
 			assert_success(rc);
 		}
@@ -1630,7 +1629,7 @@ rebuild_delay_and_reintegrate(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude;delay_rebuild");
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
@@ -1664,7 +1663,7 @@ rebuild_delay_and_extend(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude\\;delay_rebuild");
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "exclude;delay_rebuild");
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
@@ -1775,7 +1774,7 @@ rebuild_long_scan_hang(void **state)
 
 	print_message("exclude engine rank %u to cause rebuild, and delay > 2 minutes\n",
 		      excl_rank);
-	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, excl_rank, -1);
+	rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, excl_rank, -1);
 	assert_success(rc);
 
 	/* wait a long time, cause PS leader engine logic to warn about "almost done" rebuild

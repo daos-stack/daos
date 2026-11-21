@@ -43,7 +43,12 @@ fi
 cd "${SL_SRC_DIR}"
 mkdir new_dir
 sudo cp -a new_dir /opt/daos
-tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
+# The memcheck stages ship the valgrind-tagged build (opt-daos-valgrind.tar) so
+# the Go runtime's valgrind client requests suppress the resident-runtime noise;
+# other stages ship the standard opt-daos.tar. Use whichever was unstashed.
+opt_tar=opt-daos.tar
+[ -f opt-daos-valgrind.tar ] && opt_tar=opt-daos-valgrind.tar
+tar --strip-components=2 --directory /opt/daos -xf "$opt_tar"
 
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 

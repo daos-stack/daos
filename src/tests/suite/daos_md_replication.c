@@ -31,7 +31,7 @@ mdr_stop_pool_svc(void **argv)
 	/* Create the pool. */
 	if (arg->myrank == 0) {
 		print_message("creating pool\n");
-		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+		rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
 				     MIN_SCM_SIZE, 0, NULL, arg->pool.svc, uuid);
 	}
 	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
@@ -118,8 +118,7 @@ destroy:
 		if (skip)
 			print_message("skipping\n");
 		print_message("destroying pool\n");
-		rc = dmg_pool_destroy(dmg_config_file,
-				      uuid, arg->group, 1);
+		rc = ctl_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 		assert_rc_equal(rc, 0);
 	}
 	if (skip)
@@ -139,7 +138,7 @@ mdr_stop_cont_svc(void **argv)
 	int			rc;
 
 	print_message("creating pool\n");
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL, MIN_SCM_SIZE,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL, MIN_SCM_SIZE,
 			     0, NULL, arg->pool.svc, pool_uuid);
 	assert_rc_equal(rc, 0);
 
@@ -183,8 +182,7 @@ destroy:
 		if (skip)
 			print_message("skipping\n");
 		print_message("destroying pool\n");
-		rc = dmg_pool_destroy(dmg_config_file,
-				      pool_uuid, arg->group, 1);
+		rc = ctl_pool_destroy(dmg_config_file, pool_uuid, arg->group, 1);
 		assert_rc_equal(rc, 0);
 	}
 	if (skip)

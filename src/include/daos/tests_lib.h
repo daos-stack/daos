@@ -14,6 +14,7 @@
 #include <daos_mgmt.h>
 #include <daos/object.h>
 #include <daos/credit.h>
+#include <daos/control_types.h>
 
 #define assert_rc_equal(rc, expected_rc)                                                           \
 	do {                                                                                       \
@@ -84,19 +85,6 @@ tsc_create_cont(struct credit_context *tsc)
 	/* Can't skip container if pool isn't also skipped */
 	return tsc_create_pool(tsc) || !tsc->tsc_skip_cont_create;
 }
-
-/* match BIO_XS_CNT_MAX, which is the max VOS xstreams mapped to a device */
-#define MAX_TEST_TARGETS_PER_DEVICE 48
-#define DSS_HOSTNAME_MAX_LEN	255
-
-typedef struct {
-	uuid_t		device_id;
-	char		state[10];
-	int		rank;
-	char		host[DSS_HOSTNAME_MAX_LEN];
-	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
-	int		n_tgtidx;
-}  device_list;
 
 enum test_cr_start_flags {
 	TCSF_NONE	= 0,
@@ -190,33 +178,6 @@ enum test_cr_action {
 	TCA_TRUST_OLDEST    = 10,
 	TCA_TRUST_EC_PARITY = 11,
 	TCA_TRUST_EC_DATA   = 12,
-};
-
-struct daos_check_pool_info {
-	uuid_t		 dcpi_uuid;
-	char		*dcpi_status;
-	char		*dcpi_phase;
-};
-
-struct daos_check_report_info {
-	uuid_t   dcri_uuid;
-	uint64_t dcri_seq;
-	uint32_t dcri_class;
-	uint32_t dcri_act;
-	int      dcri_rank;
-	int      dcri_result;
-	int      dcri_option_nr;
-	int      dcri_options[3];
-};
-
-struct daos_check_info {
-	char                          *dci_status;
-	char                          *dci_phase;
-	int                            dci_leader;
-	int                            dci_pool_nr;
-	int                            dci_report_nr;
-	struct daos_check_pool_info   *dci_pools;
-	struct daos_check_report_info *dci_reports;
 };
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
@@ -314,8 +275,9 @@ dts_append_config(char buf[DTS_CFG_MAX], const char *format, ...)
  *				-DER_TRUNC	\a pools cannot hold \a npools
  *						items
  */
-int dmg_pool_list(const char *dmg_config_file, const char *group,
-		  daos_size_t *npools, daos_mgmt_pool_info_t *pools);
+int
+ctl_pool_list(const char *dmg_config_file, const char *group, daos_size_t *npools,
+	      daos_mgmt_pool_info_t *pools);
 
 /**
  * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
@@ -350,12 +312,10 @@ int dmg_pool_list(const char *dmg_config_file, const char *group,
  *			shall be the list of pool service ranks.
  * \param uuid	[OUT]	UUID of the pool created
  */
-int dmg_pool_create(const char *dmg_config_file,
-		    uid_t uid, gid_t gid, const char *grp,
-		    const d_rank_list_t *tgts,
-		    daos_size_t scm_size, daos_size_t nvme_size,
-		    daos_prop_t *prop,
-		    d_rank_list_t *svc, uuid_t uuid);
+int
+ctl_pool_create(const char *dmg_config_file, uid_t uid, gid_t gid, const char *grp,
+		const d_rank_list_t *tgts, daos_size_t scm_size, daos_size_t nvme_size,
+		daos_prop_t *prop, d_rank_list_t *svc, uuid_t uuid);
 
 /**
  * Destroy a pool with \a uuid. If there is at least one connection to this
@@ -368,8 +328,8 @@ int dmg_pool_create(const char *dmg_config_file,
  * \param grp	[IN]	Process set name of the DAOS servers managing the pool
  * \param force	[IN]	Force destruction even if there are active connections
  */
-int dmg_pool_destroy(const char *dmg_config_file,
-		     const uuid_t uuid, const char *grp, int force);
+int
+ctl_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp, int force);
 
 /**
  * Evict any open handles on a pool.
@@ -380,7 +340,7 @@ int dmg_pool_destroy(const char *dmg_config_file,
  * \param grp		[IN]	Process set name of the DAOS servers managing the pool
  */
 int
-dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp);
+ctl_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp);
 
 /**
  * Update/add an access control entry to a pool's access control list.
@@ -393,7 +353,7 @@ dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp);
  *				TYPE:FLAGS:PRINCIPAL:PERMISSIONS
  */
 int
-dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+ctl_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
 		    const char *ace);
 
 /**
@@ -406,8 +366,8 @@ dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *
  * \param principal	[IN]	Principal whose entry should be removed
  */
 int
-    dmg_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
-			const char *principal);
+ctl_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *principal);
 
 /**
  * Exclude an entire rank or a target on that rank from a pool.
@@ -419,8 +379,9 @@ int
  * \param rank		[IN]	Rank to exclude (all targets if no tgt_idx set)
  * \param tgt_idx	[IN]	Target index to exclude (ignored if -1)
  */
-int dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
-		     const char *grp, d_rank_t rank, int tgt_idx);
+int
+ctl_pool_exclude(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+		 int tgt_idx);
 
 /**
  * Reintegrate an entire rank or a target on that rank to a pool.
@@ -432,8 +393,9 @@ int dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
  * \param rank		[IN]	Rank to reintegrate (all targets if no tgt_idx set)
  * \param tgt_idx	[IN]	Target index to reintegrate (ignored if -1)
  */
-int dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
-			 const char *grp, d_rank_t rank, int tgt_idx);
+int
+ctl_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+		     int tgt_idx);
 
 /**
  * Drain an entire rank or a target on that rank from a pool.
@@ -445,8 +407,9 @@ int dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
  * \param rank		[IN]	Rank to drain (all targets if no tgt_idx set)
  * \param tgt_idx	[IN]	Target index to drain (ignored if -1)
  */
-int dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
-		   const char *grp, d_rank_t rank, int tgt_idx);
+int
+ctl_pool_drain(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t rank,
+	       int tgt_idx);
 
 /**
  * Extend a pool by adding ranks.
@@ -458,8 +421,9 @@ int dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
  * \param ranks		[IN]	Ranks to add to the pool
  * \param ranks_nr	[IN]	Number of ranks to add to the pool
  */
-int dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
-		    const char *grp, d_rank_t *ranks, int ranks_nr);
+int
+ctl_pool_extend(const char *dmg_config_file, const uuid_t uuid, const char *grp, d_rank_t *ranks,
+		int ranks_nr);
 
 /**
  * Set property of the pool with \a pool_uuid.
@@ -470,8 +434,7 @@ int dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
  * \param prop_value		[IN] the value of the property.
  */
 int
-dmg_pool_set_prop(const char *dmg_config_file,
-		  const char *prop_name, const char *prop_value,
+ctl_pool_set_prop(const char *dmg_config_file, const char *prop_name, const char *prop_value,
 		  const uuid_t pool_uuid);
 
 /**
@@ -485,8 +448,9 @@ dmg_pool_set_prop(const char *dmg_config_file,
  *
  * \return			Zero on success, negative value if error.
  */
-int dmg_pool_get_prop(const char *dmg_config_file, const char *label, const uuid_t uuid,
-		      const char *name, char **value);
+int
+ctl_pool_get_prop(const char *dmg_config_file, const char *label, const uuid_t uuid,
+		  const char *name, char **value);
 
 /**
  * Interactively stop a pool's currently-running rebuild.
@@ -496,7 +460,7 @@ int dmg_pool_get_prop(const char *dmg_config_file, const char *label, const uuid
  * \param force           [IN] forcibly stop a rebuild that is failing.
  */
 int
-dmg_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force);
+ctl_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char *grp, bool force);
 
 /**
  * Interactively start/resume a pool's rebuilding.
@@ -505,7 +469,7 @@ dmg_pool_rebuild_stop(const char *dmg_config_file, const uuid_t uuid, const char
  * \param grp             [IN] Process set name of the DAOS servers managing the pool.
  */
 int
-    dmg_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp);
+ctl_pool_rebuild_start(const char *dmg_config_file, const uuid_t uuid, const char *grp);
 
 /**
  * List all disks in the specified DAOS system.
@@ -518,8 +482,8 @@ int
  *				NULL is permitted in which case only the
  *				number of disks will be returned in \a ndisks.
  */
-int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
-			    device_list *devices);
+int
+ctl_storage_device_list(const char *dmg_config_file, int *ndisks, device_list *devices);
 
 /**
  * Set NVMe device to faulty. Which will trigger the rebuild and all the
@@ -530,10 +494,9 @@ int dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
  * \param host	[IN]	Nvme set to faulty on host name provided. Only single
 					disk can be set to fault for now.
  * \param uuid	[IN]	UUID of the device.
- * \param force	[IN]	Do not require confirmation
  */
-int dmg_storage_set_nvme_fault(const char *dmg_config_file,
-			       char *host, const uuid_t uuid, int force);
+int
+ctl_storage_set_nvme_fault(const char *dmg_config_file, char *host, const uuid_t uuid);
 /**
  * Get NVMe Device health stats.
  *
@@ -541,10 +504,15 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
  * \param[in] host		Get device health from the given host.
  * \param[in] uuid		UUID of the device.
  * \param[in,out] stats		[in] Health stats for which to get counter value.
- *				[out] Stats counter value.
+ *				[out] Stats counter value (NUL-terminated,
+ *				truncated to \a stats_len - 1 if longer).
+ * \param[in] stats_len		Size of the \a stats buffer in bytes. Must be
+ *				large enough to hold both the longest key
+ *				name and any value the caller cares about.
  */
-int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
-				    char *stats, const uuid_t uuid);
+int
+    ctl_storage_query_device_health(const char *dmg_config_file, char *host, char *stats,
+				    size_t stats_len, const uuid_t uuid);
 
 /**
  * Verify the assumed blobstore device state with the actual enum definition
@@ -565,19 +533,42 @@ int verify_blobstore_state(int state, const char *state_str);
  *
  * \param dmg_config_file
  *		[IN]	DMG config file
- * \param rank	[IN]	Rank to stop.
+ * \param rank	[IN]	Rank to stop. Must be a real rank; use
+ *			ctl_system_stop() to stop the whole system.
  * \param force	[IN]	Terminate with extreme prejudice.
  */
-int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
+int
+ctl_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
+
+/**
+ * Stop every member of the system.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param force	[IN]	Terminate with extreme prejudice.
+ */
+int
+ctl_system_stop(const char *dmg_config_file, int force);
 
 /**
  * Start a rank.
  *
  * \param dmg_config_file
  *		[IN]	DMG config file
- * \param rank	[IN]	Rank to start.
+ * \param rank	[IN]	Rank to start. Must be a real rank; use
+ *			ctl_system_start() to start the whole system.
  */
-int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
+int
+ctl_system_start_rank(const char *dmg_config_file, d_rank_t rank);
+
+/**
+ * Start every member of the system.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ */
+int
+ctl_system_start(const char *dmg_config_file);
 
 /**
  * Reintegrate a rank into the system.
@@ -586,7 +577,8 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
  *		[IN]	DMG config file
  * \param rank	[IN]	Rank to be reintegrated.
  */
-int dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank);
+int
+ctl_system_reint_rank(const char *dmg_config_file, d_rank_t rank);
 
 /**
  * Query the state of a rank in the system.
@@ -598,8 +590,9 @@ int dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank);
  * \param state_len
  *		[IN]	Size of the \a state buffer.
  */
-int dmg_system_query_rank_state(const char *dmg_config_file, d_rank_t rank, char *state,
-				size_t state_len);
+int
+ctl_system_query_rank_state(const char *dmg_config_file, d_rank_t rank, char *state,
+			    size_t state_len);
 
 /**
  * Exclude a rank from the system.
@@ -608,7 +601,8 @@ int dmg_system_query_rank_state(const char *dmg_config_file, d_rank_t rank, char
  *		[IN]	DMG config file
  * \param rank	[IN]	Rank to be excluded.
  */
-int dmg_system_exclude_rank(const char *dmg_config_file, d_rank_t rank);
+int
+ctl_system_exclude_rank(const char *dmg_config_file, d_rank_t rank);
 
 /**
  * Dynamically change engine logging.
@@ -623,7 +617,7 @@ int dmg_system_exclude_rank(const char *dmg_config_file, d_rank_t rank);
  *
  */
 int
-dmg_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
+ctl_server_set_logmasks(const char *dmg_config_file, const char *masks, const char *streams,
 			const char *subsystems);
 /* clang-format on */
 
@@ -662,7 +656,8 @@ void td_destroy(struct test_data *td);
  *
  * \return		Zero on success, negative value if error.
  */
-int dmg_fault_inject(const char *dmg_config_file, uuid_t uuid, bool mgmt, const char *fault);
+int
+ctl_fault_inject(const char *dmg_config_file, uuid_t uuid, bool mgmt, const char *fault);
 
 /**
  * Switch DAOS check mode.
@@ -673,7 +668,8 @@ int dmg_fault_inject(const char *dmg_config_file, uuid_t uuid, bool mgmt, const 
  *
  * \return		Zero on success, negative value if error.
  */
-int dmg_check_switch(const char *dmg_config_file, bool enable);
+int
+ctl_check_switch(const char *dmg_config_file, bool enable);
 
 /**
  * Start DAOS checker.
@@ -687,8 +683,9 @@ int dmg_check_switch(const char *dmg_config_file, bool enable);
  *
  * \return		Zero on success, negative value if error.
  */
-int dmg_check_start(const char *dmg_config_file, uint32_t flags, uint32_t pool_nr, uuid_t uuids[],
-		    const char *policies);
+int
+ctl_check_start(const char *dmg_config_file, uint32_t flags, uint32_t pool_nr, uuid_t uuids[],
+		const char *policies);
 
 /**
  * Stop DAOS checker.
@@ -700,7 +697,8 @@ int dmg_check_start(const char *dmg_config_file, uint32_t flags, uint32_t pool_n
  *
  * \return		Zero on success, negative value if error.
  */
-int dmg_check_stop(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[]);
+int
+ctl_check_stop(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[]);
 
 /**
  * Query DAOS checker.
@@ -713,8 +711,9 @@ int dmg_check_stop(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[]
  *
  * \return		Zero on success, negative value if error.
  */
-int dmg_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[],
-		    struct daos_check_info *dci);
+int
+ctl_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[],
+		struct daos_check_info *dci);
 
 /**
  * Execute the specified check repair action.
@@ -727,7 +726,7 @@ int dmg_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[
  * \return		Zero on success, negative value if error.
  */
 int
-    dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt);
+ctl_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt);
 
 /**
  * Set inconsistency handle policy for DAOS checker.
@@ -739,6 +738,7 @@ int
  *
  * \return		Zero on success, negative value if error.
  */
-int dmg_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *policies);
+int
+ctl_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *policies);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

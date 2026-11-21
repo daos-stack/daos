@@ -811,8 +811,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 
 	/** exclude the target of this obj's replicas */
 	print_message("dmg pool exclude rank %u " DF_UUID "\n", rank, DP_UUID(arg->pool.pool_uuid));
-	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-			      arg->group, rank, -1);
+	rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
 	assert_success(rc);
 
 	/* wait until exclude rebuild done */
@@ -821,8 +820,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 
 	print_message("dmg pool reintegrate rank %u " DF_UUID "\n", rank,
 		      DP_UUID(arg->pool.pool_uuid));
-	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-				  rank, -1);
+	rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
 	assert_success(rc);
 
 	/* wait until reintegration rebuild is done */
@@ -912,8 +910,7 @@ rebuild_large_object(void **state)
 	}
 
 	print_message("dmg pool exclude rank %u " DF_UUID "\n", rank, DP_UUID(arg->pool.pool_uuid));
-	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-			      rank, -1);
+	rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
 	assert_success(rc);
 
 	/* wait until exclude rebuild done */
@@ -921,8 +918,7 @@ rebuild_large_object(void **state)
 
 	print_message("dmg pool reintegrate rank %u " DF_UUID "\n", rank,
 		      DP_UUID(arg->pool.pool_uuid));
-	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-				  rank, -1);
+	rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
 	assert_success(rc);
 
 	/* wait until reintegration rebuild is done */
@@ -1475,9 +1471,9 @@ rebuild_object_with_csum_error(void **state)
 	T_BEGIN();
 
 	/* setup pool to have scrubbing turned on */
-	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub", "timed", pool_uuid));
-	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub_freq", "1", pool_uuid));
-	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub_thresh", "2", pool_uuid));
+	assert_success(ctl_pool_set_prop(dmg_config_file, "scrub", "timed", pool_uuid));
+	assert_success(ctl_pool_set_prop(dmg_config_file, "scrub_freq", "1", pool_uuid));
+	assert_success(ctl_pool_set_prop(dmg_config_file, "scrub_thresh", "2", pool_uuid));
 
 	/* setup container */
 	cont_props = daos_prop_alloc(3);
@@ -1551,7 +1547,7 @@ rebuild_object_with_csum_error(void **state)
 	/* clean up */
 	assert_success(daos_cont_close(coh, NULL));
 	assert_success(daos_cont_destroy(poh, uuid_cont_str, false, NULL));
-	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub", "off", arg->pool.pool_uuid));
+	assert_success(ctl_pool_set_prop(dmg_config_file, "scrub", "off", arg->pool.pool_uuid));
 	T_END();
 }
 
