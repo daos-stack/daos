@@ -284,11 +284,13 @@ void            *ds_mgmt_pool_query_info_ptr;
 d_rank_list_t   *ds_mgmt_pool_query_enabled_ranks_out;
 d_rank_list_t   *ds_mgmt_pool_query_disabled_ranks_out;
 d_rank_list_t   *ds_mgmt_pool_query_dead_ranks_out;
+uint64_t         ds_mgmt_pool_query_self_heal;
+uint32_t         ds_mgmt_pool_query_prop_type;
 
 int
 ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **enabled_ranks,
 		   d_rank_list_t **disabled_ranks, d_rank_list_t **dead_ranks, uint64_t deadline,
-		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		   daos_pool_info_t *pool_info, daos_prop_t *prop, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver, uint64_t *mem_file_bytes)
 {
 	/* If function is to return with an error, pool_info and ranks will not be filled. */
@@ -321,6 +323,13 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **e
 		ds_mgmt_pool_query_dead_ranks_out = *dead_ranks;
 	}
 
+	ds_mgmt_pool_query_prop_type = 0;
+	if (prop != NULL) {
+		ds_mgmt_pool_query_prop_type = prop->dpp_entries[0].dpe_type;
+		if (ds_mgmt_pool_query_prop_type == DAOS_PROP_PO_SELF_HEAL)
+			prop->dpp_entries[0].dpe_val = ds_mgmt_pool_query_self_heal;
+	}
+
 	ds_mgmt_pool_query_info_in = *pool_info;
 	*pool_info                 = ds_mgmt_pool_query_info_out;
 	*mem_file_bytes            = ds_mgmt_pool_query_mem_bytes;
@@ -338,6 +347,8 @@ mock_ds_mgmt_pool_query_setup(void)
 	ds_mgmt_pool_query_enabled_ranks_out  = NULL;
 	ds_mgmt_pool_query_disabled_ranks_out = NULL;
 	ds_mgmt_pool_query_dead_ranks_out     = NULL;
+	ds_mgmt_pool_query_self_heal          = 0;
+	ds_mgmt_pool_query_prop_type          = 0;
 }
 
 int			ds_mgmt_pool_query_targets_return;

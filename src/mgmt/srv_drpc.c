@@ -414,7 +414,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, NULL, NULL,
 				daos_getmtime_coarse() + 2 * 60 * 1000, &pool_info, NULL, NULL,
-				&mem_file_bytes);
+				NULL, &mem_file_bytes);
 	if (DAOS_FAIL_CHECK(DAOS_MGMT_FAIL_CREATE_QUERY))
 		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
@@ -1174,7 +1174,7 @@ free_response_props(Mgmt__PoolProperty **props, size_t n_props)
 }
 
 static int
-add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
+add_props_to_resp(daos_prop_t *prop, Mgmt__PoolProperty ***out_props, size_t *out_n_props)
 {
 	Mgmt__PoolProperty	**resp_props;
 	struct daos_prop_entry	*entry;
@@ -1261,8 +1261,8 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 		j++;
 	}
 
-	resp->properties = resp_props;
-	resp->n_properties = valid_prop_nr;
+	*out_props   = resp_props;
+	*out_n_props = valid_prop_nr;
 
 out:
 	if (rc != 0)
@@ -1317,7 +1317,7 @@ void ds_mgmt_drpc_pool_get_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out_ranks;
 	}
 
-	rc = add_props_to_resp(props, &resp);
+	rc = add_props_to_resp(props, &resp.properties, &resp.n_properties);
 	if (rc != 0)
 		goto out_ranks;
 
@@ -1822,6 +1822,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolRebuildStatus rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
 	uuid_t                  uuid;
 	daos_pool_info_t        pool_info          = {0};
+	daos_prop_t            *prop               = NULL;
 	d_rank_list_t          *svc_ranks          = NULL;
 	d_rank_list_t          *enabled_ranks      = NULL;
 	d_rank_list_t          *disabled_ranks     = NULL;
@@ -1851,14 +1852,24 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
 
+	if (req->n_properties > 0) {
+		rc = conv_req_props(&prop, false, req->properties, req->n_properties);
+		if (rc != 0)
+			D_GOTO(error, rc);
+	}
+
 	pool_info.pi_bits = req->query_mask;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &disabled_ranks, &dead_ranks,
-				mgmt_ps_call_deadline(), &pool_info, &resp.pool_layout_ver,
+				mgmt_ps_call_deadline(), &pool_info, prop, &resp.pool_layout_ver,
 				&resp.upgrade_layout_ver, &resp.mem_file_bytes);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_UUID ": Failed to query the pool", DP_UUID(uuid));
 		D_GOTO(error, rc);
 	}
+
+	rc = add_props_to_resp(prop, &resp.properties, &resp.n_properties);
+	if (rc != 0)
+		D_GOTO(error, rc);
 
 	rc = d_rank_list_to_str(enabled_ranks, &enabled_ranks_str);
 	if (rc != 0) {
@@ -1939,6 +1950,8 @@ error:
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
 
+	free_response_props(resp.properties, resp.n_properties);
+	daos_prop_free(prop);
 	d_rank_list_free(enabled_ranks);
 	D_FREE(enabled_ranks_str);
 	d_rank_list_free(disabled_ranks);
