@@ -1,0 +1,2 @@
+Effective user: root
+error: Cannot create log directory: DER_INVAL(-1003): 'Invalid parameters'

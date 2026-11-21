@@ -1,0 +1,2 @@
+VOS file allocation: ok.
+error: VOS file path allocation failed: DER_INVAL(-1003): 'Invalid parameters'
