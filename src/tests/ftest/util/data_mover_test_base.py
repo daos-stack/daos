@@ -310,9 +310,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.fail("Failed to parse container label")
         return label_search.group(1).strip()
 
+    # pylint: disable=too-many-arguments,too-many-locals
     def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
                     num_akeys_array, akey_sizes, akey_extents, oclass="OC_SX",
-                    punch_extents=0):
+                    punch_extents=0, punch_tail_extents=0):
         """Generate a dataset with some number of objects, dkeys, and akeys.
 
         Expects the container to be created with the API control method.
@@ -327,8 +328,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             akey_extents (list): varying number of akey extents to iterate.
             oclass (str, optional): object class for the objects. Defaults to "OC_SX".
             punch_extents (int, optional): number of leading records to punch back out of
-                each array akey. Defaults to 0. Always leaves at least one record intact,
-                so the akey keeps a hole followed by data.
+                each array akey. Defaults to 0.
+            punch_tail_extents (int, optional): number of trailing records to punch back out
+                of each array akey. Defaults to 0. Only a trailing hole shortens the reply of
+                a fetch, so this is what catches a copy that trusts the enumerated extents.
 
         Returns:
             list: a list of DaosObj created.
@@ -382,9 +385,13 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         c_data.append([create_string_buffer(data), data_size])
                     ioreq.insert_array(c_dkey, c_akey, c_data)
 
-                    punch_nr = self._dataset_punch_nr(punch_extents, num_extents)
-                    if punch_nr:
-                        ioreq.punch_array(c_dkey, c_akey, 0, punch_nr)
+                    punch_lead, punch_tail = self._dataset_punch_nr(
+                        punch_extents, punch_tail_extents, num_extents)
+                    if punch_lead:
+                        ioreq.punch_array(c_dkey, c_akey, 0, punch_lead)
+                    if punch_tail:
+                        ioreq.punch_array(
+                            c_dkey, c_akey, num_extents - punch_tail, punch_tail)
 
             obj.close()
         cont.close()
@@ -392,25 +399,225 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return obj_list
 
     @staticmethod
-    def _dataset_punch_nr(punch_extents, num_extents):
-        """Get how many leading records of an array akey are punched.
+    def _dataset_punch_nr(punch_extents, punch_tail_extents, num_extents):
+        """Get how many leading and trailing records of an array akey are punched.
 
         Args:
-            punch_extents (int): number of records the caller asked to punch.
+            punch_extents (int): number of leading records the caller asked to punch.
+            punch_tail_extents (int): number of trailing records the caller asked to punch.
             num_extents (int): number of records in the akey.
 
         Returns:
-            int: the number to punch, always leaving at least one record.
+            tuple: (leading, trailing), clamped to always leave at least one record.
 
         """
-        if not punch_extents:
-            return 0
-        return min(punch_extents, num_extents - 1)
+        lead = min(punch_extents or 0, max(num_extents - 1, 0))
+        tail = min(punch_tail_extents or 0, max(num_extents - 1 - lead, 0))
+        return lead, tail
 
-    # pylint: disable=too-many-locals
+    @staticmethod
+    def _ec_stripe_fill(stripe_idx):
+        """Get the byte an erasure coded stripe is filled with.
+
+        Args:
+            stripe_idx (int): index of the stripe.
+
+        Returns:
+            bytes: a single byte, distinct per stripe so a misplaced copy is visible.
+
+        """
+        return bytes([ord("a") + (stripe_idx % 26)])
+
+    # pylint: disable=too-many-arguments
+    def dataset_gen_ec(self, cont, num_objs, num_dkeys, num_akeys, oclass,
+                       stripe_size, num_stripes, punch_stripes, full_punch_akeys=0):
+        """Generate erasure coded objects whose array akeys have whole stripes punched.
+
+        Each akey is written one full stripe at a time so parity is computed at update
+        time, then whole stripes are punched. The parity of a punched stripe is left
+        behind, and enumeration of an erasure coded object is served by a parity shard,
+        so daos_obj_list_recx() reports those stripes as if they still held data. Only
+        the io map returned by a fetch says what is really there.
+
+        The extents are byte granular on purpose. With a record size larger than a byte
+        the enumeration reports the live extents exactly and none of this is exercised.
+
+        Args:
+            cont (TestContainer): the container.
+            num_objs (int): number of objects to create in the container.
+            num_dkeys (int): number of dkeys to create per object.
+            num_akeys (int): number of array akeys per dkey.
+            oclass (str): erasure coded object class, for example OC_EC_2P1G1.
+            stripe_size (int): full stripe size in bytes, data cells times the cell size.
+            num_stripes (int): number of stripes to write per akey.
+            punch_stripes (list): indices of the stripes to punch back out.
+            full_punch_akeys (int, optional): how many of the trailing akeys have every
+                stripe punched. Enumeration still reports those akeys as holding a full
+                stripe of data while the fetch returns nothing at all, which is a
+                separate case from an akey that keeps some live stripes. Defaults to 0.
+
+        Returns:
+            list: a list of DaosObj created.
+
+        """
+        self.log.info("Creating erasure coded dataset in %s/%s", str(cont.pool), str(cont))
+
+        cont.open()
+        obj_list = []
+
+        for obj_idx in range(num_objs):
+            obj = DaosObj(cont.pool.context, cont.container)
+            obj_list.append(obj)
+            obj.create(rank=obj_idx, objcls=oclass)
+            obj.open()
+
+            ioreq = IORequest(cont.pool.context, cont.container, obj)
+            for dkey_idx in range(num_dkeys):
+                c_dkey = create_string_buffer("dkey {}".format(dkey_idx))
+
+                for akey_idx in range(num_akeys):
+                    c_akey = create_string_buffer("akey array {}".format(akey_idx))
+
+                    for stripe_idx in range(num_stripes):
+                        data = self._ec_stripe_fill(stripe_idx) * stripe_size
+                        c_data = create_string_buffer(data, stripe_size)
+                        ioreq.insert_recx(
+                            c_dkey, c_akey, 1, stripe_idx * stripe_size, stripe_size, c_data)
+
+                    # punching a whole stripe leaves its parity behind
+                    for stripe_idx in self._ec_punched_stripes(
+                            akey_idx, num_akeys, num_stripes, punch_stripes,
+                            full_punch_akeys):
+                        ioreq.punch_array(
+                            c_dkey, c_akey, stripe_idx * stripe_size, stripe_size)
+
+            obj.close()
+        cont.close()
+
+        return obj_list
+
+    @staticmethod
+    def _ec_punched_stripes(akey_idx, num_akeys, num_stripes, punch_stripes,
+                            full_punch_akeys):
+        """Get which stripes of an array akey are punched.
+
+        Args:
+            akey_idx (int): index of the akey.
+            num_akeys (int): number of array akeys per dkey.
+            num_stripes (int): number of stripes per akey.
+            punch_stripes (list): stripes to punch in a normal akey.
+            full_punch_akeys (int): how many of the trailing akeys have every stripe
+                punched instead.
+
+        Returns:
+            list: indices of the stripes to punch.
+
+        """
+        if akey_idx >= num_akeys - full_punch_akeys:
+            return list(range(num_stripes))
+        return list(punch_stripes)
+
+    @staticmethod
+    def _ec_live_extents(stripe_size, num_stripes, punch_stripes):
+        """Get the extents an akey should really hold data in.
+
+        Args:
+            stripe_size (int): full stripe size in bytes.
+            num_stripes (int): number of stripes written per akey.
+            punch_stripes (list): indices of the stripes that were punched.
+
+        Returns:
+            list: (rx_idx, rx_nr) tuples, with neighboring stripes merged the way
+                an io map reports them.
+
+        """
+        extents = []
+        for stripe_idx in range(num_stripes):
+            if stripe_idx in punch_stripes:
+                continue
+            start = stripe_idx * stripe_size
+            if extents and extents[-1][0] + extents[-1][1] == start:
+                extents[-1] = (extents[-1][0], extents[-1][1] + stripe_size)
+            else:
+                extents.append((start, stripe_size))
+        return extents
+
+    # pylint: disable=too-many-arguments
+    def dataset_verify_ec(self, obj_list, cont, num_objs, num_dkeys, num_akeys,
+                          stripe_size, num_stripes, punch_stripes, full_punch_akeys=0):
+        """Verify a dataset generated with dataset_gen_ec.
+
+        Checks the io map as well as the bytes. A punched stripe and a stripe someone
+        wrote zeros over both read back as zeros, so comparing bytes alone would pass
+        against a copy that filled every hole in.
+
+        Args:
+            obj_list (list): obj_list returned from dataset_gen_ec.
+            cont (TestContainer): the container.
+            num_objs (int): number of objects created in the container.
+            num_dkeys (int): number of dkeys created per object.
+            num_akeys (int): number of array akeys per dkey.
+            stripe_size (int): full stripe size in bytes.
+            num_stripes (int): number of stripes written per akey.
+            punch_stripes (list): indices of the stripes that were punched.
+            full_punch_akeys (int, optional): the value passed to dataset_gen_ec.
+                Defaults to 0.
+
+        """
+        self.log.info("Verifying erasure coded dataset in %s/%s", str(cont.pool), str(cont))
+
+        cont.open()
+
+        for obj_idx in range(num_objs):
+            c_oid = obj_list[obj_idx].c_oid
+            obj = DaosObj(cont.pool.context, cont.container, c_oid=c_oid)
+            obj.open()
+
+            ioreq = IORequest(cont.pool.context, cont.container, obj)
+            for dkey_idx in range(num_dkeys):
+                dkey = "dkey {}".format(dkey_idx)
+                c_dkey = create_string_buffer(dkey)
+
+                for akey_idx in range(num_akeys):
+                    akey = "akey array {}".format(akey_idx)
+                    c_akey = create_string_buffer(akey)
+                    punched = self._ec_punched_stripes(
+                        akey_idx, num_akeys, num_stripes, punch_stripes, full_punch_akeys)
+                    expect_extents = self._ec_live_extents(
+                        stripe_size, num_stripes, punched)
+                    where = "\nobj: {}.{}\ndkey: {}\nakey: {}".format(
+                        obj.c_oid.hi, obj.c_oid.lo, dkey, akey)
+                    actual, extents = ioreq.fetch_recx_map(
+                        c_dkey, c_akey, 1, 0, num_stripes * stripe_size)
+
+                    for stripe_idx in range(num_stripes):
+                        if stripe_idx in punched:
+                            expect = b"\0" * stripe_size
+                        else:
+                            expect = self._ec_stripe_fill(stripe_idx) * stripe_size
+                        start = stripe_idx * stripe_size
+                        got = actual[start:start + stripe_size]
+                        if got != expect:
+                            self.log.info(
+                                "Expected stripe %s to be %r but got %r",
+                                stripe_idx, expect[:16], got[:16])
+                            self.log.info("For:%s", where)
+                            self.fail("Erasure coded stripe verification failed.")
+
+                    if extents != expect_extents:
+                        self.log.info(
+                            "Expected the io map to hold %s but it holds %s",
+                            expect_extents, extents)
+                        self.log.info("For:%s", where)
+                        self.fail("Punched stripes were filled in rather than kept.")
+
+            obj.close()
+        cont.close()
+
+    # pylint: disable=too-many-arguments,too-many-locals
     def dataset_verify(self, obj_list, cont, num_objs, num_dkeys,
                        num_akeys_single, num_akeys_array, akey_sizes,
-                       akey_extents, punch_extents=0):
+                       akey_extents, punch_extents=0, punch_tail_extents=0):
         """Verify a dataset generated with dataset_gen.
 
         Args:
@@ -424,6 +631,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             akey_extents (list): varying number of akey extents to iterate.
             punch_extents (int, optional): the value passed to dataset_gen. Punched
                 records must read back as zeros. Defaults to 0.
+            punch_tail_extents (int, optional): the value passed to dataset_gen. Defaults to 0.
 
         """
         self.log.info("Verifying dataset in %s/%s", str(cont.pool), str(cont))
@@ -475,9 +683,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     c_num_extents = ctypes.c_uint(num_extents)
                     c_data_size = ctypes.c_size_t(data_size)
                     actual_data = ioreq.fetch_array(c_dkey, c_akey, c_num_extents, c_data_size)
-                    punch_nr = self._dataset_punch_nr(punch_extents, num_extents)
+                    punch_lead, punch_tail = self._dataset_punch_nr(
+                        punch_extents, punch_tail_extents, num_extents)
                     for data_idx in range(num_extents):
-                        if data_idx < punch_nr:
+                        if data_idx < punch_lead or data_idx >= num_extents - punch_tail:
                             # a punched record is a hole and reads back as zeros
                             data = data_size * "\0"
                         else:
