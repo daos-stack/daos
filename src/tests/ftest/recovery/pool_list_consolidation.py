@@ -12,7 +12,7 @@ from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
-from recovery_utils import wait_for_check_complete
+from recovery_utils import clean_mounts, run_cmd_check_result, wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
@@ -99,42 +99,6 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.check_disable()
 
         return errors
-
-    def run_cmd_check_result(self, command):
-        """Run given command as root and check its result.
-
-        Args:
-            command (str): Command to execute.
-        """
-        command_root = command_as_user(command=command, user="root")
-        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
-        if not result.passed:
-            self.fail(f"{command} failed on {result.failed_hosts}!")
-
-    def clean_mounts(self, tmpfs_mounts):
-        """Unmount and remove the tmpfs directory used for MD-on-SSD testing.
-
-        Args:
-            tmpfs_mounts (list): tmpfs mounts to clean.
-
-        Returns:
-            list: Errors detected during cleanup.
-        """
-        self.log.info("MD-on-SSD: Clean %s on %s", tmpfs_mounts, self.hostlist_servers)
-        commands = ["rc=0"]
-        for tmpfs_mount in tmpfs_mounts:
-            commands.append(
-                f"if mountpoint -q {tmpfs_mount}; then umount {tmpfs_mount} || rc=1; fi")
-            commands.append(
-                f"if mountpoint -q {tmpfs_mount}; then rc=1; "
-                f"else rm -rf {tmpfs_mount} || rc=1; fi")
-        commands.append("exit $rc")
-        command_str = "; ".join(commands)
-        command = command_as_user(command=f"sh -c '{command_str}'", user="root")
-        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command)
-        if not result.passed:
-            return [f"Failed to clean {tmpfs_mounts} on {result.failed_hosts}"]
-        return []
 
     def test_dangling_pool(self):
         """Test dangling pool.
@@ -370,12 +334,12 @@ class PoolListConsolidationTest(TestWithServers):
 
         self.log_step(
             "MD-on-SSD: Create a directory to load pool data under /mnt in all servers.")
-        cleanup_errors = self.clean_mounts(tmpfs_mounts)
+        cleanup_errors = clean_mounts(self, tmpfs_mounts)
         if cleanup_errors:
             self.fail("\n".join(cleanup_errors))
-        self.run_cmd_check_result(command=f"mkdir -p {' '.join(tmpfs_mounts)}")
+        run_cmd_check_result(self, command=f"mkdir -p {' '.join(tmpfs_mounts)}")
         # Make sure to clean the mounts even if the test hits an error.
-        self.register_cleanup(self.clean_mounts, tmpfs_mounts=tmpfs_mounts)
+        self.register_cleanup(clean_mounts, test=self, tmpfs_mounts=tmpfs_mounts)
 
         self.log_step("MD-on-SSD: Load pool dir to /mnt/daos2 and daos3 for all servers.")
         for host in self.hostlist_servers:
@@ -598,6 +562,6 @@ class PoolListConsolidationTest(TestWithServers):
         self.verify_pool_dir_removed(pool, errors=errors)
 
         if md_on_ssd:
-            errors.extend(self.clean_mounts(tmpfs_mounts=tmpfs_mounts))
+            errors.extend(clean_mounts(self, tmpfs_mounts=tmpfs_mounts))
 
         report_errors(test=self, errors=errors)
