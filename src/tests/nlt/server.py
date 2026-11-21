@@ -337,6 +337,19 @@ class DaosServer():
         print(f'Format completion in {duration:.2f} seconds')
         self.running = True
 
+        # Reused storage already has members; their ranks are held as stopped.
+        rc = self.run_dmg(['system', 'query', '--json'])
+        data = json.loads(rc.stdout.decode('utf-8'))
+        if data['error'] is not None:
+            raise NLTestFail(data['error'])
+        cmd = ['system', 'start' if data['response']['members'] else 'initialize', '--json']
+        rc = self.run_dmg(cmd)
+        data = json.loads(rc.stdout.decode('utf-8'))
+        print(f'{cmd[1]} data: {data}')
+        if data['error'] is not None:
+            self._add_test_case(cmd[1], failure=data['error'])
+            raise NLTestFail(data['error'])
+
         # Now wait until the system is up, basically the format to happen.
         start_timeout = 0.5
         while True:

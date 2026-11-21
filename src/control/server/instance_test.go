@@ -280,6 +280,7 @@ type (
 		RemoveSuperblockErr error
 		SetupRankErr        error
 		StopErr             error
+		ExitErr             error
 		ScmTierConfig       *storage.TierConfig
 		ScanBdevTiersResult []storage.BdevTierScanResult
 		LastHealthStats     map[string]*ctlpb.BioHealthResp
@@ -332,6 +333,10 @@ func (mi *MockInstance) IsReady() bool {
 	return mi.cfg.Ready.Load()
 }
 
+func (mi *MockInstance) memberState() system.MemberState {
+	return mi.LocalState()
+}
+
 func (mi *MockInstance) LocalState() system.MemberState {
 	return mi.cfg.LocalState
 }
@@ -378,8 +383,23 @@ func (mi *MockInstance) isAwaitingFormat() bool {
 	return false
 }
 
+func (mi *MockInstance) lastErr() error {
+	return mi.cfg.ExitErr
+}
+
+func (mi *MockInstance) getSuperblock() *Superblock {
+	return nil
+}
+
+func (mi *MockInstance) isAwaitingStart() bool {
+	return false
+}
+
 func (mi *MockInstance) NotifyDrpcReady(_ *srvpb.NotifyReadyReq) {}
 func (mi *MockInstance) NotifyStorageReady(_ *ranklist.Rank)     {}
+func (mi *MockInstance) NotifyStartReady()                       {}
+func (mi *MockInstance) abortStart()                             {}
+func (mi *MockInstance) holdStart(func())                        {}
 
 func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	return nil, nil

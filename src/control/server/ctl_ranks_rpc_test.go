@@ -39,6 +39,7 @@ import (
 var (
 	// test aliases for member states
 	msReady      = stateString(system.MemberStateReady)
+	msStarting   = stateString(system.MemberStateStarting)
 	msWaitFormat = stateString(system.MemberStateAwaitFormat)
 	msStopped    = stateString(system.MemberStateStopped)
 	msErrored    = stateString(system.MemberStateErrored)
@@ -245,6 +246,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		missingSB         bool
 		engineCount       int
 		instancesStopped  bool
+		instancesHeld     bool
 		instancesDontStop bool
 		req               *ctlpb.RanksReq
 		timeout           time.Duration
@@ -308,6 +310,14 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				{Rank: 1, State: msStopped},
 			},
 		},
+		"instances held": {
+			req:           &ctlpb.RanksReq{Ranks: "0-3"},
+			instancesHeld: true,
+			expResults: []*sharedpb.RankResult{
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -349,9 +359,13 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				}
 
 				trc := &engine.TestRunnerConfig{}
-				if !tc.instancesStopped {
+				if !tc.instancesStopped && !tc.instancesHeld {
 					trc.Running.SetTrue()
 					ei.ready.SetTrue()
+				}
+				if tc.instancesHeld {
+					ei.onAwaitStart = func() {}
+					ei.waitStart.SetTrue()
 				}
 				trc.SignalCb = func(idx uint32, sig os.Signal) {
 					signalsSent.Store(idx, sig)
@@ -417,6 +431,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		missingSB        bool
 		engineCount      int
 		instancesStarted bool
+		instancesHeld    bool
 		startFails       bool
 		req              *ctlpb.RanksReq
 		timeout          time.Duration
@@ -440,6 +455,14 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStarted: true,
 			expErr:           FaultInstancesNotStopped("reset format", 1),
+		},
+		"instances awaiting start go back to wait format": {
+			req:           &ctlpb.RanksReq{Ranks: "0-3"},
+			instancesHeld: true,
+			expResults: []*sharedpb.RankResult{
+				{Rank: 1, State: msWaitFormat},
+				{Rank: 2, State: msWaitFormat},
+			},
 		},
 		"instances reach wait format": {
 			req: &ctlpb.RanksReq{Ranks: "0-3"},
@@ -506,6 +529,8 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					ei.ready.SetTrue()
 				}
+				ei.onAwaitStart = func() {}
+				ei.waitStart.Store(tc.instancesHeld)
 				if !tc.startFails {
 					ei.waitFormat.SetTrue()
 				}
@@ -667,6 +692,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		missingSB        bool
 		engineCount      int
 		instancesStopped bool
+		instancesHeld    bool
 		startFails       bool
 		req              *ctlpb.RanksReq
 		timeout          time.Duration
@@ -712,6 +738,15 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			startFails:       true,
 			expErr:           errors.New("deadline exceeded"),
 		},
+		"held instances get released": {
+			req:              &ctlpb.RanksReq{Ranks: "0-3"},
+			instancesStopped: true,
+			instancesHeld:    true,
+			expResults: []*sharedpb.RankResult{
+				{Rank: 1, State: msReady},
+				{Rank: 2, State: msReady},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -754,12 +789,21 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				srv._superblock.Rank = new(ranklist.Rank)
 				*srv._superblock.Rank = ranklist.Rank(i + 1)
 
+				srv.onAwaitStart = func() {}
+				srv.waitStart.Store(tc.instancesHeld)
+
 				// mimic srv.run, set "ready" on startLoop rx
-				go func(ctx context.Context, s *EngineInstance, startFails bool) {
-					select {
-					case <-ctx.Done():
-						return
-					case <-s.startRequested:
+				go func(ctx context.Context, s *EngineInstance, held, startFails bool) {
+					if held {
+						if err := s.awaitStart(ctx); err != nil {
+							return
+						}
+					} else {
+						select {
+						case <-ctx.Done():
+							return
+						case <-s.startRequested:
+						}
 					}
 					t.Logf("instance %d: start signal received", s.Index())
 					if startFails || !tc.instancesStopped {
@@ -773,10 +817,159 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 					}
 					s.ready.SetTrue()
 					t.Log("ready set to true")
-				}(ctx, srv, tc.startFails)
+				}(ctx, srv, tc.instancesHeld, tc.startFails)
 			}
 
 			gotResp, gotErr := svc.StartRanks(ctx, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_CtlSvc_StartEngines(t *testing.T) {
+	for name, tc := range map[string]struct {
+		instancesStopped     bool
+		instancesHeld        bool
+		instancesAwaitFormat bool
+		startFails           bool
+		exitErr              error
+		staleExitErr         error
+		req                  *ctlpb.StartEnginesReq
+		timeout              time.Duration
+		expResults           []*ctlpb.EngineResult
+		expErr               error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"instances already started": {
+			req: &ctlpb.StartEnginesReq{},
+			expResults: []*ctlpb.EngineResult{
+				{Index: 0, State: msReady, Uuid: test.MockUUID(0)},
+				{Index: 1, State: msReady, Uuid: test.MockUUID(1)},
+			},
+		},
+		"instances get started": {
+			req:              &ctlpb.StartEnginesReq{},
+			instancesStopped: true,
+			expResults: []*ctlpb.EngineResult{
+				{Index: 0, State: msStarting, Uuid: test.MockUUID(0)},
+				{Index: 1, State: msStarting, Uuid: test.MockUUID(1)},
+			},
+		},
+		"held instances get released": {
+			req:              &ctlpb.StartEnginesReq{},
+			instancesStopped: true,
+			instancesHeld:    true,
+			expResults: []*ctlpb.EngineResult{
+				{Index: 0, State: msStarting, Uuid: test.MockUUID(0)},
+				{Index: 1, State: msStarting, Uuid: test.MockUUID(1)},
+			},
+		},
+		"instances awaiting format are reported, not started": {
+			req:                  &ctlpb.StartEnginesReq{},
+			instancesStopped:     true,
+			instancesAwaitFormat: true,
+			expResults: []*ctlpb.EngineResult{
+				{Index: 0, State: msWaitFormat},
+				{Index: 1, State: msWaitFormat},
+			},
+		},
+		"instances not started in time": {
+			req:              &ctlpb.StartEnginesReq{},
+			timeout:          time.Second,
+			instancesStopped: true,
+			startFails:       true,
+			expErr:           errors.New("deadline exceeded"),
+		},
+		"engine that exits is reported without waiting": {
+			req:              &ctlpb.StartEnginesReq{},
+			timeout:          10 * time.Second,
+			instancesStopped: true,
+			exitErr:          errors.New("exit status 1"),
+			expResults: []*ctlpb.EngineResult{
+				{Index: 0, State: msErrored, Error: "exit status 1", Uuid: test.MockUUID(0)},
+				{Index: 1, State: msErrored, Error: "exit status 1", Uuid: test.MockUUID(1)},
+			},
+		},
+		"earlier exit does not fail a new start": {
+			req:              &ctlpb.StartEnginesReq{},
+			instancesStopped: true,
+			staleExitErr:     errors.New("exit status 1"),
+			expResults: []*ctlpb.EngineResult{
+				{Index: 0, State: msStarting, Uuid: test.MockUUID(0)},
+				{Index: 1, State: msStarting, Uuid: test.MockUUID(1)},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			ctx, outerCancel := context.WithCancel(test.Context(t))
+			t.Cleanup(outerCancel)
+			if tc.timeout != time.Duration(0) {
+				inner, cancel := context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
+				ctx = inner
+			}
+
+			cfg := config.DefaultServer().WithEngines(
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+			)
+			svc := mockControlService(t, log, cfg, nil, nil, nil)
+
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
+
+				trc := &engine.TestRunnerConfig{}
+				trc.Running.Store(!tc.instancesStopped)
+				srv.ready.Store(!tc.instancesStopped)
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
+				srv.setIndex(uint32(i))
+				srv.onAwaitStart = func() {}
+				srv.waitStart.Store(tc.instancesHeld)
+				srv.waitFormat.Store(tc.instancesAwaitFormat)
+				srv._lastErr = tc.staleExitErr
+				if !tc.instancesAwaitFormat {
+					srv.setSuperblock(&Superblock{UUID: test.MockUUID(int32(i))})
+				}
+
+				go func(ctx context.Context, s *EngineInstance, held, startFails bool, exitErr error) {
+					if held {
+						if err := s.awaitStart(ctx); err != nil {
+							return
+						}
+					} else {
+						select {
+						case <-ctx.Done():
+							return
+						case <-s.startRequested:
+						}
+					}
+					if exitErr != nil {
+						s.handleExit(ctx, 0, exitErr)
+						return
+					}
+					if startFails || !tc.instancesStopped {
+						return
+					}
+
+					if _, err := s.runner.Start(ctx); err != nil {
+						t.Logf("failed to start runner: %s", err)
+					}
+				}(ctx, srv, tc.instancesHeld, tc.startFails, tc.exitErr)
+			}
+
+			gotResp, gotErr := svc.StartEngines(ctx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

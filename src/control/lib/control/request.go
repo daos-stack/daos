@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -58,8 +59,10 @@ type (
 	// completion.
 	deadliner interface {
 		SetTimeout(time.Duration)
+		SetNoDeadline()
 		getDeadline() time.Time
 		getTimeout() time.Duration
+		noDeadline() bool
 	}
 
 	hostResponseReporter interface {
@@ -83,10 +86,11 @@ var (
 // request is an embeddable struct to provide basic functionality
 // common to all request types.
 type request struct {
-	timeout  time.Duration
-	deadline time.Time
-	Sys      string // DAOS system name
-	HostList []string
+	timeout   time.Duration
+	deadline  time.Time
+	unbounded bool
+	Sys       string // DAOS system name
+	HostList  []string
 }
 
 // SetSystem sets the request's system name.
@@ -139,6 +143,17 @@ func (r *request) AddHost(hostAddr string) {
 func (r *request) SetTimeout(timeout time.Duration) {
 	r.timeout = timeout
 	r.deadline = time.Now().Add(timeout)
+}
+
+// SetNoDeadline lets the request run until the caller's context is done
+// instead of inheriting the default timeout.
+func (r *request) SetNoDeadline() {
+	r.unbounded = true
+}
+
+// noDeadline returns true if the request has opted out of a deadline.
+func (r *request) noDeadline() bool {
+	return r.unbounded
 }
 
 // getDeadline retrieves the deadline set for the request, if any.

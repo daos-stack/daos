@@ -30,6 +30,8 @@ import "chk/faults.proto";
 service MgmtSvc {
 	// Join the server described by JoinReq to the system.
 	rpc Join(JoinReq) returns (JoinResp) {}
+	// Report what a server needs to decide whether to start an engine on boot.
+	rpc EnginePreflight(EnginePreflightReq) returns (EnginePreflightResp) {}
 	// ClusterEvent notify MS of a RAS event in the cluster.
 	rpc ClusterEvent(shared.ClusterEventReq) returns (shared.ClusterEventResp) {}
 	// LeaderQuery provides a mechanism for clients to discover
@@ -97,6 +99,10 @@ service MgmtSvc {
 	rpc SystemStop(SystemStopReq) returns (SystemStopResp) {}
 	// Start DAOS system (restart data-plane instances)
 	rpc SystemStart(SystemStartReq) returns (SystemStartResp) {}
+	// Start engines on formatted hosts to form a new DAOS system
+	rpc SystemInitialize(SystemInitializeReq) returns (SystemInitializeResp) {}
+	// Start engines on formatted hosts to join an existing DAOS system
+	rpc SystemExtend(SystemExtendReq) returns (SystemExtendResp) {}
 	// Exclude DAOS ranks
 	rpc SystemExclude(SystemExcludeReq) returns (SystemExcludeResp) {}
 	// Drain or reintegrate DAOS ranks from all pools

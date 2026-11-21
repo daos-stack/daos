@@ -606,6 +606,44 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb
 	return msg.(*mgmtpb.JoinResp), nil
 }
 
+// EnginePreflight implements the method defined for the Management Service.
+//
+// Report, for each engine a server is about to launch, whether it should
+// start now and otherwise why it waits.
+func (svc *mgmtSvc) EnginePreflight(ctx context.Context, req *mgmtpb.EnginePreflightReq) (*mgmtpb.EnginePreflightResp, error) {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.EnginePreflightResp)
+	for _, e := range req.Engines {
+		reason, err := svc.startHoldReason(ranklist.Rank(e.Rank))
+		if err != nil {
+			return nil, err
+		}
+		resp.Engines = append(resp.Engines, &mgmtpb.EnginePreflightResp_Engine{
+			Idx: e.Idx, Start: reason == "", Reason: reason,
+		})
+	}
+
+	return resp, nil
+}
+
+// startHoldReason returns why a rank should not start on boot, or "" if it should.
+func (svc *mgmtSvc) startHoldReason(rank ranklist.Rank) (string, error) {
+	member, err := svc.sysdb.FindMemberByRank(rank)
+	if system.IsMemberNotFound(err) {
+		return "not a system member; awaiting dmg system initialize or extend", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !member.State.StartsOnBoot() {
+		return fmt.Sprintf("rank %d is %s; awaiting dmg system clear-exclude", member.Rank, member.State), nil
+	}
+	return "", nil
+}
+
 type (
 	// systemRanksFunc is an alias for control client API *Ranks() fanout
 	// function that executes across ranks on different hosts.
@@ -840,10 +878,10 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	}
 
 	if hitRanks.Count() == 0 {
-		// If the membership is empty, this replica is likely waiting
-		// for logs from peers, so we should indicate to the client
+		// If the membership is empty on a non-leader replica, it is likely
+		// waiting for logs from peers, so we should indicate to the client
 		// that it should try a different replica.
-		if req.Ranks == "" && req.Hosts == "" {
+		if req.Ranks == "" && req.Hosts == "" && !svc.sysdb.IsLeader() {
 			return nil, system.ErrRaftUnavail
 		}
 		return resp, nil
@@ -1125,6 +1163,201 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	}
 
 	return resp, nil
+}
+
+// SystemInitialize implements the method defined for the Management Service.
+//
+// Start engines on the supplied hosts and wait for them to join a system
+// that has no pools yet.
+func (svc *mgmtSvc) SystemInitialize(ctx context.Context, req *mgmtpb.SystemInitializeReq) (*mgmtpb.SystemInitializeResp, error) {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+	svc.log.Debug("Received SystemInitialize RPC")
+
+	pools, err := svc.sysdb.PoolServiceList(true)
+	if err != nil {
+		return nil, err
+	}
+	if len(pools) > 0 {
+		return nil, FaultSystemInitialized(len(pools))
+	}
+
+	results, err := svc.startEngines(ctx, req.Hosts, req.JoinTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.SystemInitializeResp{Results: results}, nil
+}
+
+// SystemExtend implements the method defined for the Management Service.
+//
+// Start engines on the supplied hosts and wait for them to join an
+// existing system.
+func (svc *mgmtSvc) SystemExtend(ctx context.Context, req *mgmtpb.SystemExtendReq) (*mgmtpb.SystemExtendResp, error) {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
+		return nil, err
+	}
+	svc.log.Debug("Received SystemExtend RPC")
+
+	numMembers, err := svc.sysdb.MemberCount()
+	if err != nil {
+		return nil, err
+	}
+	if numMembers == 0 {
+		return nil, FaultSystemNotInitialized()
+	}
+
+	results, err := svc.startEngines(ctx, req.Hosts, req.JoinTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.SystemExtendResp{Results: results}, nil
+}
+
+// startEngines starts the engines on the supplied hosts and reports each
+// joined rank and each host with start or join errors.
+func (svc *mgmtSvc) startEngines(ctx context.Context, hosts string, joinSecs uint32) ([]*sharedpb.RankResult, error) {
+	if hosts == "" {
+		return nil, errors.New("no hosts specified")
+	}
+	req := &control.StartEnginesReq{}
+	req.SetHostList([]string{hosts})
+	resp, err := control.StartEngines(ctx, svc.rpcClient, req)
+	if err != nil {
+		return nil, err
+	}
+
+	expected, results := startedEngines(resp)
+	joined, err := svc.awaitJoins(ctx, expected, joinSecs)
+	if err != nil {
+		return nil, err
+	}
+	results = append(results, joinResults(expected, joined)...)
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Addr != results[j].Addr {
+			return results[i].Addr < results[j].Addr
+		}
+		return results[i].Rank < results[j].Rank
+	})
+
+	var pbResults []*sharedpb.RankResult
+	if err := convert.Types(results, &pbResults); err != nil {
+		return nil, err
+	}
+
+	return pbResults, nil
+}
+
+func hostErrResult(host string, err error) *system.MemberResult {
+	res := system.NewMemberResult(ranklist.NilRank, err, system.MemberStateErrored, "start")
+	res.Addr = host
+	return res
+}
+
+// startedEngines splits the start responses into the engines expected to
+// join, by host, and an errored result for each host with engines that
+// will not.
+func startedEngines(resp *control.StartEnginesResp) (map[string][]uuid.UUID, system.MemberResults) {
+	var results system.MemberResults
+	// Joins are matched by UUID; a member's control address can differ
+	// from the request's.
+	expected := make(map[string][]uuid.UUID)
+	unformatted := make(map[string]int)
+	for _, res := range resp.Results {
+		switch system.MemberStateFromString(res.State) {
+		case system.MemberStateAwaitFormat:
+			unformatted[res.Addr]++
+		case system.MemberStateErrored:
+			results = append(results, hostErrResult(res.Addr,
+				errors.Errorf("engine %d: %s", res.Index, res.Error)))
+		default:
+			u, err := uuid.Parse(res.UUID)
+			if err != nil {
+				results = append(results, hostErrResult(res.Addr,
+					errors.Wrapf(err, "engine %d uuid", res.Index)))
+				continue
+			}
+			expected[res.Addr] = append(expected[res.Addr], u)
+		}
+	}
+	for errStr, hostErrs := range resp.HostErrors {
+		for _, host := range hostErrs.HostSet.Slice() {
+			results = append(results, hostErrResult(host, errors.New(errStr)))
+		}
+	}
+	for host, n := range unformatted {
+		results = append(results, hostErrResult(host,
+			errors.Errorf("%d engines awaiting format", n)))
+	}
+	return expected, results
+}
+
+func (svc *mgmtSvc) joinedEngines(expected map[string][]uuid.UUID) (map[string][]*system.Member, bool, error) {
+	joined := make(map[string][]*system.Member)
+	pending := false
+	for host, uuids := range expected {
+		for _, u := range uuids {
+			m, err := svc.sysdb.FindMemberByUUID(u)
+			if system.IsMemberNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return nil, false, err
+			}
+			if m.State == system.MemberStateJoined {
+				joined[host] = append(joined[host], m)
+			}
+		}
+		pending = pending || len(joined[host]) < len(uuids)
+	}
+	return joined, pending, nil
+}
+
+// awaitJoins waits for the expected engines to join, for at most joinSecs
+// if non-zero.
+func (svc *mgmtSvc) awaitJoins(ctx context.Context, expected map[string][]uuid.UUID, joinSecs uint32) (map[string][]*system.Member, error) {
+	var deadline <-chan time.Time
+	if joinSecs > 0 {
+		timer := time.NewTimer(time.Duration(joinSecs) * time.Second)
+		defer timer.Stop()
+		deadline = timer.C
+	}
+
+	for {
+		joined, pending, err := svc.joinedEngines(expected)
+		if err != nil {
+			return nil, err
+		}
+		if !pending {
+			return joined, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline:
+			return joined, nil
+		case <-time.After(instanceUpdateDelay):
+		}
+	}
+}
+
+func joinResults(expected map[string][]uuid.UUID, joined map[string][]*system.Member) system.MemberResults {
+	var results system.MemberResults
+	for host, uuids := range expected {
+		for _, m := range joined[host] {
+			res := system.NewMemberResult(m.Rank, nil, m.State, "start")
+			res.Addr = host
+			results = append(results, res)
+		}
+		if got, want := len(joined[host]), len(uuids); got < want {
+			results = append(results, hostErrResult(host,
+				errors.Errorf("%d of %d engines joined", got, want)))
+		}
+	}
+	return results
 }
 
 // SystemExclude marks the specified ranks as administratively excluded from the system.
@@ -1756,6 +1989,11 @@ func (h *EngineHarness) eraseEngineFormat(ctx context.Context, instances []Engin
 
 	if opts.restartNow {
 		for _, ei := range instances {
+			// A held engine has no process to restart; send it back to format.
+			if ei.isAwaitingStart() {
+				ei.abortStart()
+				continue
+			}
 			ei.requestStart(ctx)
 		}
 	}

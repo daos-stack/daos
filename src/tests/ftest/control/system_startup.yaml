@@ -1,0 +1,18 @@
+hosts:
+  test_servers: 3
+timeout: 600
+setup:
+  start_servers: false
+  start_agents: false
+  mgmt_svc_replicas_qty: 1
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  system_ram_reserved: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage: auto
+pool:
+  size: 10%

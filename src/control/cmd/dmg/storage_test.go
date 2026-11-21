@@ -58,6 +58,15 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Format with init",
+			"storage format --init",
+			strings.Join([]string{
+				printRequest(t, systemQueryReq),
+				printRequest(t, &control.StorageFormatReq{Start: true, Rank: uint32(ranklist.NilRank)}),
+			}, " "),
+			nil,
+		},
+		{
 			"Scan summary",
 			"storage scan",
 			strings.Join([]string{

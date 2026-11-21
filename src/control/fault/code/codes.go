@@ -166,6 +166,8 @@ const (
 	ServerJoinReplaceEnabledPoolRank
 	ServerRankAdminExcluded
 	ServerTransparentHugepageEnabled
+	ServerSystemInitialized
+	ServerSystemNotInitialized
 )
 
 // server config fault codes

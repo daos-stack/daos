@@ -238,6 +238,108 @@ void   mgmt__join_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__join_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__engine_preflight_req__engine__init
+                     (Mgmt__EnginePreflightReq__Engine         *message)
+{
+  static const Mgmt__EnginePreflightReq__Engine init_value = MGMT__ENGINE_PREFLIGHT_REQ__ENGINE__INIT;
+  *message = init_value;
+}
+void   mgmt__engine_preflight_req__init
+                     (Mgmt__EnginePreflightReq         *message)
+{
+  static const Mgmt__EnginePreflightReq init_value = MGMT__ENGINE_PREFLIGHT_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__engine_preflight_req__get_packed_size
+                     (const Mgmt__EnginePreflightReq *message)
+{
+  assert(message->base.descriptor == &mgmt__engine_preflight_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__engine_preflight_req__pack
+                     (const Mgmt__EnginePreflightReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__engine_preflight_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__engine_preflight_req__pack_to_buffer
+                     (const Mgmt__EnginePreflightReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__engine_preflight_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__EnginePreflightReq *
+       mgmt__engine_preflight_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__EnginePreflightReq *)
+     protobuf_c_message_unpack (&mgmt__engine_preflight_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__engine_preflight_req__free_unpacked
+                     (Mgmt__EnginePreflightReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__engine_preflight_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__engine_preflight_resp__engine__init
+                     (Mgmt__EnginePreflightResp__Engine         *message)
+{
+  static const Mgmt__EnginePreflightResp__Engine init_value = MGMT__ENGINE_PREFLIGHT_RESP__ENGINE__INIT;
+  *message = init_value;
+}
+void   mgmt__engine_preflight_resp__init
+                     (Mgmt__EnginePreflightResp         *message)
+{
+  static const Mgmt__EnginePreflightResp init_value = MGMT__ENGINE_PREFLIGHT_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__engine_preflight_resp__get_packed_size
+                     (const Mgmt__EnginePreflightResp *message)
+{
+  assert(message->base.descriptor == &mgmt__engine_preflight_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__engine_preflight_resp__pack
+                     (const Mgmt__EnginePreflightResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__engine_preflight_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__engine_preflight_resp__pack_to_buffer
+                     (const Mgmt__EnginePreflightResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__engine_preflight_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__EnginePreflightResp *
+       mgmt__engine_preflight_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__EnginePreflightResp *)
+     protobuf_c_message_unpack (&mgmt__engine_preflight_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__engine_preflight_resp__free_unpacked
+                     (Mgmt__EnginePreflightResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__engine_preflight_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__leader_query_req__init
                      (Mgmt__LeaderQueryReq         *message)
 {
@@ -1493,6 +1595,210 @@ const ProtobufCMessageDescriptor mgmt__join_resp__descriptor =
   mgmt__join_resp__field_indices_by_name,
   1,  mgmt__join_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__join_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__engine_preflight_req__engine__field_descriptors[2] =
+{
+  {
+    "idx",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__EnginePreflightReq__Engine, idx),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rank",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__EnginePreflightReq__Engine, rank),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__engine_preflight_req__engine__field_indices_by_name[] = {
+  0,   /* field[0] = idx */
+  1,   /* field[1] = rank */
+};
+static const ProtobufCIntRange mgmt__engine_preflight_req__engine__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__engine_preflight_req__engine__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.EnginePreflightReq.Engine",
+  "Engine",
+  "Mgmt__EnginePreflightReq__Engine",
+  "mgmt",
+  sizeof(Mgmt__EnginePreflightReq__Engine),
+  2,
+  mgmt__engine_preflight_req__engine__field_descriptors,
+  mgmt__engine_preflight_req__engine__field_indices_by_name,
+  1,  mgmt__engine_preflight_req__engine__number_ranges,
+  (ProtobufCMessageInit) mgmt__engine_preflight_req__engine__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__engine_preflight_req__field_descriptors[2] =
+{
+  {
+    "sys",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__EnginePreflightReq, sys),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "engines",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__EnginePreflightReq, n_engines),
+    offsetof(Mgmt__EnginePreflightReq, engines),
+    &mgmt__engine_preflight_req__engine__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__engine_preflight_req__field_indices_by_name[] = {
+  1,   /* field[1] = engines */
+  0,   /* field[0] = sys */
+};
+static const ProtobufCIntRange mgmt__engine_preflight_req__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__engine_preflight_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.EnginePreflightReq",
+  "EnginePreflightReq",
+  "Mgmt__EnginePreflightReq",
+  "mgmt",
+  sizeof(Mgmt__EnginePreflightReq),
+  2,
+  mgmt__engine_preflight_req__field_descriptors,
+  mgmt__engine_preflight_req__field_indices_by_name,
+  1,  mgmt__engine_preflight_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__engine_preflight_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__engine_preflight_resp__engine__field_descriptors[3] =
+{
+  {
+    "idx",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__EnginePreflightResp__Engine, idx),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "start",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__EnginePreflightResp__Engine, start),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "reason",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__EnginePreflightResp__Engine, reason),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__engine_preflight_resp__engine__field_indices_by_name[] = {
+  0,   /* field[0] = idx */
+  2,   /* field[2] = reason */
+  1,   /* field[1] = start */
+};
+static const ProtobufCIntRange mgmt__engine_preflight_resp__engine__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__engine_preflight_resp__engine__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.EnginePreflightResp.Engine",
+  "Engine",
+  "Mgmt__EnginePreflightResp__Engine",
+  "mgmt",
+  sizeof(Mgmt__EnginePreflightResp__Engine),
+  3,
+  mgmt__engine_preflight_resp__engine__field_descriptors,
+  mgmt__engine_preflight_resp__engine__field_indices_by_name,
+  1,  mgmt__engine_preflight_resp__engine__number_ranges,
+  (ProtobufCMessageInit) mgmt__engine_preflight_resp__engine__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__engine_preflight_resp__field_descriptors[1] =
+{
+  {
+    "engines",
+    1,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__EnginePreflightResp, n_engines),
+    offsetof(Mgmt__EnginePreflightResp, engines),
+    &mgmt__engine_preflight_resp__engine__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__engine_preflight_resp__field_indices_by_name[] = {
+  0,   /* field[0] = engines */
+};
+static const ProtobufCIntRange mgmt__engine_preflight_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 1 }
+};
+const ProtobufCMessageDescriptor mgmt__engine_preflight_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.EnginePreflightResp",
+  "EnginePreflightResp",
+  "Mgmt__EnginePreflightResp",
+  "mgmt",
+  sizeof(Mgmt__EnginePreflightResp),
+  1,
+  mgmt__engine_preflight_resp__field_descriptors,
+  mgmt__engine_preflight_resp__field_indices_by_name,
+  1,  mgmt__engine_preflight_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__engine_preflight_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__leader_query_req__field_descriptors[2] =

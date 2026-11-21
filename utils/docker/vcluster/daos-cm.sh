@@ -168,6 +168,11 @@ function start
 		fatal "DAOS storage could not be formatted"
 	fi
 
+	info "Initializing DAOS system"
+	if ! run docker exec daos-admin dmg system initialize --host-list=daos-server ; then
+		fatal "DAOS system could not be initialized"
+	fi
+
 	timeout_counter=10
 	until docker exec daos-server grep -q -e "DAOS I/O Engine .* started on rank" /tmp/daos_server.log > /dev/null 2>&1 ; do
 		info "Waiting DAOS file system to be formatted : timeout=$timeout_counter"
