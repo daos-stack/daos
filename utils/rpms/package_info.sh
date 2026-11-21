@@ -57,7 +57,7 @@ export spdk_major_version="26.01"
 export daos_spdk_version=${spdk_major_version}
 export daos_spdk_release="3${distro_name}"
 export daos_spdk_full="${daos_spdk_version}-${daos_spdk_release}"
-export fused_version="1.2.0"
+export fused_version="1.2.1"
 export fused_release="1${distro_name}"
 export fused_full="${fused_version}-${fused_release}"
 
