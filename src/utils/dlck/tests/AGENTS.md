@@ -36,7 +36,7 @@
 
 ## Mocking Functions
 
-- Shared per-area files provide memory, stdio, ABT mutex and checker callback mocks. Each test
+- Shared per-area files provide memory, stdio, ABT, DAOS and checker callback mocks. Each test
   binary compiles only the mock areas it needs and enables only its required linker wraps.
 - Tests include the headers for the mock areas they use directly; do not rely on
   `ut_dlck_checker_mock.h` to include the required header for you.
@@ -55,6 +55,8 @@
 - For APIs returning status and an output handle, queue the handle only on success.
 - For mocks which are expected to set `errno` on error, queue an `errno` only on error.
 - Successful free APIs have to have fixed output effects, such as clearing a handle.
+- Use a distinct sentinel for each resource instance so tests catch resources mixed between
+  execution streams. Initialize ABT handles to their explicit null constants, which may be nonzero.
 
 ## Checking Parameters
 
@@ -78,6 +80,22 @@
 - For I/O mocks check also printf-style formats.
 - Never use `__real_*()` variants.
 - Never pass fake `FILE *` values to real stdio.
+
+## DLCK Engine Batch
+
+- Exercise batch initialization, execution, joining and finalization separately as well as through
+  `dlck_engine_exec_all()`. The start message spans initialization and execution; joining reports
+  its own result.
+- The caller owns and initializes `dlck_exec`, including its ULT callback, allocation callbacks,
+  target count and optional checker. `dlck_exec_fini()` releases resources, not the structure.
+- After execution or joining, propagate the batch's `join_fail` to the engine before finalization.
+  Finalization must not free arguments belonging to ULTs that have not joined.
+- Test allocation and partial-start failures, join failures, and cleanup with distinct resources
+  for each target. Allocation cleanup may call the free callback with a null argument.
+- The `dlck_engine_ut` binary replaces `dlck_abt.c` with the `ut_dlck_abt_mock.c` mocks. Its
+  `dlck_ult_create` mock runs successful ULTs synchronously, so queue their expectations before
+  creating them. Use per-stream sentinels for retained handles; transient ULTs can share
+  `Mock_thread`.
 
 ## DLCK Checker Tests
 

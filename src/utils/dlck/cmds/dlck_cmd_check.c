@@ -331,8 +331,8 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		goto err_stop_engine;
 	}
 
-	rc = dlck_engine_exec_all(engine, exec_one, dlck_engine_xstream_arg_alloc, ctrl,
-				  dlck_engine_xstream_arg_free, sts, ck);
+	rc = dlck_engine_exec_all(engine, dlck_engine_xstream_arg_alloc, ctrl,
+				  dlck_engine_xstream_arg_free, sts, exec_one, ck);
 	if (rc != DER_SUCCESS) {
 		goto err_free_sts;
 	}
