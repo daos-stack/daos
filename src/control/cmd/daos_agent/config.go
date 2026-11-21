@@ -2,6 +2,7 @@
 // (C) Copyright 2020-2024 Intel Corporation.
 // (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 // (C) Copyright 2025 Google LLC
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -227,6 +228,6 @@ func DefaultConfig() *Config {
 		RuntimeDir:       defaultRuntimeDir,
 		LogLevel:         common.DefaultControlLogLevel,
 		TransportConfig:  security.DefaultAgentTransportConfig(),
-		CredentialConfig: &security.CredentialConfig{},
+		CredentialConfig: &security.CredentialConfig{NodeCertDir: security.DefaultNodeCertDir},
 	}
 }
