@@ -156,6 +156,7 @@ case "${rpm_suffix}" in
             [libpmem-devel]=libpmem
             [libpmemobj-devel]=libpmemobj
             [daos-devel]=daos-client
+            [slurm-devel]=slurm
         )
         ;;
     suse.lp15*)
@@ -170,6 +171,7 @@ case "${rpm_suffix}" in
             [libpmem-devel]=libpmem1
             [libpmemobj-devel]=libpmemobj1
             [daos-devel]=daos-client
+            [slurm-devel]=slurm
         )
         ;;
     *)
