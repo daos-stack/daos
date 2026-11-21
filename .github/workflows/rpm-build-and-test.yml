@@ -535,12 +535,12 @@ jobs:
             DISTRO_VERSION_MAJOR="9"
             if [[ '${{ matrix.stage }}' = Medium* ]]; then
                 LABEL=${{ env.CP_HW_MEDIUM_LABEL &&
-                          env.CP_HW_MEDIUM_LABEL || 'ci_nvme5' }}
+                          env.CP_HW_MEDIUM_LABEL || 'nodes_5 && nvme && pmem' }}
                 STAGE_TAGS+=",medium"
                 SIZE="MEDIUM"
             elif [[ '${{ matrix.stage }}' = Large* ]]; then
                 LABEL=${{ env.CP_HW_LARGE_LABEL &&
-                          env.CP_HW_LARGE_LABEL || 'ci_nvme9' }}
+                          env.CP_HW_LARGE_LABEL || 'nodes_9 && nvme && pmem' }}
                 STAGE_TAGS+=",large"
                 SIZE="LARGE"
             fi
