@@ -417,383 +417,388 @@ rebuild2p_partial_fail_2parity(void **state)
 	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 2, FULL_UPDATE);
 }
 
-static void
-rebuild_dfs_fail_data_s0(void **state)
-{
-	int shard = 0;
+/*
+ * dfs io with EC shards failing: several combinations of failed shards are
+ * covered by one rebuild (two for the sequential failures). Small files are
+ * created until, for some rank(s), every combination has a file with exactly
+ * those shards on the rank(s); the other files are rebuilt along with them.
+ */
+#define RDF_SHARD_NR  6 /* OC_EC_4P2G1 */
+#define RDF_FILE_STEP 32
+#define RDF_FILE_MAX  512
+#define RDF_RANK_MAX  64
+#define RDF_PART_MAX  60
 
-	print_message("BEGIN %s\n", __FUNCTION__);
-	dfs_ec_rebuild_io(state, &shard, 1);
+struct rdf_combo {
+	int rc_shards[2]; /* failed shards of the layout, the second is -1 if only one fails */
+};
+
+struct rdf_file {
+	dfs_obj_t *rf_obj;
+	d_rank_t   rf_ranks[RDF_SHARD_NR];
+};
+
+struct rdf_io {
+	uint32_t    ri_cell_size; /* 0: default */
+	daos_size_t ri_chunk_size;
+	daos_size_t ri_full_size; /* full stripe write at offset 0 */
+	daos_size_t ri_part_size; /* partial stripe writes */
+	int         ri_part_nr;
+	daos_off_t  ri_part_offs[RDF_PART_MAX];
+};
+
+/* the io of dfs_ec_rebuild_io() */
+static void
+rdf_io_init(struct rdf_io *io)
+{
+	int i;
+
+	io->ri_cell_size  = 1 << 15;
+	io->ri_chunk_size = 32 * 1024 * 4;
+	io->ri_full_size  = 32 * 1024 * 32;
+	io->ri_part_size  = 32 * 1024 * 2;
+	io->ri_part_nr    = 10;
+	for (i = 0; i < io->ri_part_nr; i++)
+		io->ri_part_offs[i] = io->ri_full_size + i * 100 * 1024;
 }
 
+/* full stripes, then small updates at the start and across the end of a cell */
 static void
-rebuild_dfs_fail_data_s1(void **state)
+rdf_io_init_seq(struct rdf_io *io)
 {
-	int shard = 1;
+	int i;
 
-	print_message("BEGIN %s\n", __FUNCTION__);
-	dfs_ec_rebuild_io(state, &shard, 1);
-}
-
-static void
-rebuild_dfs_fail_data_s3(void **state)
-{
-	int shard = 3;
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	dfs_ec_rebuild_io(state, &shard, 1);
-}
-
-static void
-rebuild_dfs_fail_2data_s0s1(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 1;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_2data_s0s2(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 2;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_2data_s0s3(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 3;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_2data_s1s2(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 1;
-	shards[1] = 2;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_2data_s1s3(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 1;
-	shards[1] = 3;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_2data_s2s3(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 2;
-	shards[1] = 3;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_data_parity_s0p1(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 5;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_data_parity_s3p1(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 3;
-	shards[1] = 5;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_data_parity_s2p1(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 2;
-	shards[1] = 5;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_data_parity_s0p0(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 4;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_data_parity_s2p0(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 2;
-	shards[1] = 4;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_data_parity_s3p0(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 3;
-	shards[1] = 4;
-	dfs_ec_rebuild_io(state, shards, 2);
-}
-
-void
-dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
-{
-	dfs_t		*dfs_mt;
-	daos_handle_t	co_hdl;
-	uuid_t		co_uuid;
-	char		str[37];
-	test_arg_t	*arg = *state;
-	d_sg_list_t	sgl;
-	d_iov_t		iov;
-	dfs_obj_t	*obj;
-	daos_size_t	buf_size = 16 * CELL_SIZE;
-	daos_size_t	chunk_size = 16 * CELL_SIZE;
-	char		filename[32];
-	d_rank_t	ranks[4] = { -1 };
-	int		idx = 0;
-	d_sg_list_t	small_sgl;
-	d_iov_t		small_iov;
-	char		*small_buf;
-	char		*small_vbuf;
-	int		small_buf_size = 32;
-	daos_obj_id_t	oid;
-	char		*buf;
-	char		*vbuf;
-	int		i;
-	int		rc;
-
-	dfs_attr_t attr = {};
-
-	attr.da_props = daos_prop_alloc(2);
-	assert_non_null(attr.da_props);
-	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
-	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
-	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RF2;
-
-	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
-	daos_prop_free(attr.da_props);
-	assert_success(rc);
-	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
-
-	D_ALLOC(buf, buf_size);
-	assert_true(buf != NULL);
-	D_ALLOC(vbuf, buf_size);
-	assert_true(vbuf != NULL);
-
-	d_iov_set(&iov, buf, buf_size);
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-
-	dts_buf_render(buf, buf_size);
-	memcpy(vbuf, buf, buf_size);
-
-	/* Full stripe update */
-	sprintf(filename, "rebuild_file");
-	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
-		      NULL, &obj);
-	assert_success(rc);
-	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
-	assert_success(rc);
-
-	/* partial stripe update */
-	D_ALLOC(small_buf, small_buf_size);
-	assert_true(small_buf != NULL);
-	D_ALLOC(small_vbuf, small_buf_size);
-	assert_true(small_vbuf != NULL);
-	d_iov_set(&small_iov, small_buf, small_buf_size);
-	small_sgl.sg_nr = 1;
-	small_sgl.sg_nr_out = 1;
-	small_sgl.sg_iovs = &small_iov;
-	dts_buf_render(small_buf, small_buf_size);
-	memcpy(small_vbuf, small_buf, small_buf_size);
-	for (i = 0; i < 30; i++) {
-		daos_off_t	offset;
-
-		offset = (i + 20) * 4 * CELL_SIZE;
-		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
-		assert_success(rc);
-		offset += CELL_SIZE - 10;
-		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
-		assert_success(rc);
+	io->ri_cell_size  = 0;
+	io->ri_chunk_size = 16 * CELL_SIZE;
+	io->ri_full_size  = 16 * CELL_SIZE;
+	io->ri_part_size  = 32;
+	io->ri_part_nr    = 60;
+	for (i = 0; i < io->ri_part_nr / 2; i++) {
+		io->ri_part_offs[2 * i]     = (i + 20) * 4 * CELL_SIZE;
+		io->ri_part_offs[2 * i + 1] = io->ri_part_offs[2 * i] + CELL_SIZE - 10;
 	}
+}
 
-	dfs_obj2id(obj, &oid);
-	while (shards_nr-- > 0) {
-		daos_size_t fetch_size = 0;
+/* every file has its own data */
+static void
+rdf_file_data(const char *base, char *buf, daos_size_t size, int f)
+{
+	daos_size_t off = ((daos_size_t)f * 4099) % size;
 
-		ranks[idx] = get_rank_by_oid_shard(arg, oid, shards[idx]);
-		rebuild_pools_ranks(&arg, 1, &ranks[idx], 1, false);
-		idx++;
+	memcpy(buf, base + off, size - off);
+	memcpy(buf + size - off, base, off);
+}
 
-		daos_cont_status_clear(co_hdl, NULL);
-		/* Verify full stripe */
-		d_iov_set(&iov, buf, buf_size);
-		memset(buf, 0, buf_size);
-		rc = dfs_read(dfs_mt, obj, &sgl, 0, &fetch_size, NULL);
-		assert_success(rc);
-		assert_int_equal(fetch_size, buf_size);
-		assert_memory_equal(buf, vbuf, buf_size);
-		for (i = 0; i < 30; i++) {
-			daos_off_t	offset;
+/* does file @file have the shards of @combo on @ranks, in this order if @ordered */
+static bool
+rdf_file_match(struct rdf_file *file, struct rdf_combo *combo, d_rank_t *ranks, bool ordered)
+{
+	d_rank_t r0 = file->rf_ranks[combo->rc_shards[0]];
+	d_rank_t r1;
 
-			memset(small_buf, 0, small_buf_size);
-			offset = (i + 20) * 4 * CELL_SIZE;
-			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
-				      &fetch_size, NULL);
-			assert_success(rc);
-			assert_int_equal(fetch_size, small_buf_size);
-			assert_memory_equal(small_buf, small_vbuf,
-					    small_buf_size);
-			offset += CELL_SIZE - 10;
-			memset(small_buf, 0, small_buf_size);
-			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
-				      &fetch_size, NULL);
-			assert_int_equal(fetch_size, small_buf_size);
-			assert_success(rc);
-			assert_memory_equal(small_buf, small_vbuf,
-					    small_buf_size);
+	if (combo->rc_shards[1] < 0)
+		return r0 == ranks[0];
+
+	r1 = file->rf_ranks[combo->rc_shards[1]];
+	if (r0 == ranks[0] && r1 == ranks[1])
+		return true;
+	return !ordered && r0 == ranks[1] && r1 == ranks[0];
+}
+
+/* the first file matching @combo, -1 if none */
+static int
+rdf_combo_file(struct rdf_file *files, int file_nr, struct rdf_combo *combo, d_rank_t *ranks,
+	       bool ordered)
+{
+	int f;
+
+	for (f = 0; f < file_nr; f++)
+		if (rdf_file_match(&files[f], combo, ranks, ordered))
+			return f;
+	return -1;
+}
+
+/* find rank(s) such that every combination has a matching file */
+static bool
+rdf_pick_ranks(struct rdf_file *files, int file_nr, struct rdf_combo *combos, int combo_nr,
+	       bool ordered, d_rank_t *ranks)
+{
+	d_rank_t all[RDF_RANK_MAX];
+	int      all_nr  = 0;
+	int      rank_nr = combos[0].rc_shards[1] < 0 ? 1 : 2;
+	int      f, s, i, j, c;
+
+	for (f = 0; f < file_nr; f++) {
+		for (s = 0; s < RDF_SHARD_NR; s++) {
+			for (i = 0; i < all_nr; i++)
+				if (all[i] == files[f].rf_ranks[s])
+					break;
+			if (i == all_nr && all_nr < RDF_RANK_MAX)
+				all[all_nr++] = files[f].rf_ranks[s];
 		}
 	}
 
-	rc = dfs_release(obj);
-	assert_success(rc);
+	for (i = 0; i < all_nr; i++) {
+		ranks[0] = all[i];
+		for (j = 0; j < (rank_nr == 1 ? 1 : all_nr); j++) {
+			if (rank_nr == 2 && j == i)
+				continue;
+			ranks[1] = all[j];
+			for (c = 0; c < combo_nr; c++)
+				if (rdf_combo_file(files, file_nr, &combos[c], ranks, ordered) < 0)
+					break;
+			if (c == combo_nr)
+				return true;
+		}
+	}
+	return false;
+}
 
+static void
+rdf_file_create(test_arg_t *arg, dfs_t *dfs_mt, struct rdf_io *io, const char *base, char *buf,
+		int f, struct rdf_file *file)
+{
+	struct daos_obj_layout *layout;
+	char                    filename[32];
+	daos_obj_id_t           oid;
+	d_sg_list_t             sgl;
+	d_iov_t                 iov;
+	int                     i;
+	int                     rc;
+
+	snprintf(filename, sizeof(filename), "rebuild_file_%d", f);
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT,
+		      OC_EC_4P2G1, io->ri_chunk_size, NULL, &file->rf_obj);
+	assert_int_equal(rc, 0);
+
+	rdf_file_data(base, buf, io->ri_full_size, f);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	d_iov_set(&iov, buf, io->ri_full_size);
+	rc = dfs_write(dfs_mt, file->rf_obj, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&iov, buf, io->ri_part_size);
+	for (i = 0; i < io->ri_part_nr; i++) {
+		rc = dfs_write(dfs_mt, file->rf_obj, &sgl, io->ri_part_offs[i], NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = dfs_obj2id(file->rf_obj, &oid);
+	assert_int_equal(rc, 0);
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(layout->ol_nr, 1);
+	assert_int_equal(layout->ol_shards[0]->os_replica_nr, RDF_SHARD_NR);
+	for (i = 0; i < RDF_SHARD_NR; i++)
+		file->rf_ranks[i] = layout->ol_shards[0]->os_shard_loc[i].sd_rank;
+	daos_obj_layout_free(layout);
+}
+
+/* returns the number of files with wrong data */
+static int
+rdf_verify(dfs_t *dfs_mt, struct rdf_io *io, struct rdf_file *files, int file_nr, const char *base,
+	   char *buf, char *vbuf, const char *stage)
+{
+	d_sg_list_t sgl;
+	d_iov_t     iov;
+	daos_size_t fetch_size;
+	bool        file_bad;
+	int         bad = 0;
+	int         f, i;
+	int         rc;
+
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs   = &iov;
+	for (f = 0; f < file_nr; f++) {
+		file_bad = false;
+		rdf_file_data(base, vbuf, io->ri_full_size, f);
+
+		d_iov_set(&iov, buf, io->ri_full_size);
+		memset(buf, 0, io->ri_full_size);
+		fetch_size = 0;
+		rc         = dfs_read(dfs_mt, files[f].rf_obj, &sgl, 0, &fetch_size, NULL);
+		if (rc != 0 || fetch_size != io->ri_full_size ||
+		    memcmp(buf, vbuf, io->ri_full_size) != 0) {
+			print_message("%s: file %d full stripes: rc %d, size " DF_U64 "%s\n", stage,
+				      f, rc, fetch_size, rc == 0 ? ", wrong data" : "");
+			file_bad = true;
+		}
+
+		d_iov_set(&iov, buf, io->ri_part_size);
+		for (i = 0; i < io->ri_part_nr; i++) {
+			memset(buf, 0, io->ri_part_size);
+			fetch_size = 0;
+			rc         = dfs_read(dfs_mt, files[f].rf_obj, &sgl, io->ri_part_offs[i],
+					      &fetch_size, NULL);
+			if (rc != 0 || fetch_size != io->ri_part_size ||
+			    memcmp(buf, vbuf, io->ri_part_size) != 0) {
+				print_message(
+				    "%s: file %d partial update %d: rc %d, size " DF_U64 "%s\n",
+				    stage, f, i, rc, fetch_size, rc == 0 ? ", wrong data" : "");
+				file_bad = true;
+			}
+		}
+
+		if (file_bad) {
+			print_message("%s: file %d is on ranks %u %u %u %u %u %u\n", stage, f,
+				      files[f].rf_ranks[0], files[f].rf_ranks[1],
+				      files[f].rf_ranks[2], files[f].rf_ranks[3],
+				      files[f].rf_ranks[4], files[f].rf_ranks[5]);
+			bad++;
+		}
+	}
+	print_message("%s: %d of %d files are wrong\n", stage, bad, file_nr);
+	return bad;
+}
+
+/*
+ * Fail the shards of every combination of @combos by excluding one or two
+ * ranks, together or one after the other if @seq, and verify all the files.
+ */
+static void
+dfs_ec_rebuild_combos(void **state, struct rdf_combo *combos, int combo_nr, bool seq)
+{
+	test_arg_t      *arg  = *state;
+	dfs_attr_t       attr = {};
+	struct rdf_io    io   = {};
+	struct rdf_file *files;
+	dfs_t           *dfs_mt;
+	daos_handle_t    co_hdl;
+	uuid_t           co_uuid;
+	char             str[37];
+	d_rank_t         ranks[2] = {-1, -1};
+	int              rank_nr  = combos[0].rc_shards[1] < 0 ? 1 : 2;
+	int              file_nr  = 0;
+	int              prop_nr  = 0;
+	int              bad      = 0;
+	char            *base;
+	char            *buf;
+	char            *vbuf;
+	int              c, f, i;
+	int              rc;
+
+	if (seq)
+		rdf_io_init_seq(&io);
+	else
+		rdf_io_init(&io);
+
+	attr.da_props = daos_prop_alloc(3);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[prop_nr].dpe_type  = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[prop_nr++].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+	attr.da_props->dpp_entries[prop_nr].dpe_type  = DAOS_PROP_CO_REDUN_FAC;
+	attr.da_props->dpp_entries[prop_nr++].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+	if (io.ri_cell_size != 0) {
+		attr.da_props->dpp_entries[prop_nr].dpe_type  = DAOS_PROP_CO_EC_CELL_SZ;
+		attr.da_props->dpp_entries[prop_nr++].dpe_val = io.ri_cell_size;
+	}
+	attr.da_props->dpp_nr = prop_nr;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+	assert_int_equal(rc, 0);
+	print_message("Created DFS Container " DF_UUIDF "\n", DP_UUID(co_uuid));
+
+	D_ALLOC_ARRAY(files, RDF_FILE_MAX);
+	D_ALLOC(base, io.ri_full_size);
+	D_ALLOC(buf, io.ri_full_size);
+	D_ALLOC(vbuf, io.ri_full_size);
+	assert_non_null(files);
+	assert_non_null(base);
+	assert_non_null(buf);
+	assert_non_null(vbuf);
+	dts_buf_render(base, io.ri_full_size);
+
+	do {
+		assert_true(file_nr + RDF_FILE_STEP <= RDF_FILE_MAX);
+		for (i = 0; i < RDF_FILE_STEP; i++, file_nr++)
+			rdf_file_create(arg, dfs_mt, &io, base, buf, file_nr, &files[file_nr]);
+	} while (!rdf_pick_ranks(files, file_nr, combos, combo_nr, seq, ranks));
+
+	for (c = 0; c < combo_nr; c++) {
+		f = rdf_combo_file(files, file_nr, &combos[c], ranks, seq);
+		if (rank_nr == 1)
+			print_message("shard %d fails: file %d of %d, rank %u\n",
+				      combos[c].rc_shards[0], f, file_nr, ranks[0]);
+		else
+			print_message("shards %d, %d fail: file %d of %d, ranks %u, %u\n",
+				      combos[c].rc_shards[0], combos[c].rc_shards[1], f, file_nr,
+				      files[f].rf_ranks[combos[c].rc_shards[0]],
+				      files[f].rf_ranks[combos[c].rc_shards[1]]);
+	}
+
+	if (seq) {
+		for (i = 0; i < rank_nr; i++) {
+			rebuild_pools_ranks(&arg, 1, &ranks[i], 1, false);
+			daos_cont_status_clear(co_hdl, NULL);
+			snprintf(str, sizeof(str), "after exclude rank %u", ranks[i]);
+			bad += rdf_verify(dfs_mt, &io, files, file_nr, base, buf, vbuf, str);
+		}
+	} else {
+		rebuild_pools_ranks(&arg, 1, ranks, rank_nr, false);
+		daos_cont_status_clear(co_hdl, NULL);
+		bad = rdf_verify(dfs_mt, &io, files, file_nr, base, buf, vbuf, "after exclude");
+	}
+
+	for (f = 0; f < file_nr; f++) {
+		rc = dfs_release(files[f].rf_obj);
+		assert_int_equal(rc, 0);
+	}
+	D_FREE(files);
+	D_FREE(base);
 	D_FREE(buf);
-	rc = dfs_umount(dfs_mt);
-	assert_success(rc);
+	D_FREE(vbuf);
 
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
-
 	uuid_unparse(co_uuid, str);
 	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 
-#if 0
-	while (idx > 0)
-		rebuild_add_back_tgts(arg, ranks[--idx], NULL, 1);
-#endif
+	assert_int_equal(bad, 0);
 }
 
 static void
-rebuild_dfs_fail_seq_s0s1(void **state)
+rebuild_dfs_fail_data(void **state)
 {
-	int shards[2];
+	struct rdf_combo combos[] = {{{0, -1}}, {{1, -1}}, {{3, -1}}};
 
 	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 1;
-	dfs_ec_seq_fail(state, shards, 2);
+	dfs_ec_rebuild_combos(state, combos, ARRAY_SIZE(combos), false);
 }
 
 static void
-rebuild_dfs_fail_seq_s1s2(void **state)
+rebuild_dfs_fail_2data(void **state)
 {
-	int shards[2];
+	struct rdf_combo combos[] = {{{0, 1}}, {{0, 2}}, {{0, 3}}, {{1, 2}}, {{1, 3}}, {{2, 3}}};
 
 	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 1;
-	shards[1] = 2;
-	dfs_ec_seq_fail(state, shards, 2);
+	dfs_ec_rebuild_combos(state, combos, ARRAY_SIZE(combos), false);
 }
 
 static void
-rebuild_dfs_fail_seq_s2s3(void **state)
+rebuild_dfs_fail_data_parity(void **state)
 {
-	int shards[2];
+	struct rdf_combo combos[] = {{{0, 5}}, {{3, 5}}, {{2, 5}}, {{0, 4}}, {{2, 4}}, {{3, 4}}};
 
 	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 2;
-	shards[1] = 3;
-	dfs_ec_seq_fail(state, shards, 2);
+	dfs_ec_rebuild_combos(state, combos, ARRAY_SIZE(combos), false);
 }
 
+/* the first shard of a combination fails first */
 static void
-rebuild_dfs_fail_seq_s0s3(void **state)
+rebuild_dfs_fail_seq(void **state)
 {
-	int shards[2];
+	struct rdf_combo combos[] = {{{0, 1}}, {{1, 2}}, {{2, 3}}, {{0, 3}},
+				     {{0, 4}}, {{3, 5}}, {{4, 5}}};
 
 	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 3;
-	dfs_ec_seq_fail(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_seq_s0p0(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 0;
-	shards[1] = 4;
-	dfs_ec_seq_fail(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_seq_s3p1(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 3;
-	shards[1] = 5;
-	dfs_ec_seq_fail(state, shards, 2);
-}
-
-static void
-rebuild_dfs_fail_seq_p0p1(void **state)
-{
-	int shards[2];
-
-	print_message("BEGIN %s\n", __FUNCTION__);
-	shards[0] = 4;
-	shards[1] = 5;
-	dfs_ec_seq_fail(state, shards, 2);
+	dfs_ec_rebuild_combos(state, combos, ARRAY_SIZE(combos), true);
 }
 
 static void
@@ -1467,7 +1472,7 @@ rebuild_ec_combined_ops(void **state)
 }
 
 /*
- * REBUILD49: EC reintegration data loss through parity replica epoch
+ * REBUILD31: EC reintegration data loss through parity replica epoch
  * inflation (DAOS-19632).
  *
  * The chain, with E_w the epoch of the original writes:
@@ -1856,7 +1861,7 @@ rcl_reint_ranks(struct rcl_ctx *ctx, d_rank_t *ranks, int nr, const char *stage)
 }
 
 /*
- * REBUILD50: EC aggregation must not generate parity below a newer update of
+ * REBUILD32: EC aggregation must not generate parity below a newer update of
  * the stripe once a data shard was rebuilt.
  *
  * Rebuild only migrates visible extents, so a data shard rebuilt after an
@@ -2474,79 +2479,43 @@ static const struct CMUnitTest rebuild_tests[] = {
      rebuild_ec_8nodes_setup, test_teardown},
     {"REBUILD13: rebuild with mixed partial/full stripe", rebuild_mixed_stripes,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD14: rebuild dfs io with data(s0) tgt fail ", rebuild_dfs_fail_data_s0,
+    {"REBUILD14: rebuild dfs io with data(s0 / s1 / s3) tgt fail", rebuild_dfs_fail_data,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD15: rebuild dfs io with data(s1) tgt fail ", rebuild_dfs_fail_data_s1,
+    {"REBUILD15: rebuild dfs io with 2 data tgts fail", rebuild_dfs_fail_2data,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD16: rebuild dfs io with data(s1) tgt fail ", rebuild_dfs_fail_data_s3,
+    {"REBUILD16: rebuild dfs io with 1 data 1 parity tgts fail", rebuild_dfs_fail_data_parity,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD17: rebuild dfs io with data(s0, s1) tgt fail ", rebuild_dfs_fail_2data_s0s1,
+    {"REBUILD17: rebuild dfs io with sequential tgts fail", rebuild_dfs_fail_seq,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD18: rebuild dfs io with data(s0, s2) tgt fail ", rebuild_dfs_fail_2data_s0s2,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD19: rebuild dfs io with data(s0, s3) tgt fail ", rebuild_dfs_fail_2data_s0s3,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD20: rebuild dfs io with data(s1, s2) tgt fail ", rebuild_dfs_fail_2data_s1s2,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD21: rebuild dfs io with data(s1, s3) tgt fail ", rebuild_dfs_fail_2data_s1s3,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD22: rebuild dfs io with data(s2, s3) tgt fail ", rebuild_dfs_fail_2data_s2s3,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD23: rebuild dfs io with 1data 1parity(s0, p1)", rebuild_dfs_fail_data_parity_s0p1,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD24: rebuild dfs io with 1data 1parity(s3, p1)", rebuild_dfs_fail_data_parity_s3p1,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD25: rebuild dfs io with 1data 1parity(s2, p1)", rebuild_dfs_fail_data_parity_s2p1,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD26: rebuild dfs io with 1data 1parity(s0, p0)", rebuild_dfs_fail_data_parity_s0p0,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD27: rebuild dfs io with 1data 1parity(s3, p0)", rebuild_dfs_fail_data_parity_s3p0,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD28: rebuild dfs io with 1data 1parity(s2, p0)", rebuild_dfs_fail_data_parity_s2p0,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD29: rebuild dfs io with sequential data(s0, s1) fail", rebuild_dfs_fail_seq_s0s1,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD30: rebuild dfs io with sequential data(s1, s2) fail", rebuild_dfs_fail_seq_s1s2,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD31: rebuild dfs io with sequential data(s2, s3) fail", rebuild_dfs_fail_seq_s2s3,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD32: rebuild dfs io with sequential data(s0, s3) fail", rebuild_dfs_fail_seq_s0s3,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD33: rebuild dfs io with data and parity(s0, p0) fail", rebuild_dfs_fail_seq_s0p0,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD34: rebuild dfs io with data and parity(s3, p1) fail", rebuild_dfs_fail_seq_s3p1,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD35: rebuild dfs io with 2 parities(p0, p1) fail", rebuild_dfs_fail_seq_p0p1,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD36: rebuild multiple group EC object", rebuild_multiple_group_ec_object,
+    {"REBUILD18: rebuild multiple group EC object", rebuild_multiple_group_ec_object,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD37: rebuild EC dkey enumeration", rebuild_ec_dkey_enumeration,
+    {"REBUILD19: rebuild EC dkey enumeration", rebuild_ec_dkey_enumeration,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD38: rebuild EC multi-stripes @ different epochs", rebuild_ec_multi_stripes,
+    {"REBUILD20: rebuild EC multi-stripes @ different epochs", rebuild_ec_multi_stripes,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD39: rebuild EC parity with multiple group", rebuild_ec_parity_multi_group,
+    {"REBUILD21: rebuild EC parity with multiple group", rebuild_ec_parity_multi_group,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD40: rebuild EC snapshot with data shard", rebuild_ec_snapshot_data_shard,
+    {"REBUILD22: rebuild EC snapshot with data shard", rebuild_ec_snapshot_data_shard,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD41: rebuild EC snapshot with parity shard", rebuild_ec_snapshot_parity_shard,
+    {"REBUILD23: rebuild EC snapshot with parity shard", rebuild_ec_snapshot_parity_shard,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD42: rebuild parity over write", rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
+    {"REBUILD24: rebuild parity over write", rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
      test_teardown},
-    {"REBUILD43: EC rebuild then aggregation", rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
+    {"REBUILD25: EC rebuild then aggregation", rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
      test_teardown},
-    {"REBUILD44: multiple shards in the same target after rebuild", rebuild_ec_multiple_shards,
+    {"REBUILD26: multiple shards in the same target after rebuild", rebuild_ec_multiple_shards,
      rebuild_ec_6nodes_setup, test_teardown},
-    {"REBUILD45: multiple shards fail tgts", rebuild_ec_multiple_failure_tgts,
+    {"REBUILD27: multiple shards fail tgts", rebuild_ec_multiple_failure_tgts,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD46: fail parity shard and data shards after overwrite",
+    {"REBUILD28: fail parity shard and data shards after overwrite",
      rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD47: fail parity shard and data shards after overwrite with aggregation",
+    {"REBUILD29: fail parity shard and data shards after overwrite with aggregation",
      rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD48: combine multiple rebuild operation for EC", rebuild_ec_combined_ops,
+    {"REBUILD30: combine multiple rebuild operation for EC", rebuild_ec_combined_ops,
      rebuild_ec_6nodes_setup, test_teardown},
-    {"REBUILD49: EC reint data loss through parity replica epoch inflation",
+    {"REBUILD31: EC reint data loss through parity replica epoch inflation",
      rebuild_ec_reint_parity_epoch_inflation, rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD50: EC parity below a newer update after rebuild", rebuild_ec_parity_below_newer,
+    {"REBUILD32: EC parity below a newer update after rebuild", rebuild_ec_parity_below_newer,
      rebuild_ec_8nodes_setup, test_teardown},
 };
 
