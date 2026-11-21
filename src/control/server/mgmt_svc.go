@@ -333,14 +333,13 @@ func (svc *mgmtSvc) processBatchJoins(ctx context.Context, bprChan batchProcessR
 }
 
 // processBatchedMsgRequests processes a batch of requests for a given message type.
+//
+// bprChan is always sized to guarantee this send cannot block, so send
+// unconditionally rather than racing it against ctx.Done() in a select.
 func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batchProcessRespChan, msgType reflect.Type, reqs []*batchRequest) {
 	bpr := &batchProcessResp{msgType: msgType}
 	if len(reqs) == 0 {
-		select {
-		case <-ctx.Done():
-			return
-		case bprChan <- bpr:
-		}
+		bprChan <- bpr
 		return
 	}
 
@@ -353,11 +352,7 @@ func (svc *mgmtSvc) processBatchedMsgRequests(ctx context.Context, bprChan batch
 		svc.log.Errorf("no batch handler for message type %s", msgType)
 	}
 
-	select {
-	case <-ctx.Done():
-		return
-	case bprChan <- bpr:
-	}
+	bprChan <- bpr
 }
 
 // processSerialRequest processes a single serialized request.
@@ -419,11 +414,17 @@ func (svc *mgmtSvc) batchReqLoop(parent context.Context) {
 			}
 
 			for i := 0; i < batchedMsgNr; i++ {
-				bpr := <-bprChan
-				if len(bpr.retryableReqs) > 0 {
-					batchedMsgReqs[bpr.msgType] = bpr.retryableReqs
-				} else {
-					delete(batchedMsgReqs, bpr.msgType)
+				// Defense-in-depth escape in case a send to bprChan is ever missed.
+				select {
+				case <-parent.Done():
+					svc.log.Debug("stopped batchReqLoop")
+					return
+				case bpr := <-bprChan:
+					if len(bpr.retryableReqs) > 0 {
+						batchedMsgReqs[bpr.msgType] = bpr.retryableReqs
+					} else {
+						delete(batchedMsgReqs, bpr.msgType)
+					}
 				}
 			}
 		}
