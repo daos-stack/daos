@@ -409,10 +409,27 @@ static const struct CMUnitTest vc_tests[] = {
 static int
 vc_test_setup(void **state)
 {
-	int     rc;
+	struct daos_prop_entry entry    = {0};
+	daos_prop_t            co_props = {0};
+	int                    rc;
 
-	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			0, NULL);
+	/*
+	 * The injected faults corrupt records without updating checksum, which would be reported
+	 * as -DER_CSUM instead of -DER_MISMATCH if checksum is enabled by default.
+	 */
+	entry.dpe_type = DAOS_PROP_CO_CSUM;
+	entry.dpe_val  = DAOS_PROP_CO_CSUM_OFF;
+
+	co_props.dpp_nr      = 1;
+	co_props.dpp_entries = &entry;
+
+	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = test_setup_next_step(state, NULL, NULL, &co_props);
+	if (rc == 0)
+		rc = test_setup_next_step(state, NULL, NULL, &co_props);
 
 	return rc;
 }

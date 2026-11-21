@@ -1510,12 +1510,18 @@ static inline int
 gc_open_bkt(struct umem_attr *uma, struct vos_gc_bkt_df *bkt_df, struct checker *ck,
 	    struct vos_gc_info *gc_info)
 {
+	bool           fi_reenable;
+	const uint64_t exp_fail_locs[] = {DAOS_FAULT_GC_TREE_INV_CLASS,
+					  DAOS_FAULT_GC_TREE_UNREG_CLASS,
+					  DAOS_FAULT_GC_TREE_FEATURES, 0};
 	int rc;
 
 	if (IS_CHECKER(ck)) {
+		checker_fi_entry(exp_fail_locs, &fi_reenable);
 		CK_PRINTF(ck, CK_GC_TREE_STR "...\n");
 		CK_INDENT(ck, rc = dbtree_check_inplace(&bkt_df->gd_bins_root, uma, NULL, ck));
 		CK_PRINTFL_RC(ck, rc, CK_GC_TREE_STR);
+		checker_fi_exit(fi_reenable);
 		if (rc != DER_SUCCESS) {
 			return rc;
 		}

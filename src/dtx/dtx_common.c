@@ -52,6 +52,7 @@ struct dtx_batched_cont_args {
 	uint32_t                         dbca_cleanup_thd;
 	uint32_t dbca_deregister : 1, dbca_cleanup_done : 1, dbca_commit_done : 1,
 	    dbca_agg_done : 1, dbca_flush_pending : 1;
+	uint32_t dbca_resync_seq;
 };
 
 struct dtx_partial_cmt_item {
@@ -619,7 +620,8 @@ dtx_aggregation_main(void *arg)
 static inline bool
 dtx_need_batched_commit(struct dtx_batched_cont_args *dbca)
 {
-	return dtx_cont_opened(dbca->dbca_cont) || dbca->dbca_flush_pending;
+	return dtx_cont_opened(dbca->dbca_cont) || dbca->dbca_flush_pending ||
+	       !d_list_empty(&dbca->dbca_cont->sc_dtx_resync_pending);
 }
 
 static void
@@ -641,6 +643,15 @@ dtx_batched_commit_one(void *arg)
 		struct dtx_stat		  stat = { 0 };
 		int			  cnt;
 		int			  rc;
+
+		cont->sc_resync_pending = 1;
+
+		rc = dtx_handle_resync_pending(dbca->dbca_cont, &cont->sc_dtx_resync_pending,
+					       dbca->dbca_resync_seq++, dbca->dbca_commit_req);
+
+		cont->sc_resync_pending = 0;
+		if (rc != 0)
+			break;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
 					    DAOS_EPOCH_MAX, false, &dtes, NULL, &dce);
@@ -749,6 +760,7 @@ dtx_batched_commit(void *arg)
 		    (dtx_batched_ult_max != 0 && tls->dt_batched_ult_cnt < dtx_batched_ult_max) &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_committable_coll_count > 0) ||
+		     !d_list_empty(&dbca->dbca_cont->sc_dtx_resync_pending) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
 		      d_hlc_age2sec(stat.dtx_oldest_committable_time) >=
 			  DTX_COMMIT_THRESHOLD_AGE))) {
@@ -1130,6 +1142,13 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 
 	if (flags & DTX_RELAY)
 		dlh->dlh_relay = 1;
+	if (flags & DTX_LEADER_DELAY) {
+		/* No healthy shard can execute conditional modification, make client to retry. */
+		if (unlikely(dlh->dlh_normal_sub_cnt == 0))
+			D_GOTO(out, rc = -DER_INPROGRESS);
+
+		dlh->dlh_leader_delay = 1;
+	}
 
 	dth = &dlh->dlh_handle;
 	rc = dtx_handle_init(dti, coh, epoch, dlh->dlh_relay ? false : true, sub_modification_cnt,
@@ -1205,8 +1224,21 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	/* For solo transaction, the validation has already been processed inside vos
 	 * when necessary. That is enough, do not need to revalid again.
 	 */
-	if (dth->dth_solo)
+	if (dth->dth_solo) {
+		/*
+		 * For very rare case, from client perspective, there is unique available
+		 * shard and current dth is marked solo. But the original DTX MBS contains
+		 * more participants. Let's commit it now instead of waiting for DTX resync
+		 * to handle it. If failed, then make client to retry sometime later.
+		 */
+		if (result == 0 && unlikely(dth->dth_prepared)) {
+			rc = vos_dtx_commit(cont->sc_hdl, &dth->dth_xid, 1, false, NULL);
+			if (rc < 0 && rc != -DER_NONEXIST)
+				result = -DER_INPROGRESS;
+		}
+
 		goto out;
+	}
 
 	/* During waiting for bulk data transfer or other non-leaders, the DTX status maybe
 	 * changes by others (such as DTX resync or DTX refresh) by race. Let's check it
@@ -1260,6 +1292,10 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont, int re
 	D_ASSERT(dth->dth_mbs != NULL);
 
 cache:
+	/* For DAOS_DTX_LEADER_SWITCH case, neither mark committable nor batched commit. */
+	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH))
+		goto out;
+
 	if (dlh->dlh_coll) {
 		rc = dtx_cos_add(cont, dlh->dlh_coll_entry, &dth->dth_leader_oid,
 				 dth->dth_dkey_hash, dth->dth_epoch, DCF_EXP_CMT | DCF_COLL);
@@ -1617,6 +1653,8 @@ dtx_reindex_ult(void *arg)
 		 DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont), rc);
 
 	cont->sc_dtx_reindex = 0;
+	if (rc > 0)
+		cont->sc_dtx_indexed = 1;
 	ds_cont_child_put(cont);
 }
 
@@ -1626,6 +1664,11 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 	int rc;
 
 	D_ASSERT(cont != NULL);
+
+	if (cont->sc_dtx_indexed) {
+		cont->sc_dtx_delay_reset = 0;
+		return 0;
+	}
 
 	/* Someone is trying to stop former DTX reindex ULT, wait until its done. */
 	while (cont->sc_dtx_reindex_abort)
@@ -1754,10 +1797,11 @@ dtx_cont_register(struct ds_cont_child *cont)
 	}
 
 	ds_cont_child_get(cont);
-	dbca->dbca_refs = 0;
-	dbca->dbca_cont = cont;
-	dbca->dbca_pool = dbpa;
-	dbca->dbca_agg_gen = tls->dt_agg_gen;
+	dbca->dbca_refs       = 0;
+	dbca->dbca_cont       = cont;
+	dbca->dbca_pool       = dbpa;
+	dbca->dbca_agg_gen    = tls->dt_agg_gen;
+	dbca->dbca_resync_seq = 2; /* The initial sequence for DTX in resync pending list is 1. */
 	D_INIT_LIST_HEAD(&dbca->dbca_sys_link);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 	if (new_pool)
@@ -1878,8 +1922,11 @@ dtx_cont_close(struct ds_cont_child *cont, bool force)
 				 * is in-progress to avoid redoing DTX re-index. We will do
 				 * that after DTX resync done globally.
 				 */
-				if (likely(!dtx_cont_opened(cont) && cont->sc_dtx_delay_reset == 0))
+				if (likely(!dtx_cont_opened(cont) &&
+					   cont->sc_dtx_delay_reset == 0)) {
 					vos_dtx_cache_reset(cont->sc_hdl, false);
+					cont->sc_dtx_indexed = 0;
+				}
 
 put:
 				dtx_put_dbca(dbca);
@@ -1890,8 +1937,8 @@ put:
 }
 
 int
-dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
-		  daos_epoch_t *epoch, uint32_t *pm_ver)
+dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti, bool leader, daos_epoch_t *epoch,
+		  uint32_t *pm_ver)
 {
 	int		rc;
 
@@ -1908,10 +1955,9 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, DCI_RESENT);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL,
+			   leader ? DCI_RESENT_LEADER : DCI_RESENT_FOLLOWER);
 	switch (rc) {
-	case DTX_ST_INITED:
-		return -DER_INPROGRESS;
 	case DTX_ST_PREPARED:
 		return 0;
 	case DTX_ST_COMMITTED:
@@ -2203,7 +2249,7 @@ again2:
 
 exec:
 	/* Execute the local operation only for once. */
-	if (dlh->dlh_forward_idx == 0)
+	if (dlh->dlh_forward_idx == 0 && likely(!dlh->dlh_leader_delay))
 		local_rc = func(dlh, func_arg, -1, NULL);
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
@@ -2249,6 +2295,12 @@ exec:
 
 			dlh->dlh_drop_cond = 0;
 		}
+	}
+
+	if (unlikely(dlh->dlh_leader_delay)) {
+		local_rc = func(dlh, func_arg, -1, NULL);
+		if (local_rc != 0 && local_rc != allow_failure)
+			D_GOTO(out, rc = local_rc);
 	}
 
 	if (likely(dlh->dlh_delay_sub_cnt == 0))
@@ -2404,38 +2456,64 @@ dtx_merge_check_result(int *tgt, int src)
 	}
 }
 
+static bool
+dtx_leader_candidate(struct ds_pool *pool, uint32_t id, struct pool_target **p_tgt)
+{
+	struct pool_target *tgt   = NULL;
+	bool                match = false;
+	int                 rc;
+
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = pool_map_find_target(pool->sp_map, id, &tgt);
+	if (rc == 1 && pool_dtx_leader_candidate_status(tgt->ta_comp.co_status)) {
+		*p_tgt = tgt;
+		match  = true;
+	}
+	ABT_rwlock_unlock(pool->sp_lock);
+
+	return match;
+}
+
 int
 dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_t *oid,
-	       uint32_t version, struct pool_target **p_tgt)
+	       struct pool_target **p_tgt)
 {
 	struct pl_map          *map    = NULL;
-	struct pool_target     *tmp    = NULL;
 	struct pl_obj_layout   *layout = NULL;
 	struct dtx_coll_target *dct;
 	struct daos_obj_md      md = {0};
 	int                     rc = 0;
 	int                     i;
+	bool                    skip;
 
 	D_ASSERT(mbs != NULL);
 
-	/* The first UPIN (and join before DTX) target is the (new) leader of the DTX. */
-	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
-		rc = ds_pool_target_status_check(pool, mbs->dm_tgts[i].ddt_id,
-						 (uint8_t)PO_COMP_ST_UPIN, p_tgt);
-		if (rc < 0)
-			D_GOTO(out, rc);
+	/*
+	 * The first UPIN/DRAIN target will be the new leader of the DTX.
+	 *
+	 * For UPIN target, even if it was in reintegrating (UP at that time) when such DTX
+	 * happened, it is still valid as the new DTX leader for such DTX related operation.
+	 * If the DTX was generated before current target being reintegrated, since target's
+	 * status has become UPIN, then it means that DTX resync for its reintegrating has
+	 * succeeded, and such old DTX should has been resynced at that time.
+	 */
 
-		if (rc == 1) {
-			if ((*p_tgt)->ta_comp.co_in_ver <= version)
-				D_GOTO(out, rc = 0);
-
-			if (tmp == NULL || tmp->ta_comp.co_in_ver > (*p_tgt)->ta_comp.co_in_ver)
-				tmp = *p_tgt;
+	for (i = 0, skip = true; i < mbs->dm_tgt_cnt; i++) {
+		if (dtx_leader_candidate(pool, mbs->dm_tgts[i].ddt_id, p_tgt)) {
+			/* Skip the first healthy target for test. */
+			if (skip && DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH) &&
+			    daos_fail_value_get() != 0) {
+				skip = false;
+				continue;
+			}
+			D_GOTO(out, rc = 0);
 		}
 	}
 
 	if (!(mbs->dm_flags & DMF_COLL_TARGET))
 		D_GOTO(out, rc = -DER_NONEXIST);
+
+	D_ASSERT(oid != NULL);
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
 	if (map == NULL) {
@@ -2462,31 +2540,13 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 		if (layout->ol_shards[i].po_target == -1 || layout->ol_shards[i].po_shard == -1)
 			continue;
 
-		rc = pool_map_find_target(map->pl_poolmap, layout->ol_shards[i].po_target, p_tgt);
-		D_ASSERT(rc == 1);
-
-		if ((*p_tgt)->ta_comp.co_status != PO_COMP_ST_UPIN)
-			continue;
-
-		if ((*p_tgt)->ta_comp.co_in_ver <= version)
+		if (dtx_leader_candidate(pool, layout->ol_shards[i].po_target, p_tgt))
 			D_GOTO(out, rc = 0);
-
-		if (tmp == NULL || tmp->ta_comp.co_in_ver > (*p_tgt)->ta_comp.co_in_ver)
-			tmp = *p_tgt;
 	}
 
 	rc = -DER_NONEXIST;
 
 out:
-	/*
-	 * If all alive participants were in rebuild/reint when DTX happened,
-	 * then the first one that became UPIN will be the DTX (new) leader.
-	 */
-	if (rc == -DER_NONEXIST && tmp != NULL) {
-		*p_tgt = tmp;
-		rc     = 0;
-	}
-
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
 
