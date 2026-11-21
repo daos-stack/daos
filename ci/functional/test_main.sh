@@ -17,6 +17,8 @@ test_tag="$TEST_TAG"
 : "${NODELIST:=localhost}"
 : "${TEST_RPMS:=false}"
 : "${STAGE_NAME:=unknown}"
+# Run the tests detached from this agent; see ci/functional/test_detached.sh
+: "${FTEST_DETACH:=false}"
 
 def_node_count="$(nodeset -c "$NODELIST")"
 : "${NODE_COUNT:=$def_node_count}"
@@ -125,8 +127,38 @@ rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 
+# Now rename the previously collected hardware test data for Jenkins
+# to use them for Junit processing.
+rename_prep_results() {
+    mkdir -p "${STAGE_NAME}/hardware_prep/"
+    for node in ${tnodes//,/ }; do
+        old_name="./hardware_prep_node_results.xml.$node"
+        new_name="${STAGE_NAME}/hardware_prep/${node}/results.xml"
+        if [ -e "$old_name" ]; then
+            mkdir -p "${STAGE_NAME}/hardware_prep/${node}"
+            mv "$old_name" "$new_name"
+        fi
+    done
+}
+
+rm -rf ftest_detached
+
 if "$hardware_ok"; then
     if "$TEST_RPMS"; then
+        if "$FTEST_DETACH"; then
+            rename_prep_results
+            FIRST_NODE="$first_node"                  \
+            TNODES="$tnodes"                          \
+            TEST_TAG="$test_tag"                      \
+            FTEST_ARG="${FTEST_ARG:-}"                \
+            WITH_VALGRIND="${WITH_VALGRIND:-}"        \
+            DAOS_HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}"  \
+            DAOS_NO_PROXY="${DAOS_NO_PROXY:-}"        \
+                ci/functional/test_detached.sh launch
+            # test_detached.sh unmounts /mnt/share once the tests finish.
+            trap - EXIT
+            exit 0
+        fi
         # shellcheck disable=SC2029
         ssh -i ci_key -l jenkins "${first_node}"      \
           "TEST_TAG=\"$test_tag\"                     \
@@ -142,16 +174,6 @@ if "$hardware_ok"; then
     fi
 fi
 
-# Now rename the previously collected hardware test data for Jenkins
-# to use them for Junit processing.
-mkdir -p "${STAGE_NAME}/hardware_prep/"
-for node in ${tnodes//,/ }; do
-    old_name="./hardware_prep_node_results.xml.$node"
-    new_name="${STAGE_NAME}/hardware_prep/${node}/results.xml"
-    if [ -e "$old_name" ]; then
-        mkdir -p "${STAGE_NAME}/hardware_prep/${node}"
-        mv "$old_name" "$new_name"
-    fi
-done
+rename_prep_results
 
 "$hardware_ok"
