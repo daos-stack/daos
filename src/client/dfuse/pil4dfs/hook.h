@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,5 +66,23 @@ query_pil4dfs_path(void);
  */
 float
 query_libc_version(void);
+
+/**
+ * query the address of a function and the size & address of a variable in a loaded shared library
+ *
+ * \param[in]	mod_name	The short name of a module
+ * \param[in]	func_name	The function name in this module
+ * \param[in]	func_addr	The address of this function in this module
+ * \param[in]	var_name	The variable name in this module
+ *
+ * \param[out]	var_size	The size of this variable
+ * \param[out]	var_addr	The address of the variable
+ *
+ * \return			0		success
+ *				otherwise	fail
+ */
+int
+query_var_addr_size(const char *mod_name, const char *func_name, char **func_addr,
+		    const char *var_name, size_t *var_size, char **var_addr);
 
 #endif
