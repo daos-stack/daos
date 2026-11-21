@@ -1,0 +1,186 @@
+"""
+  Copyright 2026 Hewlett Packard Enterprise Development LP
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
+import os
+import re
+
+import yaml
+from dlck_utils import TestDlck
+from fault_config_utils import FaultInjection
+from file_utils import distribute_files
+from run_utils import command_as_user, run_remote
+
+
+class DlckBasicTest(TestDlck):
+    """Test class for dlck command line utility.
+
+    :avocado: recursive
+    """
+    def check_dlck_result(self, result, fault_name):
+        """Check that dlck reported the expected error for an injected fault.
+        Args:
+            result (dict): The result object returned by the dlck command.
+            fault_name (str): The name of the injected fault.
+        """
+        expected_errors = ("DER_INVAL", "DER_NONEXIST", "DER_ID_MISMATCH",
+                           "DER_DF_INCOMPT", "DER_DF_INVAL", "WARNING:", "DER_PROTO")
+        warning_pattern = r"\b[1-9]\d*\s+warning(?:\(s\)|s?)\b"
+        output = f"{result.joined_stdout}\n{result.joined_stderr}"
+        expected_error_found = any(error in output for error in expected_errors)
+        warning_found = re.search(warning_pattern, output)
+        if not (expected_error_found or warning_found):
+            return [f"{fault_name}: no expected error found in dlck output: {output}"]
+        return []
+
+    def cleanup_dpdk(self):
+        """Cleanup DPDK temporary files on the remote hosts."""
+        cmd = 'rm -rf /tmp/dpdk*'
+        command_root = command_as_user(command=cmd, user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+        if not result.passed:
+            self.fail(f"{command_root} failed on {result.failed_hosts}")
+
+    def mount_dlck_tmpfs(self, tmpfs_mount):
+        """Mount 256G of memory-backed tmpfs for testing purposes on the remote hosts.
+
+        Args:
+            tmpfs_mounts (str): The mount point of the tmpfs to mount.
+        """
+        cmd = f'sudo bash -c "mkdir -p {tmpfs_mount} && ' \
+              f'mount -t tmpfs -o rw,uid=daos_server,' \
+              f'gid=daos_server,mode=0775,size=256G,huge=always tmpfs {tmpfs_mount}"'
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=cmd)
+        if not result.passed:
+            self.fail(f"{cmd} failed on {result.failed_hosts}")
+
+    def unmount_dlck_tmpfs(self, tmpfs_mount):
+        """Unmount the memory-backed tmpfs used for testing on the remote hosts.
+
+        Args:
+            tmpfs_mount (str): The mount point of the tmpfs to unmount.
+        """
+        cmd = f'umount {tmpfs_mount}'
+        command_root = command_as_user(command=cmd, user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+        self.log.info("Unmounted dlck tmpfs on remote hosts")
+        if not result.passed:
+            self.fail(f"{command_root} failed on {result.failed_hosts}")
+        return []
+
+    def test_dlck_basic(self):
+        """Basic Test: Run 'dlck' command to check
+        the health of the pool and storage.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,dlck_cmd
+        :avocado: tags=DlckBasicTest,test_dlck_basic
+        """
+        dmg = self.get_dmg_command()
+        self.log_step("Create a pool to run dlck")
+        pool = self.get_pool()
+        dlck = self.get_dlck_command()
+        dlck.pool_uuid.value = pool.uuid
+        dlck.log_dir.value = self.test_env.log_dir
+        dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
+        tmpfs_mount = "/mnt/dlck_test"
+
+        self.log_step("Perform dmg system stop to run dlck command")
+        dmg.system_stop()
+
+        if self.server_managers[0].manager.job.using_control_metadata:
+            self.log_step("Setup Memory-backed tmpfs for dlck")
+            dlck.nvme.value = os.path.join(
+                self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
+                "daos_nvme.conf")
+            self.cleanup_dpdk()
+            self.log.info("Setting DAOS_DMA_INIT_PCT=1 for dlck MDonSSD environment")
+            dlck.env["DAOS_DMA_INIT_PCT"] = "1"
+            self.mount_dlck_tmpfs(tmpfs_mount=tmpfs_mount)
+            # Make sure to clean the mounts even if the test hits an error.
+            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mount=tmpfs_mount)
+            dlck.storage.value = tmpfs_mount
+
+        self.log_step("Run dlck command to check the health of the pool and storage")
+        dlck.timeout = 120
+        result = dlck.run()
+
+        self.log_step("Perform dmg system start after running dlck command")
+        dmg.system_start()
+        if not result.passed:
+            self.fail(f"dlck failed on {result.failed_hosts}")
+        self.log.info("dlck basic test passed with no errors")
+
+    def test_dlck_basic_fault(self):
+        """Basic Fault Test: Run 'dlck' injecting basic faults.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,dlck_cmd,faults
+        :avocado: tags=DlckBasicTest,test_dlck_basic_fault
+        """
+        errors = []
+        faults_object = FaultInjection()
+        faults_dict = faults_object.get_faults_dict()
+        fault_list = self.params.get("fault_list", '/run/dlck_test_faults/*')
+        self.log.info("Test log dir %s", self.test_env.log_dir)
+        fault_inject_file = os.path.join(self.test_env.log_dir, "fi.yaml")
+        self.log.info("Fault injection file: %s", fault_inject_file)
+        self.log.info("Faults: %s", fault_list)
+        self.log.info("Faults dict: %s", faults_dict)
+        tmpfs_mount = "/mnt/dlck_test"
+        dmg = self.get_dmg_command()
+        pool = self.get_pool()
+        dlck = self.get_dlck_command()
+        dlck.pool_uuid.value = pool.uuid
+        dlck.log_dir.value = self.test_env.log_dir
+        dlck.exit_status_exception = False
+        dlck.env["D_FI_CONFIG"] = fault_inject_file
+        dlck.storage.value = self.server_managers[0].get_config_value("scm_mount")
+
+        self.log_step("Perform dmg system stop to run dlck command")
+        dmg.system_stop()
+
+        if self.server_managers[0].manager.job.using_control_metadata:
+            self.log_step("Setup Memory-backed tmpfs for dlck")
+            dlck.nvme.value = os.path.join(
+                self.server_managers[0].get_config_value("path"), "daos_control", "engine0",
+                "daos_nvme.conf")
+            self.cleanup_dpdk()
+            self.log.info("Setting DAOS_DMA_INIT_PCT=1 for dlck MDonSSD environment")
+            dlck.env["DAOS_DMA_INIT_PCT"] = "1"
+            self.mount_dlck_tmpfs(tmpfs_mount=tmpfs_mount)
+            # Make sure to clean the mounts even if the test hits an error.
+            dlck.register_cleanup_method(self.unmount_dlck_tmpfs, tmpfs_mount=tmpfs_mount)
+            dlck.storage.value = tmpfs_mount
+
+        for test_fault in fault_list:
+            if test_fault == "DAOS_FAULT_POOL_OPEN_BIO" and \
+               not self.server_managers[0].manager.job.using_control_metadata:
+                self.log.info("Skipping test fault %s as control metadata is not used", test_fault)
+                continue
+            fault_config = {
+                'fault_config': [
+                    {key: str(value) for key, value in faults_dict[test_fault].items()}]}
+            with open(fault_inject_file, 'w') as f:
+                yaml.dump(fault_config, f)
+            self.log.info("Reading the updated fault injection file contents")
+
+            with open(fault_inject_file, 'r') as f:
+                file_data = f.read()
+                self.log.info("\n %s", file_data)
+            distribute_files(self.log, self.hostlist_servers, fault_inject_file,
+                             fault_inject_file)
+            self.log_step("Run dlck command after injecting fault")
+            dlck.timeout = 120
+            result = dlck.run()
+            errors.extend(self.check_dlck_result(result, test_fault))
+
+        self.log_step("Perform dmg system start after running dlck command")
+        dmg.system_start()
+
+        if errors:
+            self.fail(f"dlck basic test failed with errors: {errors}")
+        self.log.info("dlck basic fault test passed with no errors")
