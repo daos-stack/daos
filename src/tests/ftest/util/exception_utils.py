@@ -1,5 +1,6 @@
 """
   (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,6 +13,10 @@ from general_utils import run_command
 
 class CommandFailure(Exception):
     """Base exception for this module."""
+
+
+class ExpectedFailure(Exception):
+    """Exception raised for expected failures."""
 
 
 class MPILoadError(Exception):
