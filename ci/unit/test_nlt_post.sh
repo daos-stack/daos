@@ -18,6 +18,7 @@ mkdir nlt_logs
 # the logs will be in build/nlt_logs/ on the node.
 rsync -v -rlpt -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/nlt_logs/ \
       --filter="include dnt*.log" --filter="include dnt*.log.bz2" \
+      --filter="include dnt_asan.*" \
       --filter="include dnt_fi_*_logs" --filter="include */" \
       --filter="exclude *" nlt_logs/
 

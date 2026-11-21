@@ -10,11 +10,11 @@ rm -rf dnt.*.memcheck.xml vm_test/
 NODE=${NODELIST%%,*}
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-# Copy over the install tree and some of the build tree. The memcheck NLT stage
-# ships the valgrind-tagged build (opt-daos-valgrind.tar); the fault-injection
-# stage ships the standard opt-daos.tar. Use whichever was unstashed.
+# Copy over the install tree and some of the build tree. The NLT stage ships the
+# ASan build (opt-daos-sanitizers.tar); the fault-injection stage ships the
+# standard opt-daos.tar. Use whichever was unstashed.
 opt_tar=opt-daos.tar
-[ -f opt-daos-valgrind.tar ] && opt_tar=opt-daos-valgrind.tar
+[ -f opt-daos-sanitizers.tar ] && opt_tar=opt-daos-sanitizers.tar
 rm -f opt-daos-install.tar
 ln "$opt_tar" opt-daos-install.tar
 rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" .build_vars* opt-daos-install.tar utils requirements-utest.txt jenkins@"$NODE":build/
