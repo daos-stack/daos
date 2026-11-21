@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -70,7 +71,7 @@ func IsConnErr(err error) bool {
 	for _, connCode := range []code.Code{
 		code.ClientConnectionBadHost, code.ClientConnectionClosed,
 		code.ClientConnectionNoRoute, code.ClientConnectionRefused,
-		code.ClientConnectionTimedOut,
+		code.ClientConnectionTimedOut, code.ClientConnectionNetUnreachable,
 	} {
 		if f.Code == connCode {
 			return true
@@ -93,6 +94,14 @@ func FaultConnectionNoRoute(srvAddr string) *fault.Fault {
 		code.ClientConnectionNoRoute,
 		fmt.Sprintf("the server could not be reached at the configured address (%s)", srvAddr),
 		"verify that the configured address is correct and that the server is available on the network",
+	)
+}
+
+func FaultConnectionNetUnreachable(srvAddr string) *fault.Fault {
+	return clientFault(
+		code.ClientConnectionNetUnreachable,
+		fmt.Sprintf("the network of the server at %s is unreachable", srvAddr),
+		"verify that the configured address is correct and that the connecting host has a route to the server's network",
 	)
 }
 
