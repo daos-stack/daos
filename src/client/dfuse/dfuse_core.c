@@ -929,6 +929,14 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			}
 			rc = dfs_mount_snap(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, snap_epoch,
 					    snap_name, &dfc->dfs_ns);
+			if (rc == 0) {
+				/* The snapshot may have been selected by name, interception
+				 * libraries need to know the epoch to access the same data.
+				 */
+				rc = dfs_get_snap_epoch(dfc->dfs_ns, &dfc->dfc_snap_epoch);
+				if (rc != 0)
+					dfs_umount(dfc->dfs_ns);
+			}
 		} else {
 			if (dfuse_info->di_read_handles)
 				dfc->dfs_ns = dfuse_info->di_dfs;

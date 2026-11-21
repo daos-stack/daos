@@ -306,6 +306,19 @@ dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epo
 	       const char *name, dfs_t **dfs);
 
 /**
+ * Query the epoch of the snapshot a file system was mounted at, with dfs_mount_snap() or
+ * recreated from a global handle of such a mount. This is how the epoch of a snapshot mounted by
+ * name can be found.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	epoch	Epoch of the mounted snapshot, or 0 if \a dfs is not a snapshot mount.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_get_snap_epoch(dfs_t *dfs, daos_epoch_t *epoch);
+
+/**
  * Unmount a DAOS file system. This closes open handles to the root object and
  * commits the epoch at current timestamp. The internal dfs struct is freed, so
  * further access to that dfs will be invalid.

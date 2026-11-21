@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +21,8 @@ struct ioil_cont {
 	struct ioil_pool *ioc_pool;
 	/* uuid of container */
 	uuid_t            ioc_uuid;
+	/* epoch of the snapshot the container was mounted at in dfuse, 0 if not a snapshot */
+	daos_epoch_t      ioc_snap_epoch;
 	/* dfs handle */
 	dfs_t            *ioc_dfs;
 	/* List of containers */
