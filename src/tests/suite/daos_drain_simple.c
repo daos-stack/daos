@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -955,9 +955,8 @@ run_daos_drain_simple_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	run_daos_sub_tests_only("DAOS_Drain_Simple", drain_tests,
-				ARRAY_SIZE(drain_tests), sub_tests,
-				sub_tests_size);
+	rc = run_daos_sub_tests_only("DAOS_Drain_Simple", drain_tests, ARRAY_SIZE(drain_tests),
+				     sub_tests, sub_tests_size);
 
 	par_barrier(PAR_COMM_WORLD);
 
