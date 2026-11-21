@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -97,7 +97,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, test.MockUUID(), "label:foo")
 			case "pool get-prop":
 				testArgs = append(testArgs, test.MockUUID(), "label")
-			case "pool extend", "pool exclude", "pool drain", "pool reintegrate":
+			case "pool extend", "pool exclude", "pool drain", "pool reintegrate", "pool discard", "pool query-discard":
 				testArgs = append(testArgs, test.MockUUID(), "--ranks", "0")
 			case "pool query-targets":
 				testArgs = append(testArgs, test.MockUUID(), "--rank", "0", "--target-idx", "1,3,5,7")

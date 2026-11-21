@@ -1072,6 +1072,9 @@ NB: with `no_data_sync` enabled, containers will be turned to read-only, daos wo
 rebuild to restore the pool data redundancy on the surviving storage engines if there are
 dead rank events.
 
+Only `data_sync` supports [manual discard before reintegration](#manual-discard-before-reintegration)
+to perform local data cleanup and an optional quiesce period in advance.
+
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
@@ -1424,6 +1427,98 @@ $ dmg pool reintegrate $DAOS_POOL --ranks=5 --target-idx=0,1
     recommended for now to try to reintegrate all engine ranks reported as disabled in
     `dmg pool query`. The string output after `Disabled ranks:` in the pool query output can
     be used as the `--ranks=<disabled_ranks>` option value in `dmg pool reintegrate` command.
+
+#### Manual Discard Before Reintegration
+
+The automatic discard step of `data_sync` reintegration can trigger NVMe garbage collection
+that competes with user I/O, causing severe performance degradation or even temporary service
+unavailability. Manual discard allows cleanup and the resulting NVMe GC to run beforehand,
+and thus eliminates this impact on user I/O during reintegration.
+
+`dmg pool discard` asynchronously removes local pool data from excluded targets before
+`data_sync` reintegration. An optional quiesce period allows time for NVMe garbage collection,
+but does not detect or guarantee its completion. This step does not enable targets or replace
+reintegration.
+
+Reintegration's automatic discard step remains unchanged. Discard is idempotent, and reintegration
+can proceed whether or not a previously submitted manual discard has completed. **You can safely skip
+manual discard or start reintegration without waiting for it to complete**; reintegration will continue
+to work as before. However, doing so does not avoid the associated performance degradation.
+
+!!! warning
+    Discard is irreversible. Verify the selected pool and ranks, and ensure surviving replicas
+    or EC fragments can recover the data. Target-state checks alone do not guarantee recoverability.
+    Only ranks whose targets are all DOWN or DOWNOUT can be manually discarded; active targets are
+    protected by the state checks.
+
+Requirements:
+
+- Use an administrator certificate when security is enabled.
+- The pool must use `reintegration:data_sync`; `no_data_sync` and `incremental` are rejected.
+- Engines must be running and reachable, with the pool started locally.
+- All targets on each selected rank must be `DOWN` or `DOWNOUT`, even when selecting a subset
+  with `--target-idx`. Partially excluded ranks can be rejected with `DER_NO_PERM`.
+
+Both commands require a pool label or UUID and `--ranks` (for example, `1,3-4`). Discard also accepts
+`--target-idx`, a comma-separated list applied to every selected rank; omitting it selects all targets.
+`--quiesce-sec` sets the wait time for NVMe GC after cleanup on each rank: the default is `180`, and
+`0` disables it.
+
+The following example assumes ranks `2` and `3` are already excluded from pool `tank`. Substitute your
+own pool and ranks; see [Manual Exclusion](#manual-exclusion) if exclusion is needed.
+
+1. Check the prerequisites, including target states and whether rebuild is still running:
+
+    ```bash
+    dmg pool get-prop tank reintegration
+    dmg system query
+    dmg pool query --health-only tank
+    dmg pool query-targets tank --rank=2
+    dmg pool query-targets tank --rank=3
+    ```
+
+2. Submit discard, then poll its progress:
+
+    ```bash
+    dmg pool discard tank --ranks=2,3 --quiesce-sec=180
+    ```
+
+    Success from `discard` means acceptance, not completion.
+    Repeat `query-discard` until every requested rank reports `done`. For example:
+
+    ```bash
+    dmg pool query-discard tank --ranks=2,3
+    rank 2: discarding
+    rank 3: discarding
+
+    dmg pool query-discard tank --ranks=2,3
+    rank 2: quiescing (waiting for NVMe GC)
+    rank 3: quiescing (waiting for NVMe GC)
+
+    dmg pool query-discard tank --ranks=2,3
+    rank 2: done (10 sec ago)
+    rank 3: done (5 sec ago)
+    ```
+
+3. Once all requested ranks are done, reintegrate and verify application data:
+
+    ```bash
+    dmg pool reintegrate tank --ranks=2,3
+    dmg pool query --health-only tank
+    ```
+
+For automation, use `dmg --json pool query-discard tank --ranks=2,3`. Check the outer `status`/`error`,
+the complete rank set, and each `response.states` entry's `phase` and `status`. A successful query
+can contain failed ranks, including unreachable engines or engines without the pool started locally.
+Use a polling timeout.
+
+| `phase` | Name | Meaning |
+| --- | --- | --- |
+| `0` | `NEVER` | No discard recorded for this local pool instance; not complete. |
+| `1` | `DISCARDING` | Local data cleanup is running. |
+| `2` | `QUIESCING` | Cleanup finished; the quiesce period is still running. |
+| `3` | `DONE` | Cleanup and quiesce succeeded; `done_age_sec` is seconds since completion. |
+| `4` | `FAILED` | Cleanup or the rank query failed; inspect the entry's `status`. |
 
 #### System Reintegrate
 
