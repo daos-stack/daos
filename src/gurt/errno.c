@@ -95,3 +95,75 @@ d_errdesc(int errnum)
 out:
 	return buf;
 }
+
+int
+d_der2errno(int err)
+{
+	if (err > 0)
+		return EINVAL;
+
+	switch (err) {
+	case -DER_SUCCESS:
+		return 0;
+	case -DER_NO_PERM:
+	case -DER_EP_RO:
+	case -DER_EP_OLD:
+	case -DER_CONT_DESTROYING:
+		return EPERM;
+	case -DER_ENOENT:
+	case -DER_NONEXIST:
+		return ENOENT;
+	case -DER_INVAL:
+	case -DER_NOTYPE:
+	case -DER_NOSCHEMA:
+	case -DER_NOLOCAL:
+	case -DER_IO_INVAL:
+		return EINVAL;
+	case -DER_NO_HDL:
+		return EBADF;
+	case -DER_KEY2BIG:
+	case -DER_REC2BIG:
+		return E2BIG;
+	case -DER_EXIST:
+		return EEXIST;
+	case -DER_UNREACH:
+		return EHOSTUNREACH;
+	case -DER_NOSPACE:
+		return ENOSPC;
+	case -DER_ALREADY:
+		return EALREADY;
+	case -DER_DOS:
+	case -DER_NOMEM:
+		return ENOMEM;
+	case -DER_TIMEDOUT:
+		return ETIMEDOUT;
+	case -DER_BUSY:
+	case -DER_EQ_BUSY:
+		return EBUSY;
+	case -DER_AGAIN:
+		return EAGAIN;
+	case -DER_PROTO:
+		return EPROTO;
+	case -DER_IO:
+		return EIO;
+	case -DER_CANCELED:
+		return ECANCELED;
+	case -DER_OVERFLOW:
+		return EOVERFLOW;
+	case -DER_BADPATH:
+	case -DER_NOTDIR:
+		return ENOTDIR;
+	case -DER_STALE:
+		return ESTALE;
+	case -DER_TX_RESTART:
+		return ERESTART;
+	case -DER_INPROGRESS:
+		return EINPROGRESS;
+	case -DER_NOTSUPPORTED:
+		return ENOTSUP;
+	case -DER_NOSYS:
+		return ENOSYS;
+	default:
+		return EIO;
+	}
+}

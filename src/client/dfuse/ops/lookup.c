@@ -226,7 +226,7 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		if (rc == EINVAL) {
+		if (rc == EINVAL || rc == EBADF) {
 			rc = ENOLINK;
 			DHS_INFO(dfs, rc, "dfs_lookup() failed");
 		} else {

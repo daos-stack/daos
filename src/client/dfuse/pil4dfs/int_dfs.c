@@ -3334,7 +3334,7 @@ out_org:
 
 out_err:
 	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
-		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
+		     ((rc == EIO || rc == EINVAL || rc == EBADF) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
@@ -3391,7 +3391,7 @@ out_org:
 
 out_err:
 	use_kernel = need_kernel_to_resolve(rc, dfs_mt, parent, item_name, parent_dir) ||
-		     ((rc == EIO || rc == EINVAL) && d_compatible_mode);
+		     ((rc == EIO || rc == EINVAL || rc == EBADF) && d_compatible_mode);
 	if (parent != NULL)
 		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);

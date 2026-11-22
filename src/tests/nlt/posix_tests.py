@@ -1456,6 +1456,28 @@ class PosixTests():
         if dfuse.stop(ignore_einval=True):
             self.fatal_errors = True
 
+    def test_cont_evict(self):
+        """Check that reading through an evicted container handle fails with EBADF"""
+        dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        dfuse.start('cont-evict')
+
+        fname = join(dfuse.dir, 'file')
+        with open(fname, 'w', encoding='ascii') as fd:
+            fd.write('data')
+
+        with open(fname, 'r', encoding='ascii') as fd:
+            rc = run_daos_cmd(self.conf,
+                              ['container', 'evict', self.pool.id(), self.container.id(), '--all'])
+            assert rc.returncode == 0, rc
+            try:
+                fd.read()
+                assert False
+            except OSError as error:
+                assert error.errno == errno.EBADF, error
+
+        if dfuse.stop(ignore_einval=True):
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_rename_clobber(self):
         """Test that rename clobbers files correctly
