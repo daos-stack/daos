@@ -1628,6 +1628,9 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	pool->vp_rdb = !!(flags & VOS_POF_RDB);
 	pool->vp_ext_chkpt = !!(flags & VOS_POF_EXTERNAL_CHKPT);
 
+	if (flags & VOS_POF_FOR_CHECK)
+		pool->vp_for_check = 1;
+
 	/*
 	 * Insert the pool into the uuid hash table before full opened, because subsequent
 	 * pool_open process maybe yield and other pool_lookup for the same UUID will find
@@ -1817,11 +1820,20 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
-		if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
-		    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
+		if (!(flags & VOS_POF_FOR_CHECK) && ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
+
+		/*
+		 * Set vp_for_check only for the first opener with VOS_POF_FOR_CHECK flag. If the
+		 * pool has already been opened without such flag, then current VOS_POF_FOR_CHECK
+		 * will not set vp_for_check. Conversely, if the pool was formerly open with such
+		 * flag but now is double opened without such flag, then clear vp_for_check.
+		 */
+		if (!(flags & VOS_POF_FOR_CHECK))
+			pool->vp_for_check = 0;
+
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
 		checker_print_indent_dec(ck);
