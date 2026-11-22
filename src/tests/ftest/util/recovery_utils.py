@@ -10,19 +10,6 @@ from exception_utils import CommandFailure
 from run_utils import command_as_user, run_remote
 
 
-def run_cmd_check_result(test, command):
-    """Run a command as root on all test servers and fail if it fails.
-
-    Args:
-        test (TestWithServers): Test instance providing logging, hosts, and failure handling.
-        command (str): Command to execute.
-    """
-    command_root = command_as_user(command=command, user="root")
-    result = run_remote(log=test.log, hosts=test.hostlist_servers, command=command_root)
-    if not result.passed:
-        test.fail(f"{command} failed on {result.failed_hosts}!")
-
-
 def clean_mounts(test, tmpfs_mounts):
     """Unmount and remove directories used for MD-on-SSD testing.
 

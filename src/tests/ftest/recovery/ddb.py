@@ -15,8 +15,8 @@ from file_utils import distribute_files
 from general_utils import (DaosTestError, create_string_buffer, get_random_string, report_errors,
                            run_command)
 from pydaos.raw import DaosObjClass, IORequest
-from recovery_utils import clean_mounts, run_cmd_check_result
-from run_utils import get_clush_command
+from recovery_utils import clean_mounts
+from run_utils import command_as_user, get_clush_command, run_remote
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,
@@ -154,7 +154,11 @@ class DdbTest(TestWithServers):
             cleanup_errors = clean_mounts(self, [self.daos_load_path])
             if cleanup_errors:
                 self.fail("\n".join(cleanup_errors))
-            run_cmd_check_result(self, command=f"mkdir {self.daos_load_path}")
+            command = f"mkdir {self.daos_load_path}"
+            command_root = command_as_user(command=command, user="root")
+            result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+            if not result.passed:
+                self.fail(f"{command} failed on {result.failed_hosts}!")
             self.register_cleanup(clean_mounts, test=self, tmpfs_mounts=[self.daos_load_path])
 
             self.log_step(f"MD-on-SSD: Load pool dir to {self.daos_load_path}")

@@ -12,7 +12,7 @@ from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
-from recovery_utils import clean_mounts, run_cmd_check_result, wait_for_check_complete
+from recovery_utils import clean_mounts, wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
@@ -337,7 +337,11 @@ class PoolListConsolidationTest(TestWithServers):
         cleanup_errors = clean_mounts(self, tmpfs_mounts)
         if cleanup_errors:
             self.fail("\n".join(cleanup_errors))
-        run_cmd_check_result(self, command=f"mkdir -p {' '.join(tmpfs_mounts)}")
+        command = f"mkdir -p {' '.join(tmpfs_mounts)}"
+        command_root = command_as_user(command=command, user="root")
+        result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+        if not result.passed:
+            self.fail(f"{command} failed on {result.failed_hosts}!")
         # Make sure to clean the mounts even if the test hits an error.
         self.register_cleanup(clean_mounts, test=self, tmpfs_mounts=tmpfs_mounts)
 

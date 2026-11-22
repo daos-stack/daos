@@ -11,7 +11,7 @@ from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
 from ior_test_base import IorTestBase
-from recovery_utils import clean_mounts, run_cmd_check_result, wait_for_check_complete
+from recovery_utils import clean_mounts, wait_for_check_complete
 from run_utils import command_as_user, run_remote
 
 
@@ -254,7 +254,7 @@ class PoolMembershipTest(IorTestBase):
         :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
-        hosts = list(set(self.server_managers[0].ranks.values()))
+        hosts = self.hostlist_servers
         md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
         tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
 
@@ -276,7 +276,10 @@ class PoolMembershipTest(IorTestBase):
             if cleanup_errors:
                 self.fail("\n".join(cleanup_errors))
             command = f"mkdir -p {tmpfs_mounts[0]} {tmpfs_mounts[1]}"
-            run_cmd_check_result(self, command=command)
+            command_root = command_as_user(command=command, user="root")
+            result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+            if not result.passed:
+                self.fail(f"{command} failed on {result.failed_hosts}!")
 
             self.log_step(f"MD-on-SSD: Load pool dir to {tmpfs_mounts}.")
             for host in hosts:
@@ -309,10 +312,6 @@ class PoolMembershipTest(IorTestBase):
 
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable(stop=False)
-
-        # If we call check start immediately after check enable, checker may not detect the fault.
-        # Developer is fixing this issue.
-        time.sleep(3)
 
         dmg_command.check_start()
 
