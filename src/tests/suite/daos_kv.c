@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -271,12 +272,14 @@ simple_put_get_old(void **state)
 static void
 kv_cond_ops(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	daos_handle_t	oh;
-	int		val, val_out;
-	size_t		size;
-	int		rc;
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	daos_handle_t th;
+	int           val;
+	int           val_out;
+	size_t        size;
+	int           rc;
 
 	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
@@ -305,11 +308,35 @@ kv_cond_ops(void **state)
 	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1", sizeof(int), &val, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
 
+	print_message("Conditional INSERT of existing Key in transaction (Should fail)\n");
+	rc = daos_tx_open(arg->coh, &th, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_kv_put(oh, th, DAOS_COND_KEY_INSERT, "Key1", sizeof(int), &val, NULL);
+	assert_rc_equal(rc, -DER_EXIST);
+	rc = daos_tx_abort(th, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_tx_close(th, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Conditional INSERT of non-existent Key in transaction\n");
+	rc = daos_tx_open(arg->coh, &th, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_kv_put(oh, th, DAOS_COND_KEY_INSERT, "TxKey", sizeof(int), &val, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_tx_commit(th, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_tx_close(th, NULL);
+	assert_rc_equal(rc, 0);
+
 	size = sizeof(int);
 	print_message("Conditional FETCH of existing Key\n");
 	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key1", &size, &val_out, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(val_out, 1);
+	size = sizeof(int);
+	rc   = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "TxKey", &size, &val_out, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(val_out, val);
 
 	print_message("Conditional Remove non existing Key (should fail)\n");
 	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key2", NULL);
