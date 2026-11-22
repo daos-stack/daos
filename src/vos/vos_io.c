@@ -1600,7 +1600,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 
 	if (ioc->ic_skip_akey_support) {
 		flags |= SUBTR_FLAT;
-		if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
+		if (ioc->ic_iod_nr > 0 && ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
 			flags |= SUBTR_EVT;
 	}
 
@@ -1649,6 +1649,9 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	}
 
 fetch_akey:
+	if (ioc->ic_iod_nr == 0)
+		goto out;
+
 	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		iod_set_cursor(ioc, 0);
 		rc = fetch_value(ioc, &ioc->ic_iods[0], toh, &ioc->ic_epr, standalone);
