@@ -254,7 +254,9 @@ cr_system_stop(bool force)
 static inline int
 cr_rank_reint(uint32_t rank, bool start)
 {
-	int	rc;
+	char state[32];
+	int  rc;
+	int  i;
 
 	print_message("CR: reintegrating the rank %u ...\n", rank);
 	rc = dmg_system_reint_rank(dmg_config_file, rank);
@@ -264,9 +266,27 @@ cr_rank_reint(uint32_t rank, bool start)
 	if (start) {
 		print_message("CR: starting the rank %u ...\n", rank);
 		rc = dmg_system_start_rank(dmg_config_file, rank);
+		if (rc != 0)
+			return rc;
+
+		for (i = 0; i < CR_WAIT_MAX; i++) {
+			rc = dmg_system_query_rank_state(dmg_config_file, rank, state,
+							 sizeof(state));
+			if (rc == 0 && strcmp(state, "checkerstarted") == 0) {
+				print_message("Rank %u is 'checkerstarted' after %d seconds\n",
+					      rank, i * 2);
+				return 0;
+			}
+
+			sleep(2);
+		}
+
+		print_message("Rank %u is not 'checkerstarted' after %d seconds: rc %d, state %s\n",
+			      rank, CR_WAIT_MAX * 2, rc, rc == 0 ? state : "unknown");
+		return rc != 0 ? rc : -DER_TIMEDOUT;
 	}
 
-	return rc;
+	return 0;
 }
 
 static struct daos_check_report_info *
