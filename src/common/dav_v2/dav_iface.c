@@ -318,6 +318,9 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 
 	hdl->do_booted = 1;
 
+	/* Pin the SOEMBs now so that dav_tx_begin does not stall waiting for them. */
+	heap_soemb_active_set(hdl->do_heap);
+
 	return hdl;
 out5:
 	dav_destroy_clogs(hdl);
