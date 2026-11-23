@@ -333,6 +333,10 @@ func (mi *MockInstance) IsReady() bool {
 	return mi.cfg.Ready.Load()
 }
 
+func (mi *MockInstance) memberState() system.MemberState {
+	return mi.LocalState()
+}
+
 func (mi *MockInstance) LocalState() system.MemberState {
 	return mi.cfg.LocalState
 }
@@ -379,7 +383,7 @@ func (mi *MockInstance) isAwaitingFormat() bool {
 	return false
 }
 
-func (mi *MockInstance) getExitErr() error {
+func (mi *MockInstance) lastErr() error {
 	return mi.cfg.ExitErr
 }
 

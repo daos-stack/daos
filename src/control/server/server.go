@@ -9,6 +9,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -243,6 +244,9 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
+	cliCfg.SystemName = srv.cfg.SystemName
+	cliCfg.ControlPort = srv.cfg.ControlPort
+	cliCfg.HostList = []string{fmt.Sprintf("localhost:%d", srv.cfg.ControlPort)}
 	rpcClient := control.NewClient(
 		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),

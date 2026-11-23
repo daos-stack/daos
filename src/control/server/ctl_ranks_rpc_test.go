@@ -246,6 +246,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		missingSB         bool
 		engineCount       int
 		instancesStopped  bool
+		instancesHeld     bool
 		instancesDontStop bool
 		req               *ctlpb.RanksReq
 		timeout           time.Duration
@@ -309,6 +310,14 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				{Rank: 1, State: msStopped},
 			},
 		},
+		"instances held": {
+			req:           &ctlpb.RanksReq{Ranks: "0-3"},
+			instancesHeld: true,
+			expResults: []*sharedpb.RankResult{
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -350,9 +359,13 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				}
 
 				trc := &engine.TestRunnerConfig{}
-				if !tc.instancesStopped {
+				if !tc.instancesStopped && !tc.instancesHeld {
 					trc.Running.SetTrue()
 					ei.ready.SetTrue()
+				}
+				if tc.instancesHeld {
+					ei.onAwaitStart = func() {}
+					ei.waitStart.SetTrue()
 				}
 				trc.SignalCb = func(idx uint32, sig os.Signal) {
 					signalsSent.Store(idx, sig)
@@ -925,7 +938,7 @@ func TestServer_CtlSvc_StartEngines(t *testing.T) {
 				srv.onAwaitStart = func() {}
 				srv.waitStart.Store(tc.instancesHeld)
 				srv.waitFormat.Store(tc.instancesAwaitFormat)
-				srv.setExitErr(tc.staleExitErr)
+				srv._lastErr = tc.staleExitErr
 				if !tc.instancesAwaitFormat {
 					srv.setSuperblock(&Superblock{UUID: test.MockUUID(int32(i))})
 				}

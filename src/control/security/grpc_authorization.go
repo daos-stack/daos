@@ -50,7 +50,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/EnginePreflight":          {ComponentServer},
 	"/mgmt.MgmtSvc/ClusterEvent":             {ComponentServer},
 	"/mgmt.MgmtSvc/LeaderQuery":              {ComponentAdmin},
-	"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemQuery":              {ComponentAdmin, ComponentServer},
 	"/mgmt.MgmtSvc/SystemErase":              {ComponentAdmin, ComponentServer},
 	"/mgmt.MgmtSvc/SystemStart":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemInitialize":         {ComponentAdmin},

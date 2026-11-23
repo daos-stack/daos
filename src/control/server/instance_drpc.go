@@ -42,6 +42,13 @@ func (ei *EngineInstance) getDrpcSocket() string {
 	return ei._drpcSocket
 }
 
+// lastErr returns the error recorded when the engine process last exited.
+func (ei *EngineInstance) lastErr() error {
+	ei.RLock()
+	defer ei.RUnlock()
+	return ei._lastErr
+}
+
 func (ei *EngineInstance) getDrpcClient() drpc.DomainSocketClient {
 	ei.Lock()
 	defer ei.Unlock()
@@ -139,12 +146,12 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 		return nil // no rank to return result for
 	}
 
-	localState := ei.LocalState()
+	localState := ei.memberState()
 	if localState != system.MemberStateReady {
 		// member not ready for dRPC comms, annotate result with last error if stopped
 		var err error
 		if localState == system.MemberStateStopped {
-			err = ei.getExitErr()
+			err = ei.lastErr()
 		}
 		return system.NewMemberResult(rank, err, localState)
 	}

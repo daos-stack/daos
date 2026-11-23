@@ -3,11 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from run_utils import run_remote, stop_processes
+from run_utils import stop_processes
 
 
 class SystemStartupTest(TestWithServers):
@@ -43,45 +41,13 @@ class SystemStartupTest(TestWithServers):
         return host, self.server_managers[0].get_host_ranks(host)[0]
 
     def restart_server(self, host):
-        """Kill daos_server on a host and start it again without starting its ranks.
+        """Kill daos_server on a host and start it again.
 
         Args:
             host (NodeSet): host to restart
         """
         stop_processes(self.log, host, self.server_managers[0].manager.job.command_regex)
-        self.server_managers[0].restart(host, start_ranks=False)
-
-    def engine_running(self, host):
-        """Report whether a daos_engine process is running on the host.
-
-        Args:
-            host (NodeSet): host to check
-
-        Returns:
-            bool: True if an engine process was found
-        """
-        return run_remote(self.log, host, "pgrep daos_engine", verbose=False).passed
-
-    def verify_no_engine(self, host, seconds):
-        """Fail if an engine process starts on the host within the given time.
-
-        Args:
-            host (NodeSet): host to check
-            seconds (int): seconds to keep checking
-        """
-        for _ in range(seconds):
-            if self.engine_running(host):
-                self.fail(f"An engine started on {host}")
-            time.sleep(1)
-
-    def restore_restart_on_boot(self):
-        """Re-enable restart_engines_on_boot.
-
-        Returns:
-            list: no errors, as register_cleanup expects
-        """
-        self.get_dmg_command().system_set_prop("restart_engines_on_boot:true")
-        return []
+        self.server_managers[0].restart(host)
 
     def verify_rank_state(self, rank, state, checks):
         """Fail unless the rank reaches the state within the number of checks.
@@ -140,46 +106,4 @@ class SystemStartupTest(TestWithServers):
         self.log_step(f"Kill and restart daos_server on {host}")
         self.restart_server(host)
         self.log_step(f"Rank {rank} rejoins on its own")
-        self.verify_rank_state(rank, "joined", 60)
-
-    def test_stopped_rank_stays_stopped(self):
-        """A rank stopped with dmg stays stopped when its server restarts.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,system_startup
-        :avocado: tags=SystemStartupTest,test_stopped_rank_stays_stopped
-        """
-        dmg = self.get_dmg_command()
-        host, rank = self.pick_rank()
-        self.log_step(f"Stop rank {rank} and restart daos_server on {host}")
-        dmg.system_stop(ranks=str(rank))
-        self.verify_rank_state(rank, "stopped", 10)
-        self.restart_server(host)
-        self.log_step(f"Rank {rank} stays stopped")
-        self.verify_no_engine(host, 20)
-        self.verify_rank_state(rank, "stopped", 1)
-        self.log_step(f"Start rank {rank}")
-        dmg.system_start(ranks=str(rank))
-        self.verify_rank_state(rank, "joined", 60)
-
-    def test_restart_engines_on_boot(self):
-        """No rank rejoins on restart while restart_engines_on_boot is false.
-
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,system_startup
-        :avocado: tags=SystemStartupTest,test_restart_engines_on_boot
-        """
-        dmg = self.get_dmg_command()
-        host, rank = self.pick_rank()
-        self.log_step("Disable engine restart on boot")
-        self.register_cleanup(self.restore_restart_on_boot)
-        dmg.system_set_prop("restart_engines_on_boot:false")
-        self.log_step(f"Kill and restart daos_server on {host}")
-        self.restart_server(host)
-        self.log_step(f"Rank {rank} stays down")
-        self.verify_no_engine(host, 20)
-        self.log_step(f"Start rank {rank}")
-        dmg.system_start(ranks=str(rank))
         self.verify_rank_state(rank, "joined", 60)

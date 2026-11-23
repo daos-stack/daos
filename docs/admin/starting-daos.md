@@ -15,10 +15,7 @@ All commands except the `daos` command should be run as root.
 
 - Start the `daos_server` daemon on all server nodes,
   for example by running `systemctl start daos_server` in a parallel shell.
-  Each server restarts the engines whose ranks were running when the system
-  was last up. Ranks stopped with `dmg system stop` stay stopped until
-  `dmg system start`, and if the `restart_engines_on_boot` system property is
-  `false`, all engines wait for `dmg system start`.
+  Each server restarts the engines whose ranks are members of the system.
 
 - Wait for the DAOS control plane and DAOS engines to start on all servers.
   Depending on the number and capacity of the NVMe disks in the servers,

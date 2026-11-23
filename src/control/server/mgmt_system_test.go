@@ -1856,11 +1856,10 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 	notMember := "not a system member; awaiting dmg system initialize or extend"
 
 	for name, tc := range map[string]struct {
-		req       *mgmtpb.EnginePreflightReq
-		members   system.Members
-		noRestart bool
-		expResp   *mgmtpb.EnginePreflightResp
-		expErr    error
+		req     *mgmtpb.EnginePreflightReq
+		members system.Members
+		expResp *mgmtpb.EnginePreflightResp
+		expErr  error
 	}{
 		"nil req": {
 			req:    (*mgmtpb.EnginePreflightReq)(nil),
@@ -1886,7 +1885,7 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 				Engines: []*mgmtpb.EnginePreflightResp_Engine{hold(0, notMember)},
 			},
 		},
-		"stopped rank": {
+		"stopped rank starts": {
 			req: &mgmtpb.EnginePreflightReq{Engines: engines(1)},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
@@ -1894,33 +1893,7 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 			},
 			expResp: &mgmtpb.EnginePreflightResp{
 				Engines: []*mgmtpb.EnginePreflightResp_Engine{
-					hold(0, "rank 1 is Stopped; awaiting dmg system start"),
-				},
-			},
-		},
-		"restart on boot disabled": {
-			req: &mgmtpb.EnginePreflightReq{Engines: engines(0)},
-			members: system.Members{
-				mockMember(t, 0, 1, "joined"),
-			},
-			noRestart: true,
-			expResp: &mgmtpb.EnginePreflightResp{
-				Engines: []*mgmtpb.EnginePreflightResp_Engine{
-					hold(0, "restart_engines_on_boot is false; awaiting dmg system start"),
-				},
-			},
-		},
-		"restart on boot disabled speaks before the rank state": {
-			req: &mgmtpb.EnginePreflightReq{Engines: engines(1, uint32(ranklist.NilRank))},
-			members: system.Members{
-				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "stopped"),
-			},
-			noRestart: true,
-			expResp: &mgmtpb.EnginePreflightResp{
-				Engines: []*mgmtpb.EnginePreflightResp_Engine{
-					hold(0, "restart_engines_on_boot is false; awaiting dmg system start"),
-					hold(1, notMember),
+					start(0),
 				},
 			},
 		},
@@ -1937,12 +1910,12 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 			req: &mgmtpb.EnginePreflightReq{Engines: engines(0, 1, uint32(ranklist.NilRank))},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
-				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 1, 1, "adminexcluded"),
 			},
 			expResp: &mgmtpb.EnginePreflightResp{
 				Engines: []*mgmtpb.EnginePreflightResp_Engine{
 					start(0),
-					hold(1, "rank 1 is Stopped; awaiting dmg system start"),
+					hold(1, "rank 1 is AdminExcluded; awaiting dmg system clear-exclude"),
 					hold(2, notMember),
 				},
 			},
@@ -1956,13 +1929,6 @@ func TestServer_MgmtSvc_EnginePreflight(t *testing.T) {
 			if tc.req != nil && tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
 			}
-			if tc.noRestart {
-				if err := system.SetUserProperty(svc.sysdb, svc.systemProps,
-					daos.SystemPropertyRestartEnginesOnBoot.String(), "false"); err != nil {
-					t.Fatal(err)
-				}
-			}
-
 			gotResp, gotErr := svc.EnginePreflight(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -2013,12 +1979,19 @@ func TestServer_MgmtSvc_SystemInitialize(t *testing.T) {
 		hasPool    bool
 		joinLater  system.Members
 		mResps     []*control.HostResponse
+		ctxTimeout time.Duration
 		expResults []*sharedpb.RankResult
 		expErr     error
 	}{
 		"nil req": {
 			req:    (*mgmtpb.SystemInitializeReq)(nil),
 			expErr: errors.New("nil request"),
+		},
+		"caller gives up": {
+			req:        &mgmtpb.SystemInitializeReq{Hosts: "10.0.0.[1-2]"},
+			mResps:     []*control.HostResponse{mockStartEnginesResp(1, 0, 1), mockStartEnginesResp(2, 2, 3)},
+			ctxTimeout: 2 * instanceUpdateDelay,
+			expErr:     context.DeadlineExceeded,
 		},
 		"not system leader": {
 			req:    &mgmtpb.SystemInitializeReq{Sys: "quack"},
@@ -2163,7 +2136,13 @@ func TestServer_MgmtSvc_SystemInitialize(t *testing.T) {
 				}()
 			}
 
-			gotResp, gotErr := svc.SystemInitialize(test.Context(t), tc.req)
+			ctx := test.Context(t)
+			if tc.ctxTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
+				defer cancel()
+			}
+			gotResp, gotErr := svc.SystemInitialize(ctx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -4244,12 +4223,8 @@ func TestServer_MgmtSvc_eraseSysdb(t *testing.T) {
 }
 
 func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
-	mockAddr := func(a int32) *net.TCPAddr {
-		return test.MockHostAddr(a)
-	}
-
 	for name, tc := range map[string]struct {
-		peers     []*net.TCPAddr
+		peers     []string
 		uErr      error
 		expErrMsg string
 	}{
@@ -4257,7 +4232,7 @@ func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
 			peers: nil,
 		},
 		"peer erase request fails": {
-			peers:     []*net.TCPAddr{mockAddr(1)},
+			peers:     []string{"10.0.0.1:10001"},
 			uErr:      errors.New("mock rpc error"),
 			expErrMsg: "erase request to MS replica peer 10.0.0.1:10001 failed: System-Query command failed: mock rpc error",
 		},
@@ -4275,6 +4250,36 @@ func TestServer_MgmtSvc_eraseReplicas(t *testing.T) {
 			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 		})
 	}
+}
+
+// TestServer_MgmtSvc_eraseReplicas_systemName verifies that eraseReplicas() explicitly
+// sets the system name on the forwarded request, rather than relying on svc.rpcClient's
+// configured default, so the peer resolves the request against the correct system even
+// if that default is ever left unset.
+func TestServer_MgmtSvc_eraseReplicas_systemName(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(t, log)
+	mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
+		UnaryResponseSet: []*control.UnaryResponse{
+			control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{}),
+			control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{}),
+		},
+	})
+	svc.rpcClient = mi
+
+	if err := svc.eraseReplicas(test.Context(t), []string{test.MockHostAddr(1).String()}); err != nil {
+		t.Fatal(err)
+	}
+
+	test.AssertEqual(t, 2, len(mi.SentReqs), "number of requests sent")
+	qReq, ok := mi.SentReqs[0].(*control.SystemQueryReq)
+	test.AssertTrue(t, ok, "first request should be a system query")
+	eReq, ok := mi.SentReqs[1].(*control.SystemEraseReq)
+	test.AssertTrue(t, ok, "second request should be a system erase")
+	test.AssertEqual(t, svc.sysdb.SystemName(), qReq.Sys, "system name in the pre-check query")
+	test.AssertEqual(t, svc.sysdb.SystemName(), eReq.Sys, "system name in the erase request")
 }
 
 func TestServer_MgmtSvc_checkReplaceRank(t *testing.T) {
@@ -4705,6 +4710,7 @@ func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
 				svc := mgmtSystemTestSetup(t, l, system.Members{}, nil)
 				return svc
 			},
+			expErr: system.ErrEmptyGroupMap,
 		},
 		"map version already updated": {
 			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {

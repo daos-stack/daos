@@ -608,7 +608,7 @@ following `daos_server` log entries to indicate the parameters are written to
 the engine's NVMe config:
 
 ```bash
-DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugRanges:[] Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
 Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
 ```
 
@@ -728,6 +728,19 @@ dev-replace operation performed successfully on the following host: boro-11:1000
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
 be for testing or for accidental device eviction.
+
+- Restricting hotplug to a PCI domain/bus-ID range:
+
+When hotplug is enabled, each engine only reacts to hotplug events on NVMe SSDs whose PCI
+domain and bus-ID fall within one of a set of ranges that are derived automatically from the
+combined `bdev_list` of all of the engine's nvme-class storage tiers; this matches exactly the
+devices the engine was formatted with (up to a fixed limit of 64 filter entries per engine),
+including on multi-PCI-segment platforms where a single engine's SSDs span more than one
+non-zero PCI domain. If Volume Management Devices (VMD) are enabled, no PCI-domain/bus-ID
+filtering is applied at all, since VMD backing device addresses are unrelated to the owning
+NUMA node's PCI domain.
+
+This filter is not intended to be configured manually, and admins should not need to set it.
 
 #### Identification
 
@@ -972,16 +985,6 @@ The output table will indicate action and result.
 While the engines are stopped, the DAOS servers will continue to
 operate and listen on the management network.
 
-A stopped rank leaves the system group at once, so its pools exclude it
-under their self-heal policy just as they would a failed rank. To stop a
-rank without a pool exclusion, disable self-heal exclusion on its pools
-first.
-
-The same applies to a system that is stopped and then only partly started:
-the ranks still stopped are excluded from every pool as soon as the pool
-services come up. A staged restart must disable self-heal exclusion first or
-start every rank.
-
 !!! warning
     All engines monitor each other and pro-actively exclude unresponsive
     members. It is critical to properly stop a DAOS system as with dmg in
@@ -1032,9 +1035,8 @@ be reintegrated. Please see the pool operation section for more information.
 A `daos_server` only starts an I/O engine when the system expects it to be
 running. After the first `dmg storage format`, engines wait for
 `dmg system initialize` (or `dmg system extend` for hosts added later). When
-`daos_server` restarts, an engine whose rank was stopped with `dmg system stop`
-stays stopped until `dmg system start`; any other rank that was a member is
-restarted.
+`daos_server` restarts, it restarts the engines whose ranks are members of the
+system.
 
 - Initialize a System:
 
@@ -1046,6 +1048,8 @@ Starts the engines on the listed hosts (or the hosts in the dmg configuration
 file) and waits for them to join. With `--timeout`, hosts whose engines had
 not joined when it expired are named in the output and the command may be
 rerun once they are fixed; without it, the command waits until interrupted.
+A host that has not been formatted is reported as an error
+(`N engines awaiting format`) and the other hosts proceed.
 
 - Extend a System:
 
@@ -1055,15 +1059,7 @@ $ dmg system extend -l ${new_storage_nodes} [--timeout=<duration>]
 
 The same operation for hosts added to a system that already has pools.
 
-The `restart_engines_on_boot` system property controls whether `daos_server`
-restarts joined ranks on boot. Set it to `false` for sites where a reboot is a
-maintenance step and engines should stay down until `dmg system start`:
-
-```bash
-$ dmg system set-prop restart_engines_on_boot:false
-```
-
-`dmg storage format --start` formats and starts the engines in one step, as
+`dmg storage format --init` formats and starts the engines in one step, as
 earlier releases did; on hosts that are already formatted it starts the engines
 still waiting. `dmg storage format --replace` also starts the engine it
 formats, so the rank it replaces rejoins without a further command.

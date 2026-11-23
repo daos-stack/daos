@@ -47,7 +47,7 @@ type Engine interface {
 	requestStart(context.Context)
 	isAwaitingFormat() bool
 	isAwaitingStart() bool
-	getExitErr() error
+	lastErr() error
 	getSuperblock() *Superblock
 
 	// These methods should probably be replaced by callbacks.
@@ -69,6 +69,7 @@ type Engine interface {
 	IsStarted() bool
 	IsReady() bool
 	LocalState() system.MemberState
+	memberState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context)
 	SetupRank(context.Context, ranklist.Rank, uint32) error
@@ -244,11 +245,6 @@ func (h *EngineHarness) runPreflight(ctx context.Context, batch map[uint32]Engin
 	}
 	for _, e := range req.Engines {
 		ei := batch[e.Idx]
-		res, ok := results[e.Idx]
-		if !ok {
-			h.log.Errorf("instance %d: no preflight result; start held", e.Idx)
-			continue
-		}
 		if !ei.isAwaitingStart() {
 			h.log.Debugf("instance %d: preflight result ignored; already released", e.Idx)
 			continue
@@ -256,6 +252,11 @@ func (h *EngineHarness) runPreflight(ctx context.Context, batch map[uint32]Engin
 		if rank, _ := ei.GetRank(); !rank.Equals(e.Rank) {
 			h.log.Noticef("instance %d: preflight result for rank %s ignored; superseded by request for rank %s",
 				e.Idx, e.Rank, rank)
+			continue
+		}
+		res, ok := results[e.Idx]
+		if !ok {
+			h.log.Errorf("instance %d: no preflight result; start held", e.Idx)
 			continue
 		}
 		if res.Start {

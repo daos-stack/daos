@@ -4,9 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 import re
 import time
-# pylint: disable=too-many-lines
 from collections import defaultdict
 from grp import getgrgid
 from logging import getLogger
@@ -15,7 +15,7 @@ from pwd import getpwuid
 from dmg_utils_base import DmgCommandBase
 from dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
 from exception_utils import CommandFailure
-from general_utils import dict_to_str, get_numeric_list
+from general_utils import dict_to_str, get_numeric_list, list_to_str
 
 
 class DmgJsonCommandFailure(CommandFailure):
@@ -226,7 +226,7 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, force=False, timeout=30, verbose=False, start=False, replace=False,
+    def storage_format(self, force=False, timeout=30, verbose=False, init=False, replace=False,
                        rank=None, hosts=None):
         """Get the result of the dmg storage format command.
 
@@ -240,7 +240,7 @@ class DmgCommand(DmgCommandBase):
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
-            start (bool): start the engines after formatting instead of waiting
+            init (bool): initialize the system after formatting instead of waiting
                 for dmg system initialize. Defaults to False
             replace (bool): replace an excluded rank, allowing a DAOS engine instance to
                 reclaim its old rank number after metadata is lost due to PMem or other
@@ -270,7 +270,7 @@ class DmgCommand(DmgCommandBase):
                 # scopes the host list to this single invocation, as required by '--replace'.
                 self._hostlist.update(str(hosts), "dmg._hostlist")
             self._get_result(
-                ("storage", "format"), force=force, verbose=verbose, start=start,
+                ("storage", "format"), force=force, verbose=verbose, init=init,
                 replace=replace, rank=rank)
         finally:
             self.timeout = saved_timeout
@@ -802,7 +802,8 @@ class DmgCommand(DmgCommandBase):
 
         Args:
             pool (str): Pool for which to get the property.
-            name (str, optional): Get the Property value based on name.
+            name (str or list, optional): Name(s) of specific properties to get. Defaults to None,
+                which will get all properties.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -812,7 +813,12 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool get-prop command fails.
 
         """
-        return self._get_json_result(("pool", "get-prop"), pool=pool, name=name)
+        names = None
+        if isinstance(name, (list, tuple)):
+            names = list_to_str(name, ',')
+        elif name is not None:
+            names = str(name)
+        return self._get_json_result(("pool", "get-prop"), pool=pool, name=names)
 
     def pool_list(self, no_query=False, verbose=False):
         """List pools.

@@ -158,9 +158,6 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		MemberStateJoined: {
 			MemberStateReady: true,
 		},
-		MemberStateStopped: {
-			MemberStateExcluded: true, // a stopped rank is expected to be dead
-		},
 		MemberStateErrored: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
@@ -187,10 +184,9 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 }
 
 // StartsOnBoot reports whether an engine in this state starts again when
-// its daos_server restarts. A stopped or administratively excluded rank
-// waits for dmg system start.
+// its daos_server restarts.
 func (ms MemberState) StartsOnBoot() bool {
-	return ms != MemberStateStopped && ms != MemberStateAdminExcluded
+	return ms != MemberStateAdminExcluded
 }
 
 // MemberStates2Mask returns a state bitmask and a flag indicating whether to include the "Unknown"

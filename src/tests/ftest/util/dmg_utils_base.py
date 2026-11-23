@@ -788,7 +788,7 @@ class DmgCommandBase(YamlCommand):
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
                 self.force = FormattedParameter("--force", False)
-                self.start = FormattedParameter("--start", False)
+                self.init = FormattedParameter("--init", False)
                 self.replace = FormattedParameter("--replace", False)
                 self.rank = FormattedParameter("--rank={}", None)
 

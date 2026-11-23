@@ -89,7 +89,8 @@ struct ds_pool {
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t sp_stopping : 1, sp_cr_checked : 1, sp_immutable : 1, sp_disable_rebuild : 1,
-	    sp_disable_dtx_resync : 1, sp_incr_reint : 1, sp_hdl_fetched : 1;
+	    sp_disable_dtx_resync : 1, sp_incr_reint : 1, sp_hdl_fetched : 1,
+	    sp_retry_dtx_resync : 1;
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
@@ -121,6 +122,10 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 	/* Hold wlock when recover container, rlock when handle container create/destroy RPC. */
 	ABT_rwlock               sp_recov_lock;
+	/* Highest stable epoch of the rebuilds seen by this engine, set by the rebuild IV and never
+	 * reset. Updates at or below it are rejected, see check_update_rebuild_race(), and EC
+	 * aggregation rounds below it check for newer updates, see agg_stripe_has_newer().
+	 */
 	daos_epoch_t             sp_rebuild_epoch;
 };
 
@@ -402,6 +407,11 @@ int dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t de
 			     char *machine, uint32_t *count);
 
 int ds_pool_target_status(struct ds_pool *pool, uint32_t id);
+
+/** Check if the target (all targets of \a rank if \a tgt_idx is -1) is DOWN/DOWNOUT */
+bool
+		 ds_pool_tgt_excluded(struct ds_pool *pool, d_rank_t rank, int tgt_idx);
+
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
 int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);

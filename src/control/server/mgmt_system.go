@@ -526,12 +526,11 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	}
 
 	gm, err := svc.sysdb.GroupMap()
-	if errors.Is(err, system.ErrEmptyGroupMap) {
-		svc.log.Debug("no ranks in group map; nothing to update")
-		return nil // nothing to update for now; any new ranks will trigger a new group update
-	}
 	if err != nil {
 		return err
+	}
+	if len(gm.RankEntries) == 0 {
+		return system.ErrEmptyGroupMap
 	}
 	if gm.Version == svc.lastMapVer {
 		svc.log.Debugf("skipping duplicate GroupUpdate @ %d", gm.Version)
@@ -616,15 +615,9 @@ func (svc *mgmtSvc) EnginePreflight(ctx context.Context, req *mgmtpb.EnginePrefl
 		return nil, err
 	}
 
-	restart, err := system.GetUserProperty(svc.sysdb, svc.systemProps,
-		daos.SystemPropertyRestartEnginesOnBoot.String())
-	if err != nil {
-		return nil, err
-	}
-
 	resp := new(mgmtpb.EnginePreflightResp)
 	for _, e := range req.Engines {
-		reason, err := svc.startHoldReason(ranklist.Rank(e.Rank), restart == "true")
+		reason, err := svc.startHoldReason(ranklist.Rank(e.Rank))
 		if err != nil {
 			return nil, err
 		}
@@ -637,7 +630,7 @@ func (svc *mgmtSvc) EnginePreflight(ctx context.Context, req *mgmtpb.EnginePrefl
 }
 
 // startHoldReason returns why a rank should not start on boot, or "" if it should.
-func (svc *mgmtSvc) startHoldReason(rank ranklist.Rank, restartOnBoot bool) (string, error) {
+func (svc *mgmtSvc) startHoldReason(rank ranklist.Rank) (string, error) {
 	member, err := svc.sysdb.FindMemberByRank(rank)
 	if system.IsMemberNotFound(err) {
 		return "not a system member; awaiting dmg system initialize or extend", nil
@@ -645,11 +638,8 @@ func (svc *mgmtSvc) startHoldReason(rank ranklist.Rank, restartOnBoot bool) (str
 	if err != nil {
 		return "", err
 	}
-	if !restartOnBoot {
-		return "restart_engines_on_boot is false; awaiting dmg system start", nil
-	}
 	if !member.State.StartsOnBoot() {
-		return fmt.Sprintf("rank %d is %s; awaiting dmg system start", member.Rank, member.State), nil
+		return fmt.Sprintf("rank %d is %s; awaiting dmg system clear-exclude", member.Rank, member.State), nil
 	}
 	return "", nil
 }
@@ -1076,8 +1066,6 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 		return nil, err
 	}
 
-	svc.reqGroupUpdate(ctx, false)
-
 	return resp, nil
 }
 
@@ -1180,7 +1168,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 // SystemInitialize implements the method defined for the Management Service.
 //
 // Start engines on the supplied hosts and wait for them to join a system
-// that has no members yet.
+// that has no pools yet.
 func (svc *mgmtSvc) SystemInitialize(ctx context.Context, req *mgmtpb.SystemInitializeReq) (*mgmtpb.SystemInitializeResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -1229,9 +1217,8 @@ func (svc *mgmtSvc) SystemExtend(ctx context.Context, req *mgmtpb.SystemExtendRe
 	return &mgmtpb.SystemExtendResp{Results: results}, nil
 }
 
-// startEngines starts the engines on the supplied hosts and waits for them
-// to join, reporting each joined rank and each host that had join errors.
-// If joinSecs is non-zero, it will wait for that many seconds for the engines to join.
+// startEngines starts the engines on the supplied hosts and reports each
+// joined rank and each host with start or join errors.
 func (svc *mgmtSvc) startEngines(ctx context.Context, hosts string, joinSecs uint32) ([]*sharedpb.RankResult, error) {
 	if hosts == "" {
 		return nil, errors.New("no hosts specified")
@@ -1243,85 +1230,12 @@ func (svc *mgmtSvc) startEngines(ctx context.Context, hosts string, joinSecs uin
 		return nil, err
 	}
 
-	var results system.MemberResults
-	hostErr := func(host string, err error) {
-		res := system.NewMemberResult(ranklist.NilRank, err, system.MemberStateErrored, "start")
-		res.Addr = host
-		results = append(results, res)
+	expected, results := startedEngines(resp)
+	joined, err := svc.awaitJoins(ctx, expected, joinSecs)
+	if err != nil {
+		return nil, err
 	}
-	// Match joins by UUID; a member's control address can differ from the request's.
-	expected := make(map[string][]uuid.UUID)
-	unformatted := make(map[string]int)
-	for _, res := range resp.Results {
-		switch system.MemberStateFromString(res.State) {
-		case system.MemberStateAwaitFormat:
-			unformatted[res.Addr]++
-		case system.MemberStateErrored:
-			hostErr(res.Addr, errors.Errorf("engine %d: %s", res.Index, res.Error))
-		default:
-			u, err := uuid.Parse(res.UUID)
-			if err != nil {
-				hostErr(res.Addr, errors.Wrapf(err, "engine %d uuid", res.Index))
-				continue
-			}
-			expected[res.Addr] = append(expected[res.Addr], u)
-		}
-	}
-	for errStr, hostErrs := range resp.HostErrors {
-		for _, host := range hostErrs.HostSet.Slice() {
-			hostErr(host, errors.New(errStr))
-		}
-	}
-	for host, n := range unformatted {
-		hostErr(host, errors.Errorf("%d engines awaiting format", n))
-	}
-
-	if joinSecs > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(joinSecs)*time.Second)
-		defer cancel()
-	}
-	joined := make(map[string][]*system.Member)
-wait:
-	for {
-		short := false
-		for host, uuids := range expected {
-			var joinedSrvs []*system.Member
-			for _, u := range uuids {
-				m, err := svc.sysdb.FindMemberByUUID(u)
-				if err != nil {
-					if system.IsMemberNotFound(err) {
-						continue
-					}
-					return nil, err
-				}
-				if m.State == system.MemberStateJoined {
-					joinedSrvs = append(joinedSrvs, m)
-				}
-			}
-			joined[host] = joinedSrvs
-			short = short || len(joinedSrvs) < len(uuids)
-		}
-		if !short {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			break wait
-		case <-time.After(instanceUpdateDelay):
-		}
-	}
-
-	for host, uuids := range expected {
-		for _, m := range joined[host] {
-			res := system.NewMemberResult(m.Rank, nil, m.State, "start")
-			res.Addr = host
-			results = append(results, res)
-		}
-		if got, want := len(joined[host]), len(uuids); got < want {
-			hostErr(host, errors.Errorf("%d of %d engines joined", got, want))
-		}
-	}
+	results = append(results, joinResults(expected, joined)...)
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].Addr != results[j].Addr {
 			return results[i].Addr < results[j].Addr
@@ -1335,6 +1249,115 @@ wait:
 	}
 
 	return pbResults, nil
+}
+
+func hostErrResult(host string, err error) *system.MemberResult {
+	res := system.NewMemberResult(ranklist.NilRank, err, system.MemberStateErrored, "start")
+	res.Addr = host
+	return res
+}
+
+// startedEngines splits the start responses into the engines expected to
+// join, by host, and an errored result for each host with engines that
+// will not.
+func startedEngines(resp *control.StartEnginesResp) (map[string][]uuid.UUID, system.MemberResults) {
+	var results system.MemberResults
+	// Joins are matched by UUID; a member's control address can differ
+	// from the request's.
+	expected := make(map[string][]uuid.UUID)
+	unformatted := make(map[string]int)
+	for _, res := range resp.Results {
+		switch system.MemberStateFromString(res.State) {
+		case system.MemberStateAwaitFormat:
+			unformatted[res.Addr]++
+		case system.MemberStateErrored:
+			results = append(results, hostErrResult(res.Addr,
+				errors.Errorf("engine %d: %s", res.Index, res.Error)))
+		default:
+			u, err := uuid.Parse(res.UUID)
+			if err != nil {
+				results = append(results, hostErrResult(res.Addr,
+					errors.Wrapf(err, "engine %d uuid", res.Index)))
+				continue
+			}
+			expected[res.Addr] = append(expected[res.Addr], u)
+		}
+	}
+	for errStr, hostErrs := range resp.HostErrors {
+		for _, host := range hostErrs.HostSet.Slice() {
+			results = append(results, hostErrResult(host, errors.New(errStr)))
+		}
+	}
+	for host, n := range unformatted {
+		results = append(results, hostErrResult(host,
+			errors.Errorf("%d engines awaiting format", n)))
+	}
+	return expected, results
+}
+
+func (svc *mgmtSvc) joinedEngines(expected map[string][]uuid.UUID) (map[string][]*system.Member, bool, error) {
+	joined := make(map[string][]*system.Member)
+	pending := false
+	for host, uuids := range expected {
+		for _, u := range uuids {
+			m, err := svc.sysdb.FindMemberByUUID(u)
+			if system.IsMemberNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return nil, false, err
+			}
+			if m.State == system.MemberStateJoined {
+				joined[host] = append(joined[host], m)
+			}
+		}
+		pending = pending || len(joined[host]) < len(uuids)
+	}
+	return joined, pending, nil
+}
+
+// awaitJoins waits for the expected engines to join, for at most joinSecs
+// if non-zero.
+func (svc *mgmtSvc) awaitJoins(ctx context.Context, expected map[string][]uuid.UUID, joinSecs uint32) (map[string][]*system.Member, error) {
+	var deadline <-chan time.Time
+	if joinSecs > 0 {
+		timer := time.NewTimer(time.Duration(joinSecs) * time.Second)
+		defer timer.Stop()
+		deadline = timer.C
+	}
+
+	for {
+		joined, pending, err := svc.joinedEngines(expected)
+		if err != nil {
+			return nil, err
+		}
+		if !pending {
+			return joined, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline:
+			return joined, nil
+		case <-time.After(instanceUpdateDelay):
+		}
+	}
+}
+
+func joinResults(expected map[string][]uuid.UUID, joined map[string][]*system.Member) system.MemberResults {
+	var results system.MemberResults
+	for host, uuids := range expected {
+		for _, m := range joined[host] {
+			res := system.NewMemberResult(m.Rank, nil, m.State, "start")
+			res.Addr = host
+			results = append(results, res)
+		}
+		if got, want := len(joined[host]), len(uuids); got < want {
+			results = append(results, hostErrResult(host,
+				errors.Errorf("%d of %d engines joined", got, want)))
+		}
+	}
+	return results
 }
 
 // SystemExclude marks the specified ranks as administratively excluded from the system.
@@ -1992,12 +2015,12 @@ func (svc *mgmtSvc) eraseLocalEngines() error {
 // fanout request targeting every rank except the leader and its replica peers (which
 // erase and restart themselves; see eraseLocalEngines()/eraseReplicas()). Must be called
 // before the raft DB is stopped, as rank/host resolution needs it.
-func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fanoutRequest, *fanoutResponse, error) {
-	svc.log.Trace("gathering MS replica peer addresses")
-	peers, err := svc.sysdb.PeerAddrs()
+func (svc *mgmtSvc) getPeersAndFanout() ([]string, *fanoutRequest, *fanoutResponse, error) {
+	selfAddr, err := svc.sysdb.ReplicaAddr()
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	peers := svc.sysdb.PeerReplicas()
 	svc.log.Tracef("found %d MS replica peer(s): %v", len(peers), peers)
 
 	svc.log.Trace("preparing fanout request")
@@ -2006,16 +2029,7 @@ func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fan
 		return nil, nil, nil, err
 	}
 
-	selfAddr, err := svc.sysdb.ReplicaAddr()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	selfAndPeerHosts := make([]string, 0, len(peers)+1)
-	selfAndPeerHosts = append(selfAndPeerHosts, selfAddr.String())
-	for _, peer := range peers {
-		selfAndPeerHosts = append(selfAndPeerHosts, peer.String())
-	}
-
+	selfAndPeerHosts := append([]string{selfAddr.String()}, peers...)
 	excludeRanks, _, err := svc.membership.CheckHosts(strings.Join(selfAndPeerHosts, ","),
 		build.DefaultControlPort)
 	if err != nil {
@@ -2031,21 +2045,25 @@ func (svc *mgmtSvc) getPeersAndFanout(ctx context.Context) ([]*net.TCPAddr, *fan
 
 // eraseReplicas sends erase requests to all MS replica peers, each of which erases its
 // own DB/engines synchronously before acking, then restarts itself.
-func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []*net.TCPAddr) error {
+func (svc *mgmtSvc) eraseReplicas(ctx context.Context, peers []string) error {
 	svc.log.Trace("sending erase request to MS replica peers")
 
 	for _, peer := range peers {
-		svc.log.Tracef("sending erase RPC to peer %s", peer.String())
+		svc.log.Tracef("sending erase RPC to peer %s", peer)
 		peerReq := new(control.SystemEraseReq)
-		peerReq.AddHost(peer.String())
+		peerReq.AddHost(peer)
+		// Explicitly set the system name rather than relying on svc.rpcClient's
+		// configured default, so the forwarded request is correctly scoped even if
+		// that default is ever left unset.
+		peerReq.SetSystem(svc.sysdb.SystemName())
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
 			// A connection error here can't be distinguished from "peer never
 			// received the request", so treat it as a hard failure rather than
 			// assuming the peer erased itself.
-			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer.String())
+			return errors.Wrapf(err, "erase request to MS replica peer %s failed", peer)
 		}
-		svc.log.Tracef("peer %s acknowledged erase request", peer.String())
+		svc.log.Tracef("peer %s acknowledged erase request", peer)
 	}
 
 	return nil
@@ -2085,7 +2103,7 @@ func (svc *mgmtSvc) eraseNonReplicaEngines(ctx context.Context, fanReq *fanoutRe
 
 // eraseAllEngines runs on the leader to coordinate the erase across replicas and engines.
 func (svc *mgmtSvc) eraseAllEngines(ctx context.Context) (*mgmtpb.SystemEraseResp, error) {
-	peers, fanReq, fanResp, err := svc.getPeersAndFanout(ctx)
+	peers, fanReq, fanResp, err := svc.getPeersAndFanout()
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to determine path to self")
 	}
@@ -2149,9 +2167,9 @@ func (svc *mgmtSvc) scheduleControlPlaneRestart(leaderStr string) error {
 	return nil
 }
 
-// execControlPlaneRestart drains the gRPC server via GracefulStop() (falling back to a
-// forced Stop() after svc.gracefulStopTimeout), then exec()s to restart the control
-// plane process.
+// execControlPlaneRestart drains the gRPC server via GracefulStop(), falling back to
+// exec()ing to restart the control plane process after svc.gracefulStopTimeout if the
+// drain hasn't completed by then.
 func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 	scheduledAt := time.Now()
 
@@ -2166,9 +2184,12 @@ func (svc *mgmtSvc) execControlPlaneRestart(myPath, leaderStr string) {
 		svc.log.Debugf("System Erase: gRPC server drained cleanly after %s [role=%s]",
 			time.Since(scheduledAt), leaderStr)
 	case <-time.After(svc.gracefulStopTimeout):
-		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, forcing stop [role=%s]",
+		svc.log.Errorf("System Erase: timed out after %s waiting for gRPC server to drain, proceeding to exec anyway [role=%s]",
 			svc.gracefulStopTimeout, leaderStr)
-		svc.grpcServer.Stop()
+		// No forced Stop() fallback: it shares GracefulStop()'s lock/condvar, so it
+		// couldn't force anything independently; exec() below tears down the
+		// listeners/connections via the kernel regardless.
+		dumpGoroutineStacks(svc.log, "GracefulStop() timed out")
 	}
 
 	svc.log.Infof("System Erase: exec'ing %s to restart control plane after %s total drain [role=%s]",

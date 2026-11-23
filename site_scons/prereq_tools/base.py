@@ -232,6 +232,17 @@ class Runner():
 RUNNER = Runner()
 
 
+def cmocka_filter_supported():
+    """Check whether the installed cmocka supports test filtering."""
+    try:
+        result = subprocess.run(['pkg-config', '--atleast-version=1.1.5', 'cmocka'],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                check=False)
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
 def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
@@ -518,10 +529,13 @@ class PreReqComponent():
         opts.Add(BoolVariable('BUILD_GO_VALGRIND',
                               'Build Go artifacts with the Go "valgrind" tag for Memcheck',
                               False))
-        opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests', False))
+        opts.Add(BoolVariable('CMOCKA_FILTER_SUPPORTED', 'Allows to filter cmocka tests',
+                              cmocka_filter_supported()))
         opts.Add(BoolVariable('CRT_PP', 'Preprocess CaRT sources', False))
         opts.Add(BoolVariable('HEAP_PROFILER', 'Instrument C code with Gperftools Heap Profiler',
                               False))
+        opts.Add(ListVariable('PROVIDERS', "List of providers to build", 'all',
+                              ['all', 'ofi', 'ucx']))
 
         opts.Update(self.__env)
 
@@ -595,8 +609,13 @@ class PreReqComponent():
 
     def run_build(self, opts):
         """Build and dependencies"""
-        common_reqs = ['ofi', 'ucx', 'hwloc', 'mercury', 'uuid', 'crypto', 'protobufc',
+        common_reqs = ['hwloc', 'mercury', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto', 'argobots']
+        providers = self.__env.get('PROVIDERS')
+        if 'all' in providers:
+            common_reqs += ['ofi', 'ucx']
+        else:
+            common_reqs += providers
         client_reqs = ['fused', 'json-c', 'capstone', 'aio']
         server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']
@@ -1199,7 +1218,7 @@ class _Component():  # pylint: disable=too-many-instance-attributes
         return False
 
     def _parse_config(self, env, opts, comp_path=None):
-        """Parse a pkg-config file"""
+        """Parse a pkg-config file, retaining library search paths for runtime linking."""
         if self.pkgconfig is None:
             return
 
@@ -1222,8 +1241,13 @@ class _Component():  # pylint: disable=too-many-instance-attributes
             if not path_found:
                 return
 
+        def merge_flags(config_env, output, unique=True):
+            flags = config_env.ParseFlags(output)
+            flags.setdefault('RPATH_FULL', []).extend(flags.get('LIBPATH', []))
+            return config_env.MergeFlags(flags, unique)
+
         try:
-            env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}')
+            env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}', merge_flags)
         except OSError:
             return
 
