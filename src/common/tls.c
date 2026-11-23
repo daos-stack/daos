@@ -201,15 +201,10 @@ dc_tls_fini(void)
 struct daos_thread_local_storage *
 dc_tls_get(unsigned int tag)
 {
-	struct daos_thread_local_storage *dtls = NULL;
+	if (!dc_tls_thread_init)
+		return dc_tls_init(tag, getpid());
 
-	if (dc_tls_thread_init)
-		dtls = pthread_getspecific(dc_tls_key);
-	/* the key is re-created on daos_fini()/daos_init(), which makes it NULL in every thread */
-	if (dtls == NULL)
-		dtls = dc_tls_init(tag, getpid());
-
-	return dtls;
+	return (struct daos_thread_local_storage *)pthread_getspecific(dc_tls_key);
 }
 
 void

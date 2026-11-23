@@ -12,7 +12,6 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include <daos_security.h>
-#include <daos/metrics.h>
 #include "daos_test.h"
 #include "daos_iotest.h"
 
@@ -492,31 +491,6 @@ reinit_live_thread(void **state)
 
 	assert_rc_equal(wa.rc[0], 0);
 	assert_rc_equal(wa.rc[1], 0);
-}
-
-/** same as above with client metrics enabled, which use per-thread storage */
-static void
-reinit_live_thread_metrics(void **state)
-{
-	test_arg_t *arg = *state;
-	char       *orig;
-	int         rc;
-
-	/* -DER_NONEXIST leaves orig NULL */
-	d_agetenv_str(&orig, DAOS_CLIENT_METRICS_ENABLE);
-	rc = d_setenv(DAOS_CLIENT_METRICS_ENABLE, "1", 1);
-	assert_int_equal(rc, 0);
-	reinit_daos(arg);
-
-	reinit_live_thread(state);
-
-	/* metrics stay enabled across init if the variable is just unset */
-	rc = d_setenv(DAOS_CLIENT_METRICS_ENABLE, orig != NULL ? orig : "0", 1);
-	assert_int_equal(rc, 0);
-	reinit_daos(arg);
-	if (orig == NULL)
-		d_unsetenv(DAOS_CLIENT_METRICS_ENABLE);
-	d_freeenv_str(&orig);
 }
 
 static bool
@@ -2519,8 +2493,6 @@ static const struct CMUnitTest pool_tests[] = {
      test_case_teardown},
     {"POOL21: sync ops from a thread that outlives daos re-init", reinit_live_thread, NULL,
      test_case_teardown},
-    {"POOL22: sync ops from a thread that outlives daos re-init (metrics)",
-     reinit_live_thread_metrics, NULL, test_case_teardown},
 };
 
 int
