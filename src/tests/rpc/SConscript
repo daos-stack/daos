@@ -16,6 +16,11 @@ def scons():
 
     denv.d_test_program('rpc_tests', sources, LIBS=libs)
 
+    henv = denv.Clone()
+    henv.require('mercury')
+    henv.AppendUnique(LIBS=['cart', 'gurt', 'cmocka', 'pthread'])
+    henv.d_test_program('cart_hdr_tests', ['cart_hdr_tests.c'])
+
 
 if __name__ == "SCons.Script":
     scons()

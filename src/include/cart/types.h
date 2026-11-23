@@ -43,7 +43,7 @@ typedef struct crt_init_options {
 	 * Global RPC timeout.
 	 *
 	 * This field is similar in behavior to setting of CRT_TIMEOUT
-	 * evnironment variable.
+	 * environment variable.
 	 */
 	int		cio_crt_timeout;
 	uint32_t        cio_sep_override : 1, /**< Deprecated */
@@ -56,7 +56,7 @@ typedef struct crt_init_options {
 	    /** whether or not to use expected sizes */
 	    cio_use_expected_size : 1, cio_use_unexpected_size : 1;
 
-	/** overrides the value of the environment variable CRT_CTX_NUM */
+	/** Non-zero overrides CRT_CTX_NUM; zero uses the environment variable/default */
 	int		cio_ctx_max_num;
 
 	/** set credit limit */

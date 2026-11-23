@@ -1,7 +1,7 @@
 /*
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -188,8 +188,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc);
 void
 ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void
-ds_pool_query_handler_v6(crt_rpc_t *rpc);
-void
      ds_pool_query_handler(crt_rpc_t *rpc);
 void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
@@ -214,8 +212,6 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc);
 void
 ds_pool_filter_cont_handler(crt_rpc_t *rpc);
 void
-    ds_pool_query_info_handler_v6(crt_rpc_t *rpc);
-void
      ds_pool_query_info_handler(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 void ds_pool_upgrade_handler(crt_rpc_t *rpc);
@@ -226,18 +222,20 @@ void
  * srv_target.c
  */
 int ds_pool_cache_init(void);
-void ds_pool_cache_fini(void);
-int ds_pool_lookup_internal(const uuid_t uuid, struct ds_pool **pool);
-int ds_pool_hdl_hash_init(void);
-void ds_pool_hdl_hash_fini(void);
-void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
-int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				      void *priv);
 void
-     ds_pool_tgt_query_handler_v6(crt_rpc_t *rpc);
-void ds_pool_tgt_query_handler(crt_rpc_t *rpc);
+ds_pool_cache_fini(void);
 int
-ds_pool_tgt_query_aggregator_v6(crt_rpc_t *source, crt_rpc_t *result, void *priv);
+ds_pool_lookup_internal(const uuid_t uuid, struct ds_pool **pool);
+int
+ds_pool_hdl_hash_init(void);
+void
+ds_pool_hdl_hash_fini(void);
+void
+ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
+int
+ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
+void
+ds_pool_tgt_query_handler(crt_rpc_t *rpc);
 int
      ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);

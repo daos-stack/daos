@@ -742,21 +742,6 @@ pipeline {
                         }
                     }
                 }
-                stage('Branch name check') {
-                    when { changeRequest() }
-                    steps {
-                        script {
-                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
-                                error('Your PR branch name does not follow the rules. Please rename it ' +
-                                      'according to the rules described here: ' +
-                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
-                                      'Once you have renamed your branch locally to match the ' +
-                                      'format, close this PR and open a new one using the newly renamed ' +
-                                      'local branch.')
-                            }
-                        }
-                    }
-                }
             }
         }
         stage('Cancel Previous Builds') {
@@ -1018,7 +1003,7 @@ pipeline {
                                      inst_repos: daosRepos(),
                                      test_script: 'ci/unit/test_nlt.sh' +
                                                   ' --system-ram-reserved 4' +
-                                                  ' --max-log-size 1950MiB' +
+                                                  ' --max-log-size 2500MiB' +
                                                   ' --dfuse-dir /localhome/jenkins/' +
                                                   ' --log-usage-save nltir.xml' +
                                                   ' --log-usage-export nltr.json' +

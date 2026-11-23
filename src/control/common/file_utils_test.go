@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common/test"
 )
@@ -199,5 +200,31 @@ func TestUtils_MkdirForcePerm(t *testing.T) {
 	perm := int(info.Mode().Perm())
 	if perm != expPerm {
 		t.Fatalf("Created directory has unexpected permissions: %04o instead of %04o", perm, expPerm)
+	}
+}
+
+func TestUtils_SyncDir(t *testing.T) {
+	for name, tc := range map[string]struct {
+		path   func(t *testing.T) string
+		expErr error
+	}{
+		"existing directory": {
+			path: func(t *testing.T) string {
+				testDir, cleanup := CreateTestDir(t)
+				t.Cleanup(cleanup)
+				return testDir
+			},
+		},
+		"nonexistent path": {
+			path: func(t *testing.T) string {
+				return "/nonexistent/path/that/should/not/exist"
+			},
+			expErr: errors.New("no such file or directory"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := SyncDir(tc.path(t))
+			CmpErr(t, tc.expErr, gotErr)
+		})
 	}
 }

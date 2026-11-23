@@ -67,7 +67,7 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 	if (d_dynamic_ctx_g) {
 		char iface[DAOS_SYS_INFO_STRING_MAX];
 
-		rc = dc_mgmt_get_iface(&iface[0]);
+		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(crt, rc);
@@ -113,7 +113,8 @@ daos_eq_lib_reset_after_fork(void)
 
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
-	crt_info          = daos_crt_init_opt_get(false, 1);
+	/* Do not impose limit and let CART set default if not set through env */
+	crt_info          = daos_crt_init_opt_get(false, 0);
 	rc                = dc_mgmt_net_cfg_init(NULL, crt_info);
 	if (rc == 0)
 		rc = daos_eq_lib_init(crt_info);
@@ -656,7 +657,7 @@ daos_eq_create(daos_handle_t *eqh)
 	if (d_dynamic_ctx_g) {
 		char iface[DAOS_SYS_INFO_STRING_MAX];
 
-		rc = dc_mgmt_get_iface(&iface[0]);
+		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
 			return rc;

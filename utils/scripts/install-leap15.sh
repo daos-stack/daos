@@ -21,7 +21,6 @@ dnf_install_args="${1:-}"
 # shellcheck disable=SC2086
 dnf --nodocs install ${dnf_install_args} \
     binutils \
-    boost-devel \
     bzip2 \
     cmake \
     cpio \
@@ -48,7 +47,6 @@ dnf --nodocs install ${dnf_install_args} \
     libndctl-devel \
     libnl3-devel \
     libnuma-devel \
-    libpsm2-devel \
     librdmacm-devel \
     libopenssl-devel \
     libprotobuf-c-devel \
