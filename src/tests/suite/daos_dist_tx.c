@@ -3272,6 +3272,141 @@ dtx_43(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool spec_leader)
+{
+	test_arg_t   *arg  = *state;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	size_t        size = 1 << 20; /* 1M data */
+	void         *wbuf;
+	void         *rbuf;
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	uint64_t      idx   = 0;
+	int           rx_nr = 1;
+	d_rank_t      kill_rank;
+	d_rank_t      rank;
+	int           rc;
+	bool          done = false;
+
+	FAULT_INJECTION_REQUIRED();
+
+	/*
+	 * Different MPI ranks will generate different object layout.
+	 * It is not easy to control multiple MPI ranks for specified
+	 * leader and some non-leader. So only test on the MPI rank_0.
+	 */
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		D_ALLOC(wbuf, size);
+		assert_non_null(wbuf);
+
+		D_ALLOC(rbuf, size);
+		assert_non_null(rbuf);
+
+		async_enable(state);
+
+		oid = daos_test_oid_gen(arg->coh, oc, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, type, arg);
+
+		daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+		memset(wbuf, 'a', size);
+		print_message("Sync update for base layout\n");
+		insert_single(dkey, akey, idx, wbuf, size, DAOS_TX_NONE, &req);
+
+		/* Get the rank to be killed, that is DTX leader for next update. */
+		kill_rank = get_rank_by_oid_shard(arg, oid, 0);
+
+		if (spec_leader)
+			/* Client will resend twice: the 1st one will get spec_leader info. */
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 1, 0, NULL);
+		else
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_LEADER_SWITCH | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_fail_loc_set(DAOS_DTX_LEADER_SWITCH | DAOS_FAIL_ALWAYS);
+
+		memset(wbuf, 'b', size);
+		print_message("Async overwrite with inject fail_loc %u.\n", DAOS_DTX_LEADER_SWITCH);
+		insert_nowait(dkey, 1, &akey, &size, &rx_nr, &idx, &wbuf, DAOS_TX_NONE, &req, 0);
+
+		sleep(3);
+		daos_event_test(&req.ev, 1000, &done);
+		/* The async update should not complete since DTX leader is blocked by fail_loc. */
+		assert_false(done);
+
+		print_message("Exclude rank %d to trigger rebuild ...\n", kill_rank);
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc,
+				 kill_rank);
+
+		print_message("Wait async update to complete ...\n");
+		insert_wait(&req);
+
+		daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc,
+				  kill_rank);
+
+		/*
+		 * Reset fail_loc to make DTX resync can go ahead.
+		 *
+		 * Note that rank_0 is the one to send collective MGMT_PARAMS_SET RPC, but it
+		 * maybe the kill_rank. So let's reset fail_loc for each rank one by one.
+		 */
+		print_message("Reset test environment.\n");
+		for (rank = 0; rank < arg->srv_nnodes; rank++) {
+			if (rank != kill_rank) {
+				if (spec_leader)
+					daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_VALUE,
+							      0, 0, NULL);
+				daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC, 0, 0,
+						      NULL);
+			}
+		}
+		daos_fail_loc_set(0);
+
+		print_message("Verifying data ...\n");
+		lookup_single(dkey, akey, idx, rbuf, size, DAOS_TX_NONE, &req);
+		assert_memory_equal(wbuf, rbuf, size);
+
+		print_message("Reintegrate rank %d ...\n", kill_rank);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  kill_rank, -1);
+		assert_success(rc);
+		test_rebuild_wait(&arg, 1);
+
+		ioreq_fini(&req);
+		D_FREE(wbuf);
+		D_FREE(rbuf);
+	}
+	par_barrier(PAR_COMM_WORLD);
+}
+
+static void
+dtx_44(void **state)
+{
+	test_arg_t *arg = *state;
+
+	print_message("DTX44: leader switch - resend update with same leader\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_leader_switch(state, OC_RP_3G1, DAOS_IOD_SINGLE, false);
+}
+
+static void
+dtx_45(void **state)
+{
+	test_arg_t *arg = *state;
+
+	print_message("DTX45: leader switch - resend update with spec leader\n");
+
+	if (!test_runable(arg, 7))
+		skip();
+
+	dtx_leader_switch(state, OC_EC_4P2G1, DAOS_IOD_ARRAY, true);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -3380,6 +3515,11 @@ static const struct CMUnitTest dtx_tests[] = {
 
     {"DTX42: query max epoch in transaction", dtx_42, NULL, test_case_teardown},
     {"DTX43: engine restarted quickly without pool map change", dtx_43, dtx_sub_setup,
+     dtx_sub_teardown},
+
+    {"DTX44: leader switch - resend update with same leader", dtx_44, dtx_sub_setup,
+     dtx_sub_teardown},
+    {"DTX45: leader switch - resend update with spec leader", dtx_45, dtx_sub_setup,
      dtx_sub_teardown},
 };
 
