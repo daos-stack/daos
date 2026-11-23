@@ -1241,7 +1241,7 @@ class _Component():  # pylint: disable=too-many-instance-attributes
             if not path_found:
                 return
 
-        def merge_flags(config_env, output, unique):
+        def merge_flags(config_env, output, unique=True):
             flags = config_env.ParseFlags(output)
             flags.setdefault('RPATH_FULL', []).extend(flags.get('LIBPATH', []))
             return config_env.MergeFlags(flags, unique)
