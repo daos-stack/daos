@@ -108,7 +108,7 @@ RUN set -eu; \
         dnf -y config-manager --add-repo \
             https://download.opensuse.org/repositories/network:/cluster/15.6/network:cluster.repo; \
         dnf -y config-manager --add-repo \
-            https://download.opensuse.org/repositories/devel:/languages:/lua/15.6/devel:languages:lua.repo; \
+            https://download.opensuse.org/repositories/devel:/languages:/lua/16.0/devel:languages:lua.repo; \
         dnf -y --nogpgcheck install lua-lmod; \
     fi; \
     rpm -q --qf '%{VERSION}-%{RELEASE}\n' lua-lmod; \

@@ -90,18 +90,17 @@ jobs:
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.6
+            deps_repo_secret: DAOS_DEPS_REPO_LEAP15
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
-      DAOS_DEPS_EXT_REPO: >-
-        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
-            matrix.distro == 'rocky' && secrets.DAOS_DEPS_REPO_EL9 ||
-            '' }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

@@ -54,19 +54,18 @@ jobs:
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.6
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_LEAP15
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       PYTHON_VERSION: ${{ matrix.python }}
-      DAOS_DEPS_EXT_REPO: >-
-        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
-            startsWith(matrix.distro, 'rocky') && secrets.DAOS_DEPS_REPO_EL9 ||
-            '' }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -184,10 +183,12 @@ jobs:
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.6
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_LEAP15
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -195,9 +196,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
       PYTHON_VERSION: ${{ matrix.python }}
       DAOS_DEPS_EXT_REPO: >-
-        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
-            startsWith(matrix.distro, 'rocky') && secrets.DAOS_DEPS_REPO_EL9 ||
-            '' }}
+        ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -272,10 +271,12 @@ jobs:
             base: el.9
             with: almalinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: rocky.9
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:24.04
@@ -284,11 +285,7 @@ jobs:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       PYTHON_VERSION: ${{ matrix.python }}
-      DAOS_DEPS_EXT_REPO: >-
-        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
-            ( startsWith(matrix.distro, 'rocky') ||
-              startsWith(matrix.distro, 'alma') ) && secrets.DAOS_DEPS_REPO_EL9 ||
-            '' }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -395,10 +392,12 @@ jobs:
             base: el.9
             with: almalinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.6
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_LEAP15
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -406,9 +405,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
       PYTHON_VERSION: ${{ matrix.python }}
       DAOS_DEPS_EXT_REPO: >-
-        ${{ matrix.distro == 'leap.15' && secrets.DAOS_DEPS_REPO_LEAP15 ||
-            startsWith(matrix.distro, 'alma') && secrets.DAOS_DEPS_REPO_EL9 ||
-            '' }}
+        ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
