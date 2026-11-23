@@ -119,9 +119,18 @@ class DlckTestHelperRunner:
     def __init__(self, storage, pool_uuid):
         self._storage = storage
         self._pool_uuid = pool_uuid
+        self._files_created = False
+
+    def _cleanup_paths(self):
+        """Return the VOS file and system database paths under the storage path."""
+        return [Path(self._storage) / self._pool_uuid / "vos-0", Path(self._storage) / "sys_db"]
 
     def init(self):
         """Run dlck_test_helper"""
+        existing = [p for p in self._cleanup_paths() if p.exists()]
+        if existing:
+            names = ", ".join(str(p) for p in existing)
+            raise SystemExit(f"stale files already exist, remove them first: {names}")
         cmd = ["sudo", "-E", str(self.DLCK_TEST_HELPER), "--file", self._pool_uuid,
                "--storage", self._storage, "--create_pools", "--verbose", "--targets", "1"]
         env = dict(os.environ, DLCK_NO_NVME="1")
@@ -131,13 +140,17 @@ class DlckTestHelperRunner:
             raise SystemExit(f"dlck_test_helper failed with exit code {proc.returncode}\n\n"
                              f"{proc.stderr}\n\n{proc.stdout}")
         print(proc.stdout)
+        self._files_created = True
         # Change permissions of the VOS file to be read-only.
         vos_file = Path(self._storage) / self._pool_uuid / "vos-0"
         subprocess.run(["sudo", "chmod", "440", str(vos_file)], check=True)
 
     def fini(self):
-        """Remove the files and directories under the storage path."""
-        subprocess.run(["sudo", "find", self._storage, "-mindepth", "1", "-delete"], check=True)
+        """Remove created VOS file and system database."""
+        if not self._files_created:
+            return
+        subprocess.run(["sudo", "rm", "-f", "--", *map(str, self._cleanup_paths())], check=True)
+        self._files_created = False
 
 
 class DlckRunner:
