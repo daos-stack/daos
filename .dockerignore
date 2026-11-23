@@ -22,6 +22,7 @@
 !utils/utest.yaml
 !utils/unit
 !utils/rpms
+!utils/docker/keys/
 !ci
 !SConstruct
 !VERSION

@@ -99,17 +99,21 @@ RUN --mount=type=bind,source=utils/scripts/install-$INSTALL_SCRIPT_SUFFIX,target
 # opensuse-oss for lua53, lua53-luaterm,, sqlite3-tcl, tcl
 # opensuse-devel-languages-lua for lua53-luafilesystem, lua53-luaposix
 ARG JENKINS_URL
-RUN set -eu; \
+RUN --mount=type=bind,source=utils/docker/keys/opensuse-network-cluster-15.6.asc,target=/tmp/opensuse-network-cluster-15.6.asc \
+    --mount=type=bind,source=utils/docker/keys/opensuse-languages-lua-16.0.asc,target=/tmp/opensuse-languages-lua-16.0.asc \
+    set -eu; \
     dnf -y remove lua-lmod || true; \
     if [ -n "${JENKINS_URL:-}" ]; then \
         dnf -y --nogpgcheck install lua-lmod --repo '*lua*' \
             --repo '*network-cluster*' --repo '*oss-proxy*'; \
     else \
+        rpm --import /tmp/opensuse-network-cluster-15.6.asc; \
+        rpm --import /tmp/opensuse-languages-lua-16.0.asc; \
         dnf -y config-manager --add-repo \
             https://download.opensuse.org/repositories/network:/cluster/15.6/network:cluster.repo; \
         dnf -y config-manager --add-repo \
             https://download.opensuse.org/repositories/devel:/languages:/lua/16.0/devel:languages:lua.repo; \
-        dnf -y --nogpgcheck install lua-lmod; \
+        dnf -y install lua-lmod; \
     fi; \
     rpm -q --qf '%{VERSION}-%{RELEASE}\n' lua-lmod; \
     dnf clean all
