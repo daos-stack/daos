@@ -660,7 +660,7 @@ daos_eq_create(daos_handle_t *eqh)
 		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
-			daos_eq_free(&eqx->eqx_hlink);
+			daos_eq_putref(eqx);
 			return rc;
 		}
 
@@ -682,7 +682,7 @@ daos_eq_create(daos_handle_t *eqh)
 		D_ERROR("failed to init EQ scheduler: " DF_RC "\n", DP_RC(rc));
 		if (eqx->eqx_ctx != daos_eq_ctx)
 			crt_context_destroy(eqx->eqx_ctx, 1);
-		daos_eq_free(&eqx->eqx_hlink);
+		daos_eq_putref(eqx);
 		return rc;
 	}
 
