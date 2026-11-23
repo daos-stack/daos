@@ -163,9 +163,6 @@ module_hotfixes=true\n" >> "$repos_dir$repo:$branch:$build_number".repo
 done
 
 disable_repos "$repos_dir" "${save_repos[@]}"
-if [ -n "$REPO_FILE_URL" ]; then
-    dnf config-manager --set-disabled daos-stack-deps-sl-15-stable-local-artifactory
-fi
 
 if [ -e /etc/profile.d/lmod.sh ]; then
     if ! grep "MODULEPATH=.*/usr/share/modules" /etc/profile.d/lmod.sh; then

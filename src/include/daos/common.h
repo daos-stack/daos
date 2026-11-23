@@ -832,6 +832,7 @@ enum {
 #define DAOS_REBUILD_ADMIN_STOP_RECLAIM   (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2b)
 #define DAOS_REBUILD_EC_PAUSE_HANG        (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2c)
 
+#define DAOS_DTX_LEADER_SWITCH            (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2f)
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
 #define DAOS_DTX_NONLEADER_ERROR	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x32)
@@ -903,6 +904,30 @@ enum {
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
 #define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
 #define DAOS_OBJ_EC_AGG_LEADER_DIFF	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x83)
+/**
+ * This fault makes the shard fetch replies of an EC single value race: a shard
+ * holding a record of fail_value bytes delays its bulk transfer, and every
+ * shard delays its reply after the bulk transfer. A shard holding a stale cell
+ * of an overwritten record is then handled by the client after the data of the
+ * newer record landed in the shared fetch buffer, but before the reply that
+ * exposes the record size conflict.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE       (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x84)
+/**
+ * Same as DAOS_OBJ_EC_SINGV_FETCH_RACE, and the shard holding a record of
+ * fail_value bytes fails the fetch with -DER_TIMEDOUT after its bulk transfer:
+ * its data landed in the shared fetch buffer, but the client does not get the
+ * record size it holds.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_FAIL  (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x85)
+/**
+ * Reverse of DAOS_OBJ_EC_SINGV_FETCH_RACE for the reply order: the shard holding
+ * a record of fail_value bytes transfers its data first and replies last, the
+ * other shards transfer later and reply earlier. The data of the other shards
+ * is then on top of that record in the shared fetch buffer, and their replies
+ * are handled before the reply that tells its size.
+ */
+#define DAOS_OBJ_EC_SINGV_FETCH_RACE_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x86)
 
 #define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
 #define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
