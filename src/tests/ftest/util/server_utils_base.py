@@ -140,7 +140,11 @@ class DaosServerCommand(YamlCommand):
             self.pattern_count = host_qty
             return
         if mode == "format":
-            self.pattern = self.FORMAT_PATTERN
+            # In MD-on-SSD mode the ramdisk SCM tier is always force-reformatted, so the
+            # engine reports "Metadata format required" instead of "SCM format required"
+            # even on a fresh/first format; PMem (dcpm) configs are unaffected.
+            self.pattern = self.REFORMAT_PATTERN if self.using_control_metadata \
+                else self.FORMAT_PATTERN
         elif mode == "reformat":
             self.pattern = self.REFORMAT_PATTERN
         elif mode == "dmg":

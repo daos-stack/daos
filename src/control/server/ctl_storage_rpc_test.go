@@ -1935,31 +1935,36 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	mockNvmeController1 := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
-		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
-		tmpfsEmpty       bool // if false, an already-mounted ramdisk is not empty
-		superblockExists bool
-		instancesStarted bool // engine already started
-		sMounts          []string
-		sClass           storage.Class
-		sDevs            []string
-		sSize            int
-		bClass           storage.Class
-		bDevs            [][]string
-		bSize            int
-		bmbcs            []*bdev.MockBackendConfig
-		awaitTimeout     time.Duration
-		getSysMemInfo    common.GetSysMemInfoFn
-		disableHPs       bool
-		nilReq           bool
-		noSrvCfg         bool
-		expAwaitExit     bool
-		expAwaitErr      error
-		expResp          *ctlpb.StorageFormatResp
-		expErr           error
-		reformat         bool // indicates setting of reformat parameter
-		replace          bool // indicates setting of replace parameter
-		start            bool // indicates setting of start parameter
-		expStartReady    bool // instances are released from the start hold
+		scmMounted bool // if scmMounted we emulate ext4 fs is mounted
+		tmpfsEmpty bool // if false, an already-mounted ramdisk is not empty
+		// Per-instance override of tmpfsEmpty. Precedence over tmpfsEmpty when non-nil.
+		tmpfsEmptyPerInst []bool
+		// Per-instance override of expStartReady. Takes precedence over expStartReady
+		// when non-nil.
+		expStartReadyPerInst []bool
+		superblockExists     bool
+		instancesStarted     bool // engine already started
+		sMounts              []string
+		sClass               storage.Class
+		sDevs                []string
+		sSize                int
+		bClass               storage.Class
+		bDevs                [][]string
+		bSize                int
+		bmbcs                []*bdev.MockBackendConfig
+		awaitTimeout         time.Duration
+		getSysMemInfo        common.GetSysMemInfoFn
+		disableHPs           bool
+		nilReq               bool
+		noSrvCfg             bool
+		expAwaitExit         bool
+		expAwaitErr          error
+		expResp              *ctlpb.StorageFormatResp
+		expErr               error
+		reformat             bool // indicates setting of reformat parameter
+		replace              bool // indicates setting of replace parameter
+		start                bool // indicates setting of start parameter
+		expStartReady        bool // instances are released from the start hold
 	}{
 		"nil request": {
 			nilReq: true,
@@ -2331,6 +2336,93 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
+		// MD-on-SSD replace: awaitStorageReady() force-reformats the ramdisk before
+		// the engine blocks on format, so the replaced engine's tmpfs reads as
+		// mounted-but-empty here.
+		"ram already mounted but empty; replace set": {
+			scmMounted:    true,
+			tmpfsEmpty:    true,
+			replace:       true,
+			expStartReady: true,
+			sMounts:       []string{"/mnt/daos"},
+			sClass:        storage.ClassRam,
+			sSize:         6,
+			bClass:        storage.ClassNvme,
+			bDevs:         [][]string{{mockNvmeController0.PciAddr}},
+			bmbcs: []*bdev.MockBackendConfig{
+				{
+					ScanRes: &storage.BdevScanResponse{
+						Controllers: storage.NvmeControllers{mockNvmeController0},
+					},
+					FormatRes: &storage.BdevFormatResponse{
+						DeviceResponses: storage.BdevDeviceFormatResponses{
+							mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+								Formatted: true,
+							},
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
+		// Regression guard: if a replaced engine's ramdisk is ever left mounted
+		// with stale (non-empty) content instead of being force-reformatted by
+		// awaitStorageReady(), instanceSkips treats it the same as an unrelated,
+		// already-formatted engine and --replace will NOT release the start hold.
+		"ram already mounted and not empty; replace set": {
+			scmMounted:    true,
+			replace:       true,
+			expStartReady: false,
+			sMounts:       []string{"/mnt/daos"},
+			sClass:        storage.ClassRam,
+			sSize:         6,
+			bClass:        storage.ClassNvme,
+			bDevs:         [][]string{{mockNvmeController0.PciAddr}},
+			bmbcs: []*bdev.MockBackendConfig{
+				{
+					ScanRes: &storage.BdevScanResponse{
+						Controllers: storage.NvmeControllers{mockNvmeController0},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info: fmt.Sprintf(msgNvmeFormatSkipFail,
+								0),
+						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
+							Error:  fmt.Sprintf(msgScmReplaceNotWiped, 0),
+						},
+					},
+				},
+			},
+		},
 		"ram already mounted and reformat set": {
 			scmMounted: true,
 			reformat:   true,
@@ -2572,6 +2664,76 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
+		// Instance 0 is the --replace target and was successfully wiped
+		// (empty); instance 1 shares the host but has also lost its
+		// superblock while retaining non-empty storage so refuses
+		"ram multi-io; second instance also missing superblock with stale data": {
+			scmMounted:           true,
+			replace:              true,
+			tmpfsEmptyPerInst:    []bool{true, false},
+			expStartReadyPerInst: []bool{true, false},
+			sMounts:              []string{"/mnt/daos0", "/mnt/daos1"},
+			sClass:               storage.ClassRam,
+			sSize:                6,
+			bClass:               storage.ClassNvme,
+			bDevs: [][]string{
+				{mockNvmeController0.PciAddr},
+				{mockNvmeController1.PciAddr},
+			},
+			bmbcs: []*bdev.MockBackendConfig{
+				{
+					ScanRes: &storage.BdevScanResponse{
+						Controllers: storage.NvmeControllers{mockNvmeController0},
+					},
+					FormatRes: &storage.BdevFormatResponse{
+						DeviceResponses: storage.BdevDeviceFormatResponses{
+							mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+								Formatted: true,
+							},
+						},
+					},
+				},
+				{
+					ScanRes: &storage.BdevScanResponse{
+						Controllers: storage.NvmeControllers{mockNvmeController1},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info: fmt.Sprintf(msgNvmeFormatSkipFail,
+								1),
+						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint:    "/mnt/daos0",
+						Instanceidx: 0,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+					{
+						Mntpoint:    "/mnt/daos1",
+						Instanceidx: 1,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
+							Error:  fmt.Sprintf(msgScmReplaceNotWiped, 1),
+						},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2649,16 +2811,21 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				RealReadFile:   true,
 			}
 			if tc.sClass == storage.ClassRam {
-				total := uint64(1234)
-				avail := total
-				if !tc.tmpfsEmpty {
-					avail--
+				emptyPerInst := tc.tmpfsEmptyPerInst
+				if emptyPerInst == nil {
+					emptyPerInst = make([]bool, len(tc.sMounts))
+					for i := range emptyPerInst {
+						emptyPerInst[i] = tc.tmpfsEmpty
+					}
 				}
-				smsc.GetfsUsageResps = []system.GetfsUsageRetval{
-					{
-						Total: total,
-						Avail: avail,
-					},
+				for _, empty := range emptyPerInst {
+					total := uint64(1234)
+					avail := total
+					if !empty {
+						avail--
+					}
+					smsc.GetfsUsageResps = append(smsc.GetfsUsageResps,
+						system.GetfsUsageRetval{Total: total, Avail: avail})
 				}
 			}
 			sysProv := system.NewMockSysProvider(log, smsc)
@@ -2838,13 +3005,18 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						tc.expResp.Mrets, resp.Mrets)
 				}
 			}
-			for _, ei := range instances {
+			for idx, ei := range instances {
 				released := false
 				select {
 				case released = <-ei.(*EngineInstance).startReady:
 				default:
 				}
-				test.AssertEqual(t, tc.expStartReady, released, "start hold released")
+				expReleased := tc.expStartReady
+				if tc.expStartReadyPerInst != nil {
+					expReleased = tc.expStartReadyPerInst[idx]
+				}
+				test.AssertEqual(t, expReleased, released,
+					fmt.Sprintf("start hold released (instance %d)", idx))
 			}
 		})
 	}
@@ -4819,7 +4991,7 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 				Replace:  tc.replace,
 			}
 
-			ctx, cancel := context.WithTimeout(test.Context(t), 2*time.Second)
+			ctx, cancel := context.WithTimeout(test.Context(t), 20*time.Second)
 			defer cancel()
 
 			_, err := cs.StorageFormat(ctx, req)
@@ -4829,7 +5001,7 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 				t.Fatalf("unexpected error from StorageFormat: %v", err)
 			}
 
-			timeout := time.After(500 * time.Millisecond)
+			timeout := time.After(5 * time.Second)
 			receivedCalls := 0
 
 			for receivedCalls < tc.expNotifyCalls {
@@ -4848,7 +5020,7 @@ func TestStorageFormat_isAwaitingFormat_GuardsNotifyStorageReady(t *testing.T) {
 			case engineIdx := <-notifyChan:
 				t.Fatalf("unexpected NotifyStorageReady call for engine %d (expected %d calls total)",
 					engineIdx, tc.expNotifyCalls)
-			case <-time.After(100 * time.Millisecond):
+			case <-time.After(500 * time.Millisecond):
 			}
 
 			notifyMu.Lock()

@@ -36,6 +36,8 @@ const (
 	msgNvmeFormatSkipHPD     = msgNvmeFormatSkip + ", use of hugepages disabled in config"
 	msgNvmeFormatSkipFail    = msgNvmeFormatSkip + ", SCM format failed"
 	msgNvmeFormatSkipNotDone = msgNvmeFormatSkip + ", SCM was not formatted"
+	msgScmReplaceNotWiped    = "instance %d: --replace requested but ramdisk is already " +
+		"mounted with existing content, refusing to reclaim rank without a wipe"
 	// Storage size reserved for storing DAOS metadata stored on SCM device.
 	//
 	// NOTE This storage size value is larger than the minimal size observed (i.e. 36864B),
@@ -945,6 +947,21 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 				scmChan <- e.StorageFormatSCM(ctx, req.reformat)
 			}(ei)
 
+			continue
+		}
+
+		// In replace mode, refuse to format ramdisk if not empty in ephemeral mode.
+		if req.replace && ei.isAwaitingFormat() && scmCfgs[idx].Class == storage.ClassRam &&
+			!ei.GetStorage().ControlMetadataPathConfigured() && !emptyTmpfs[idx] {
+
+			err := errors.Errorf(msgScmReplaceNotWiped, idx)
+			errored[idx] = err.Error()
+			resp.Mrets = append(resp.Mrets, &ctlpb.ScmMountResult{
+				Instanceidx: uint32(idx),
+				Mntpoint:    scmCfgs[idx].Scm.MountPoint,
+				State:       newResponseState(err, ctlpb.ResponseStatus_CTL_ERR_SCM, ""),
+			})
+			skipped[idx] = true
 			continue
 		}
 
