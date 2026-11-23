@@ -83,7 +83,7 @@ type EngineFormatStatus struct {
 	// an administrator action to trigger a format.
 	AwaitingFormat bool `json:"awaiting_format"`
 	// State is the human-readable local engine instance state, e.g.
-	// "AwaitFormat", "Starting", "Ready", "Stopped".
+	// "Stopped", "AwaitingFormat", "AwaitingStart", "EnginesStarting", "Ready".
 	State string `json:"state"`
 }
 

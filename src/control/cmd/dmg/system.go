@@ -193,6 +193,9 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 		return err
 	}
 	if err := resp.Errors(); err != nil {
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp, err)
+		}
 		return err
 	}
 

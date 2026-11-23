@@ -297,6 +297,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 			},
 		}
 	case *control.StorageFormatReq:
+		// Falls back to the default empty response above; these tests only
+		// check the recorded request, not the format response content.
 	}
 
 	return resp, nil
