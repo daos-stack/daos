@@ -25,8 +25,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -202,9 +200,6 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	req.retryTestFn = func(err error, _ uint) bool {
 		switch {
 		case IsRetryableConnErr(err), system.IsNotReady(err):
-			return true
-		// The route to the MS may not be installed yet when joining at boot.
-		case fault.IsFaultCode(err, code.ClientConnectionNetUnreachable):
 			return true
 		}
 		return err == errNoMsResponse

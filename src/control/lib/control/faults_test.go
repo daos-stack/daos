@@ -16,5 +16,5 @@ func TestControl_FaultConnectionNetUnreachable(t *testing.T) {
 	err := FaultConnectionNetUnreachable("10.0.0.1")
 
 	test.AssertTrue(t, IsConnErr(err), "expected a connection error")
-	test.AssertFalse(t, IsRetryableConnErr(err), "expected the default retry policy to exclude it")
+	test.AssertTrue(t, IsRetryableConnErr(err), "expected a retryable connection error")
 }

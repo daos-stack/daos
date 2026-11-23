@@ -2124,6 +2124,7 @@ func TestControl_SystemSelfHealEval_RetryableErrors(t *testing.T) {
 		"leader step-up":         system.ErrLeaderStepUpInProgress,
 		"connection closed":      FaultConnectionClosed(""),
 		"connection refused":     FaultConnectionRefused(""),
+		"network unreachable":    FaultConnectionNetUnreachable(""),
 		"not leader":             &system.ErrNotLeader{LeaderHint: "host1", Replicas: []string{"host2"}},
 		"not replica":            &system.ErrNotReplica{Replicas: []string{"host1", "host2"}},
 		"data plane not started": &fault.Fault{Code: code.ServerDataPlaneNotStarted},

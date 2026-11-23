@@ -56,9 +56,11 @@ func IsRetryableConnErr(err error) bool {
 		return false
 	}
 
+	// Unlike EHOSTUNREACH, a missing route (ENETUNREACH) often appears once the network is up.
 	return f.Code == code.ClientConnectionRefused ||
 		f.Code == code.ClientConnectionTimedOut ||
-		f.Code == code.ClientConnectionClosed
+		f.Code == code.ClientConnectionClosed ||
+		f.Code == code.ClientConnectionNetUnreachable
 }
 
 // IsConnErr indicates whether the error is a connection error.

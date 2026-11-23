@@ -386,6 +386,10 @@ func TestServer_srvModule_chkReportErrToDaosStatus(t *testing.T) {
 			in:        control.FaultConnectionTimedOut("dontcare"),
 			expResult: daos.TryAgain,
 		},
+		"network unreachable": {
+			in:        control.FaultConnectionNetUnreachable("dontcare"),
+			expResult: daos.TryAgain,
+		},
 		"permanent connection error": {
 			in:        control.FaultConnectionBadHost("dontcare"),
 			expResult: daos.Unreachable,
