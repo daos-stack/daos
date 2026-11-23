@@ -584,6 +584,9 @@ int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 
 int dc_obj_init(void);
 void dc_obj_fini(void);
+/** Number of the checksum errors this client reported to the servers */
+uint64_t
+	      dc_obj_csum_report_nr(void);
 
 int dc_obj_register_class(tse_task_t *task);
 int dc_obj_query_class(tse_task_t *task);
