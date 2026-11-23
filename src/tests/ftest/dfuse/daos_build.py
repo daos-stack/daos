@@ -94,6 +94,7 @@ def run_build_test(self, cache_mode, il_lib=None):
     remote_env['COVFILE'] = os.environ['COVFILE']
     remote_env['HTTPS_PROXY'] = os.environ.get('HTTPS_PROXY', '')
     remote_env['NO_PROXY'] = os.environ.get('NO_PROXY', '')
+    remote_env['REPO_FILE_URL'] = os.environ.get('REPO_FILE_URL', '')
 
     if il_lib is not None:
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
@@ -120,6 +121,8 @@ def run_build_test(self, cache_mode, il_lib=None):
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
+            f'cp {build_dir}/utils/scripts/repo-helper-{distro}.sh /tmp/repo-helper.sh',
+            'sudo -E NO_OPENMPI_DEVEL=1 /tmp/repo-helper.sh -y',
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
             'python3 -m pip install pip --upgrade',
