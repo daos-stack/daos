@@ -2097,8 +2097,9 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		/*
 		 * Network error to a dead but not yet excluded rank: the refreshed map is likely
 		 * unchanged. Resend at once the first time, then back off to avoid busy retry.
+		 * -DER_NOREPLY means the peer is alive, so no need to back off for it.
 		 */
-		if (!pmap_stale || daos_crt_network_error(result)) {
+		if (!pmap_stale || (daos_crt_network_error(result) && result != -DER_NOREPLY)) {
 			uint32_t now = daos_gettime_coarse();
 
 			delay = dc_obj_retry_delay(task, opc, result, &obj_auxi->retry_cnt,
