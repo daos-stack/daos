@@ -83,7 +83,7 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 	if (mbs == NULL)
 		return 1;
 
-	rc = dtx_leader_get(pool, mbs, &dre->dre_oid, dre->dre_dte.dte_ver, &target);
+	rc = dtx_leader_get(pool, mbs, &dre->dre_oid, &target);
 	if (rc < 0)
 		return rc;
 
@@ -914,6 +914,10 @@ again:
 
 	D_DEBUG(DB_MD, DF_UUID " start dtx resync: version %u vs %u, retry %d times.\n",
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version, arg->version, retry);
+
+	/* Wait until test logic prepared related things. */
+	while (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_SWITCH))
+		dss_sleep(1000);
 
 	rc = ds_pool_thread_collective(arg->pool_uuid, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
 				       PO_COMP_ST_NEW, dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
