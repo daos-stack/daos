@@ -273,15 +273,15 @@ class FaultInjectionTest:
         NVME_REQUIRED = 5
 
     @staticmethod
-    def rc_to_str(code):
+    def rc_to_str_with_padding(code):
         """Return the display text of a ReturnCode."""
         labels = {
-            FaultInjectionTest.ReturnCode.OK: "OK",
-            FaultInjectionTest.ReturnCode.FAIL: "FAIL",
-            FaultInjectionTest.ReturnCode.NO_TEMPLATE: "NO TEMPLATE",
-            FaultInjectionTest.ReturnCode.DISABLED: "DISABLED",
-            FaultInjectionTest.ReturnCode.NOT_SUPPORTED: "NOT SUPPORTED",
-            FaultInjectionTest.ReturnCode.NVME_REQUIRED: "NVME REQUIRED"
+            FaultInjectionTest.ReturnCode.OK: "OK\t\t",
+            FaultInjectionTest.ReturnCode.FAIL: "FAIL\t\t",
+            FaultInjectionTest.ReturnCode.NO_TEMPLATE: "NO TEMPLATE\t",
+            FaultInjectionTest.ReturnCode.DISABLED: "DISABLED\t",
+            FaultInjectionTest.ReturnCode.NOT_SUPPORTED: "NOT SUPPORTED\t",
+            FaultInjectionTest.ReturnCode.NVME_REQUIRED: "NVME REQUIRED\t"
         }
         return labels[code]
 
@@ -415,10 +415,17 @@ def main():
 
     print("\nSummary:")
     for name, code in results.items():
-        print(f"  {name}: {FaultInjectionTest.rc_to_str(code)}")
-    fail = any(code == FaultInjectionTest.ReturnCode.FAIL for code in results.values())
-    print(f"\nResult: {'FAIL' if fail else 'OK'}")
-    if fail:
+        print(f"  {FaultInjectionTest.rc_to_str_with_padding(code)}{name}")
+
+    ReturnCode = FaultInjectionTest.ReturnCode
+    failed = [name for name, code in results.items() if code == ReturnCode.FAIL]
+    passed = sum(1 for code in results.values() if code == ReturnCode.OK)
+    skipped = len(results) - passed - len(failed)
+    print(f"\nTotal: {len(results)}, pass: {passed}, skip: {skipped}, failed: {len(failed)}")
+    if failed:
+        print("\nFailed:\n  " + "\n  ".join(failed))
+    print(f"\nResult: {'FAIL' if failed else 'OK'}")
+    if failed:
         raise SystemExit(1)
 
 
