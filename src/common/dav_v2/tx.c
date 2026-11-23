@@ -532,6 +532,8 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 			goto err_abort;
 		}
 
+		heap_soemb_active_set(pop->do_heap);
+
 		err = dav_wal_tx_reserve(pop, &wal_id);
 		if (err) {
 			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
@@ -560,8 +562,7 @@ dav_tx_begin_v2(dav_obj_t *pop, jmp_buf env, ...)
 		tx->ranges = ravl_new_sized(tx_range_def_cmp,
 			sizeof(struct tx_range_def));
 		tx->first_snapshot = 1;
-		tx->pop = pop;
-		heap_soemb_active_update(pop->do_heap);
+		tx->pop            = pop;
 	} else {
 		FATAL("Invalid stage %d to begin new transaction", tx->stage);
 	}

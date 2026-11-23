@@ -540,6 +540,11 @@ int   umempobj_get_heapusage(struct umem_pool *pool,
 int
       umempobj_get_mbusage(struct umem_pool *pool, uint32_t mb_id, daos_size_t *cur_allocated,
 			   daos_size_t *maxsz);
+int
+umempobj_get_mb_limits(struct umem_pool *pool, uint32_t *nemb_max, uint32_t *emb_max,
+		       uint32_t *soe_rsrv);
+int
+umempobj_get_soemb_ids(struct umem_pool *pool, uint32_t *ids, uint32_t max_ids, uint32_t *count);
 void  umempobj_log_fraginfo(struct umem_pool *pool);
 
 /** Number of flag bits to reserve for encoding extra information in
