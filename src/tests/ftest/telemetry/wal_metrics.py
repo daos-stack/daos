@@ -142,7 +142,7 @@ class WalMetrics(TestWithTelemetry):
         wal_metrics = list(self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS)
 
         self.log_step('Creating a pool with check pointing disabled (dmg pool create)')
-        self.get_pool(properties='space_rb:0,checkpoint:disabled')
+        self.get_pool(properties='rd_fac:0,space_rb:0,checkpoint:disabled')
 
         self.log_step(
             'Collect WAL checkpoint metrics after creating a pool w/o check pointing '
@@ -160,7 +160,7 @@ class WalMetrics(TestWithTelemetry):
 
         self.log_step('Creating a pool with timed check pointing (dmg pool create)')
         pool = self.get_pool(
-            properties=f'space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
+            properties=f'rd_fac:0,space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
 
         self.log_step(
             'Collect WAL checkpoint metrics after creating a pool w/ check pointing '
