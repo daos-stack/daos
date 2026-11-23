@@ -25,6 +25,8 @@ jobs:
       - name: Load jira metadata
         run: ./ci/jira_query.py ${{ github.event.pull_request.number }}
         id: jira-data
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Comment on PR
         if: always()
         # yamllint disable-line rule:line-length

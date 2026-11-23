@@ -74,16 +74,22 @@ def fetch_pr_data():
 
         github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
         gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+        gh_req = urllib.request.Request(gh_url)
+
+        # Unauthenticated requests are limited to 60 per hour for each IP address.
+        github_token = os.environ.get('GITHUB_TOKEN')
+        if github_token:
+            gh_req.add_header('Authorization', f'Bearer {github_token}')
 
         # We occasionally see this fail with rate-limit-exceeded, if that happens then wait for a
         # while and re-try once.
         try:
-            with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+            with urllib.request.urlopen(gh_req) as raw_pr_data:  # nosec
                 pr_data = json.loads(raw_pr_data.read())
         except urllib.error.HTTPError as error:
             if error.code == 403:
                 time.sleep(60 * 10)
-                with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                with urllib.request.urlopen(gh_req) as raw_pr_data:  # nosec
                     pr_data = json.loads(raw_pr_data.read())
             else:
                 raise
