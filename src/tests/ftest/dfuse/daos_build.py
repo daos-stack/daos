@@ -120,7 +120,6 @@ def run_build_test(self, cache_mode, il_lib=None):
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
-            'sudo -E dnf config-manager --set-disabled daos-stack-deps-el-9-stable-local-artifactory',
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
             'python3 -m pip install pip --upgrade',
