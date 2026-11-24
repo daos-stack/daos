@@ -234,9 +234,19 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 			return -DER_INVAL;
 		}
 
-		hg_proc_set_class(proc, bulk_class);
+/*
+ * TODO: change this back to hg_proc_set_class() once mercury change lands
+ * without this the bounded bulks over secondary provider will not work
+ */
+#define __hg_proc_set_class(p, b)                                                                  \
+	{                                                                                          \
+		(void)p;                                                                           \
+		(void)b;                                                                           \
+	}
+
+		__hg_proc_set_class(proc, bulk_class);
 		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
-		hg_proc_set_class(proc, saved_class);
+		__hg_proc_set_class(proc, saved_class);
 
 		if (unlikely(hg_ret != HG_SUCCESS))
 			return -DER_HG;
