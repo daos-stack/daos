@@ -7,6 +7,7 @@
 #ifndef __DLCK_CHECKER__
 #define __DLCK_CHECKER__
 
+#include <abt.h>
 #include <stdio.h>
 
 #include <daos/checker.h>
