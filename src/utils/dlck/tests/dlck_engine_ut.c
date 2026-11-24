@@ -262,15 +262,6 @@ setup(void **unused)
 	return 0;
 }
 
-static int
-teardown(void **unused)
-{
-	daos_fail_loc_set(0);
-	daos_fail_value_set(0);
-
-	return 0;
-}
-
 /** tests - dlck_engine_xstream_arg_alloc/free */
 
 /** verify a successfully allocated argument points at the right execution stream */
@@ -381,25 +372,6 @@ test_dlck_exec_init_success(void **unused)
 		assert_ptr_equal(de->ults[i].thread, ABT_THREAD_NULL);
 	}
 	assert_false(de->join_fail);
-}
-
-/** verify the DLCK_FAULT_ENGINE_EXEC fault injection stops the batch allocation */
-static void
-test_dlck_exec_init_fault(void **unused)
-{
-	struct dlck_exec *de = &Exec_buf;
-	int               rc;
-
-	engine_build(2);
-	exec_prepare(2);
-	daos_fail_loc_set(DLCK_FAULT_ENGINE_EXEC | DAOS_FAIL_ONCE);
-	daos_fail_value_set(ENOMEM);
-
-	rc = dlck_exec_init(&Engine_buf, de);
-
-	assert_int_equal(rc, -DER_NOMEM);
-	assert_null(de->ults);
-	assert_null(de->ult_args);
 }
 
 /** verify a batch resource allocation failure is reported by the batch coordinator */
@@ -568,27 +540,6 @@ test_dlck_exec_join_success(void **unused)
 	assert_false(Exec_buf.join_fail);
 }
 
-/** verify the DLCK_FAULT_ENGINE_JOIN fault injection marks the batch and joins the ULTs */
-static void
-test_dlck_exec_join_fault(void **unused)
-{
-	int rc;
-
-	exec_build(2);
-	daos_fail_loc_set(DLCK_FAULT_ENGINE_JOIN | DAOS_FAIL_ONCE);
-	daos_fail_value_set(EBUSY);
-	for (int i = 0; i < 2; ++i) {
-		Ults_buf[i].thread = MOCK_THREAD(i);
-		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
-	}
-
-	rc = dlck_exec_join(&Exec_buf);
-
-	assert_int_equal(rc, -DER_BUSY);
-	assert_true(Exec_buf.join_fail);
-}
-
 /** verify a join failure keeps the thread handle and the remaining ULTs are still joined */
 static void
 test_dlck_exec_join_join_failure(void **unused)
@@ -702,29 +653,24 @@ test_dlck_engine_exec_all_exec_failure(void **unused)
 	assert_false(Engine_buf.join_fail);
 }
 
-/** verify a join failure of the batch marks the engine as unstoppable */
+/** verify a ULT join failure is propagated and marks the engine as unstoppable */
 static void
-test_dlck_engine_exec_all_fault_join(void **unused)
+test_dlck_engine_exec_all_join_failure(void **unused)
 {
 	int rc;
 
 	engine_build(1);
-	daos_fail_loc_set(DLCK_FAULT_ENGINE_JOIN | DAOS_FAIL_ONCE);
-	daos_fail_value_set(EBUSY);
 	EXPECT_EXEC_INIT_ALLOC(1);
 	EXPECT_mock_arg_alloc_fn(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
 	expect_value(mock_exec_one, arg, &Payload[0]);
-	/** cleanup */
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_mock_arg_free_fn(&Payload[0]);
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
 	EXPECT_EXEC_FINI_FREE();
 
 	rc = dlck_engine_exec_all(&Engine_buf, mock_arg_alloc_fn, &Custom_alloc, mock_arg_free_fn,
 				  &Custom_free, mock_exec_one, NULL);
 
-	assert_int_equal(rc, -DER_BUSY);
+	assert_int_equal(rc, -DER_INVAL);
 	assert_true(Engine_buf.join_fail);
 }
 
@@ -769,23 +715,6 @@ test_dlck_engine_start_success_no_nvme(void **unused)
 
 	assert_int_equal(rc, DER_SUCCESS);
 	assert_ptr_equal(engine, &Engine_buf);
-}
-
-/** verify the DLCK_FAULT_ENGINE_START fault injection stops the startup before it begins */
-static void
-test_dlck_engine_start_fault(void **unused)
-{
-	struct dlck_engine *engine = NULL;
-	int                 rc;
-
-	Args.targets = 2;
-	daos_fail_loc_set(DLCK_FAULT_ENGINE_START | DAOS_FAIL_ONCE);
-	daos_fail_value_set(EIO);
-
-	rc = dlck_engine_start(&Args, &engine);
-
-	assert_int_equal(rc, -DER_IO);
-	assert_null(engine);
 }
 
 /** verify an engine allocation failure is reported as -DER_NOMEM */
@@ -1288,7 +1217,7 @@ test_dlck_engine_stop_fini_ult_create_failure(void **unused)
 	assert_int_equal(rc, -DER_NOMEM);
 }
 
-#define TEST(ID, FUNC) {"DLCK_ENGINE_" #ID ": " #FUNC, FUNC, setup, teardown, NULL}
+#define TEST(ID, FUNC) {"DLCK_ENGINE_" #ID ": " #FUNC, FUNC, setup, NULL, NULL}
 
 static const struct CMUnitTest dlck_engine_tests[] = {
     TEST(101, test_dlck_engine_xstream_arg_alloc_success),
@@ -1296,47 +1225,44 @@ static const struct CMUnitTest dlck_engine_tests[] = {
     TEST(103, test_dlck_engine_xstream_arg_free_null),
     TEST(104, test_dlck_engine_xstream_arg_free_collects_outputs),
     TEST(105, test_dlck_exec_init_success),
-    TEST(106, test_dlck_exec_init_fault),
-    TEST(107, test_dlck_engine_exec_all_ults_alloc_failure),
-    TEST(108, test_dlck_exec_init_ults_alloc_failure),
-    TEST(109, test_dlck_exec_init_args_alloc_failure),
-    TEST(110, test_dlck_exec_init_arg_alloc_failure),
-    TEST(111, test_dlck_engine_exec_success),
-    TEST(112, test_dlck_engine_exec_ult_create_failure),
-    TEST(113, test_dlck_engine_exec_cleanup_join_failure),
-    TEST(114, test_dlck_exec_join_success),
-    TEST(115, test_dlck_exec_join_fault),
-    TEST(116, test_dlck_exec_join_join_failure),
-    TEST(117, test_dlck_exec_join_thread_free_failure),
-    TEST(118, test_dlck_exec_fini_success),
-    TEST(119, test_dlck_exec_fini_skips_unjoined),
-    TEST(120, test_dlck_engine_exec_all_success),
-    TEST(121, test_dlck_engine_exec_all_exec_failure),
-    TEST(122, test_dlck_engine_exec_all_fault_join),
-    TEST(123, test_dlck_engine_start_success),
-    TEST(124, test_dlck_engine_start_success_no_nvme),
-    TEST(125, test_dlck_engine_start_fault),
-    TEST(126, test_dlck_engine_start_engine_alloc_failure),
-    TEST(127, test_dlck_engine_start_xss_alloc_failure),
-    TEST(128, test_dlck_engine_start_dbtree_classes_failure),
-    TEST(129, test_dlck_engine_start_bio_nvme_init_failure),
-    TEST(130, test_dlck_engine_start_sm_init_failure),
-    TEST(131, test_dlck_engine_start_tls_key_create_failure),
-    TEST(132, test_dlck_engine_start_vos_tls_init_failure),
-    TEST(133, test_dlck_engine_start_vos_sys_db_init_failure),
-    TEST(134, test_dlck_engine_start_xs_create_failure),
-    TEST(135, test_dlck_engine_start_xs_init_tls_failure),
-    TEST(136, test_dlck_engine_start_xs_init_xsctxt_failure),
-    TEST(137, test_dlck_engine_start_xs_init_eventual_failure),
-    TEST(138, test_dlck_engine_start_xs_init_polling_ult_failure),
-    TEST(139, test_dlck_engine_start_polling_eventual_test_failure),
-    TEST(140, test_dlck_engine_stop_success),
-    TEST(141, test_dlck_engine_stop_join_fail),
-    TEST(142, test_dlck_engine_stop_fini_failure),
-    TEST(143, test_dlck_engine_stop_pool_not_empty),
-    TEST(144, test_dlck_engine_stop_xs_free_failure),
-    TEST(145, test_dlck_engine_stop_sm_fini_failure),
-    TEST(146, test_dlck_engine_stop_fini_ult_create_failure),
+    TEST(106, test_dlck_engine_exec_all_ults_alloc_failure),
+    TEST(107, test_dlck_exec_init_ults_alloc_failure),
+    TEST(108, test_dlck_exec_init_args_alloc_failure),
+    TEST(109, test_dlck_exec_init_arg_alloc_failure),
+    TEST(110, test_dlck_engine_exec_success),
+    TEST(111, test_dlck_engine_exec_ult_create_failure),
+    TEST(112, test_dlck_engine_exec_cleanup_join_failure),
+    TEST(113, test_dlck_exec_join_success),
+    TEST(114, test_dlck_exec_join_join_failure),
+    TEST(115, test_dlck_exec_join_thread_free_failure),
+    TEST(116, test_dlck_exec_fini_success),
+    TEST(117, test_dlck_exec_fini_skips_unjoined),
+    TEST(118, test_dlck_engine_exec_all_success),
+    TEST(119, test_dlck_engine_exec_all_exec_failure),
+    TEST(120, test_dlck_engine_exec_all_join_failure),
+    TEST(121, test_dlck_engine_start_success),
+    TEST(122, test_dlck_engine_start_success_no_nvme),
+    TEST(123, test_dlck_engine_start_engine_alloc_failure),
+    TEST(124, test_dlck_engine_start_xss_alloc_failure),
+    TEST(125, test_dlck_engine_start_dbtree_classes_failure),
+    TEST(126, test_dlck_engine_start_bio_nvme_init_failure),
+    TEST(127, test_dlck_engine_start_sm_init_failure),
+    TEST(128, test_dlck_engine_start_tls_key_create_failure),
+    TEST(129, test_dlck_engine_start_vos_tls_init_failure),
+    TEST(130, test_dlck_engine_start_vos_sys_db_init_failure),
+    TEST(131, test_dlck_engine_start_xs_create_failure),
+    TEST(132, test_dlck_engine_start_xs_init_tls_failure),
+    TEST(133, test_dlck_engine_start_xs_init_xsctxt_failure),
+    TEST(134, test_dlck_engine_start_xs_init_eventual_failure),
+    TEST(135, test_dlck_engine_start_xs_init_polling_ult_failure),
+    TEST(136, test_dlck_engine_start_polling_eventual_test_failure),
+    TEST(137, test_dlck_engine_stop_success),
+    TEST(138, test_dlck_engine_stop_join_fail),
+    TEST(139, test_dlck_engine_stop_fini_failure),
+    TEST(140, test_dlck_engine_stop_pool_not_empty),
+    TEST(141, test_dlck_engine_stop_xs_free_failure),
+    TEST(142, test_dlck_engine_stop_sm_fini_failure),
+    TEST(143, test_dlck_engine_stop_fini_ult_create_failure),
 };
 
 int
@@ -1349,16 +1275,7 @@ main(int argc, char **argv)
 	}
 	d_register_alt_assert(mock_assert);
 
-	/** required by daos_fail_loc_set() to store the fault attributes */
-	rc = daos_fail_init();
-	if (rc != 0) {
-		fprintf(stderr, "ERROR: daos_fail_init() failed: %d\n", rc);
-		return 1;
-	}
-
 	rc = cmocka_run_group_tests_name("dlck_engine_ut", dlck_engine_tests, NULL, NULL);
-
-	daos_fail_fini();
 
 	return rc;
 }
