@@ -7234,7 +7234,8 @@ register_handler(int sig, struct sigaction *old_handler)
 static inline void
 check_exe_sh_bash(void)
 {
-	if (memcmp(exe_short_name, "bash", 5) == 0 || memcmp(exe_short_name, "sh", 3) == 0)
+	if (strncmp(exe_short_name, STR_AND_SIZE("bash")) == 0 ||
+	    strncmp(exe_short_name, STR_AND_SIZE("sh")) == 0)
 		is_bash = true;
 }
 
@@ -7358,8 +7359,8 @@ check_bypasslist(void)
 		}
 	}
 
-	if ((memcmp(exe_short_name, STR_AND_SIZE("python")) == 0 ||
-	     memcmp(exe_short_name, STR_AND_SIZE("python3")) == 0) &&
+	if ((strncmp(exe_short_name, STR_AND_SIZE("python")) == 0 ||
+	     strncmp(exe_short_name, STR_AND_SIZE("python3")) == 0) &&
 	    first_arg) {
 		/* built-in list of python scripts to skip */
 		for (i = 0; i < ARRAY_SIZE(bypass_python3_cmd_list); i++) {
