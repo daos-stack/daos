@@ -136,6 +136,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      STAGE_NAME=\"$STAGE_NAME\"
      DAOS_HTTPS_PROXY=\"$_DAOS_HTTPS_PROXY\"
      DAOS_NO_PROXY=\"$_DAOS_NO_PROXY\"
+    REPO_FILE_URL=\"${REPO_FILE_URL:-}\"
      DAOS_FTEST_VENV=\"$DAOS_FTEST_VENV\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
