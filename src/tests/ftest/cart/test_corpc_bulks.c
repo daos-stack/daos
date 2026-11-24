@@ -173,6 +173,7 @@ corpc_hdlr(crt_rpc_t *rpc)
 {
 	struct bulk_test_in *input;
 	crt_bulk_t           remote_bulk;
+	uint32_t             provider_idx;
 	int                  rc;
 
 	DBG_PRINT("corpc handler called on rank %d\n", g_my_rank);
@@ -185,6 +186,9 @@ corpc_hdlr(crt_rpc_t *rpc)
 
 	remote_bulk = g_inline_bulk ? rpc->cr_co_bulk_hdl : input->bulk_hdl;
 	D_ASSERTF(remote_bulk != CRT_BULK_NULL, "bulk handle is not set\n");
+	rc = crt_bulk_get_provider_index(remote_bulk, &provider_idx);
+	D_ASSERTF(rc == 0, "Failed to get bulk provider index: %d\n", rc);
+	D_ASSERTF(provider_idx == 0, "Unexpected bulk provider index: %u\n", provider_idx);
 
 	if (g_inline_bulk) {
 		verify_implicit_bulk(remote_bulk, input->bulk_size);

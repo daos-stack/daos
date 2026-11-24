@@ -88,6 +88,8 @@ struct crt_prov_gdata {
 	struct crt_na_config cpg_na_config;
 	/** Context0 URI */
 	char                 cpg_addr[CRT_ADDR_STR_MAX_LEN];
+	/** Class used to decode bulks arriving over another provider. */
+	hg_class_t          *cpg_bulk_hg_class;
 
 	/** CaRT contexts list */
 	d_list_t             cpg_ctx_list;

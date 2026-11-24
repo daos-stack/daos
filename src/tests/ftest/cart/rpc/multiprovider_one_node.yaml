@@ -1,0 +1,13 @@
+hosts:
+  hosts_1:
+    config: one_node
+    test_servers: server-1
+    test_clients: server-1
+timeout: 300
+multiprovider:
+  primary_provider: "ofi+tcp"
+  secondary_provider: "ofi+tcp"
+  primary_interface: "eth0"
+  secondary_interface: "lo"
+  primary_domain: "eth0"
+  secondary_domain: "lo"

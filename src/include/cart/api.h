@@ -104,6 +104,21 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
+/**
+ * Create a server context on a secondary provider. Currently only secondary
+ * provider index 0 is supported.
+ *
+ * \param[out] crt_ctx         created CRT transport context
+ * \param[in]  idx             secondary provider index
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_create_secondary(crt_context_t *crt_ctx, int idx);
+
+/** Return whether a server context uses the primary provider. */
+bool
+crt_context_is_primary(crt_context_t crt_ctx);
 
 /**
  * Returns number of interfaces passed to CaRT at initialization time.
@@ -810,6 +825,25 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
 		       crt_bulk_opid_t *opid);
 
 /**
+ * Transfer a bound bulk using an explicitly selected context. This permits a
+ * forwarded bulk to use a different provider from the RPC carrying its handle.
+ * Both bulk handles must belong to the selected context's Mercury class. The
+ * selected context must be progressed until the completion callback runs.
+ * The RPC in bulk_desc still supplies the operation's deadline.
+ *
+ * \param[in] ctx              context for the bulk transfer
+ * \param[in] bulk_desc        bulk descriptor; may be freed after this call
+ * \param[in] complete_cb      completion callback
+ * \param[in] arg              callback argument
+ * \param[out] opid            optional operation ID for cancellation
+ *
+ * \return                    DER_SUCCESS on success, negative value on failure
+ */
+int
+crt_bulk_bind_transfer_ctx(crt_context_t ctx, struct crt_bulk_desc *bulk_desc,
+			   crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid);
+
+/**
  * Get length (number of bytes) of data abstracted by bulk handle.
  *
  * \param[in] bulk_hdl         bulk handle
@@ -821,8 +855,9 @@ int
 crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len);
 
 /**
- * Get provider index (0 for primary, 1+ for secondary) associated with the
- * bulk handle
+ * Get the server fabric index (0 for primary, 1 for the supported secondary)
+ * associated with the bulk handle. A secondary-only client returns 1 even
+ * though its sole local context is primary locally.
  *
  * \param[in] crt_bulk         bulk handle
  * \param[out] ret_idx         provider index

@@ -256,6 +256,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	int			ctx_idx;
 	int			max_ctx_num;
 	d_list_t		*ctx_list;
+	struct crt_prov_gdata   *prov_data;
 
 	if (crt_ctx == NULL) {
 		D_ERROR("invalid parameter of NULL crt_ctx.\n");
@@ -310,6 +311,9 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 	ctx_list = crt_provider_get_ctx_list(primary, provider);
 	d_list_add_tail(&ctx->cc_link, ctx_list);
+	prov_data = HG_Class_get_data(ctx->cc_hg_ctx.chc_hgcla);
+	if (ctx_idx == 0)
+		prov_data->cpg_bulk_hg_class = ctx->cc_hg_ctx.chc_hgcla;
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -441,6 +445,11 @@ int
 crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
 {
 	crt_provider_t sec_prov;
+
+	if (!crt_is_service() || idx != 0) {
+		D_ERROR("Secondary contexts require a server and provider index 0\n");
+		return -DER_INVAL;
+	}
 
 	if (crt_gdata.cg_secondary_provs == NULL) {
 		D_ERROR("Secondary provider not initialized\n");
@@ -764,6 +773,7 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context      *ctx = crt_ctx;
+	struct crt_prov_gdata   *prov_data;
 	uint32_t                 timeout_sec;
 	int                      ctx_idx;
 	int                      provider;
@@ -851,6 +861,18 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
 	provider = ctx->cc_hg_ctx.chc_provider;
+
+	if (ctx->cc_hg_ctx.chc_hgcla != NULL && !ctx->cc_hg_ctx.chc_shared_hg_class) {
+		prov_data = HG_Class_get_data(ctx->cc_hg_ctx.chc_hgcla);
+		if (prov_data != NULL) {
+			D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+
+			if (prov_data->cpg_bulk_hg_class == ctx->cc_hg_ctx.chc_hgcla)
+				prov_data->cpg_bulk_hg_class = NULL;
+
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		}
+	}
 
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {

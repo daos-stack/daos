@@ -295,7 +295,7 @@ crt_hg_bulk_bind(hg_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx);
 int
 crt_hg_bulk_access(hg_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int
-crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
+crt_hg_bulk_transfer(crt_context_t ctx, struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 		     crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid, bool bind);
 
 void

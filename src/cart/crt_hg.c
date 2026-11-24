@@ -927,6 +927,12 @@ retry:
 		D_GOTO(out, rc);
 	}
 
+	if (HG_Class_set_data(hg_class, prov_data, NULL) != HG_SUCCESS) {
+		D_ERROR("Failed to associate provider data with Mercury class\n");
+		HG_Finalize(hg_class);
+		D_GOTO(out, rc = -DER_HG);
+	}
+
 out:
 	if (rc == 0)
 		*ret_hg_class = hg_class;
@@ -1038,8 +1044,10 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int idx,
 	hg_ctx->chc_provider    = provider;
 
 	hg_ctx->chc_shared_hg_class = crt_provider_is_sep(true, provider);
-	hg_ctx->chc_thread_mode_single =
-	    (!hg_ctx->chc_shared_hg_class && crt_is_service()) || crt_gdata.cg_thread_mode_single;
+	/* Forwarded bulks can access either provider from another progress thread. */
+	hg_ctx->chc_thread_mode_single = (!hg_ctx->chc_shared_hg_class && crt_is_service() &&
+					  crt_gdata.cg_num_secondary_provs == 0) ||
+					 crt_gdata.cg_thread_mode_single;
 
 	/* In SEP mode all contexts share same hg_class*/
 	if (hg_ctx->chc_shared_hg_class) {
@@ -2191,8 +2199,9 @@ out:
 }
 
 int
-crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
-		     crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid, bool bind)
+crt_hg_bulk_transfer(crt_context_t crt_ctx, struct crt_bulk_desc *bulk_desc,
+		     crt_bulk_cb_t verify_cb, crt_bulk_cb_t complete_cb, void *arg,
+		     crt_bulk_opid_t *opid, bool bind)
 {
 	struct crt_context		*ctx;
 	struct crt_hg_context		*hg_ctx;
@@ -2212,7 +2221,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t verify_cb,
 		 bulk_desc->bd_bulk_op == CRT_BULK_GET);
 	D_ASSERT(bulk_desc->bd_rpc != NULL);
 
-	ctx = bulk_desc->bd_rpc->cr_ctx;
+	ctx    = crt_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
 
 	crt_local_bulk  = ((struct crt_bulk *)(bulk_desc->bd_local_hdl));

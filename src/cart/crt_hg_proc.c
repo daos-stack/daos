@@ -150,16 +150,18 @@ crt_proc_crt_bulk_t_deferred(struct crt_bulk *bulk)
 int
 crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bulk)
 {
-	struct crt_bulk *bulk = NULL;
-	hg_bulk_t        hg_bulk;
-	hg_return_t      hg_ret;
-	uint32_t         tmp = 0;
-	int              rc;
+	struct crt_bulk       *bulk = NULL;
+	struct crt_prov_gdata *prov_data;
+	hg_class_t            *saved_class;
+	hg_class_t            *bulk_class;
+	hg_bulk_t              hg_bulk;
+	hg_return_t            hg_ret;
+	uint32_t               provider_idx = 0;
+	int                    rc;
 
 	/*
-	 * We only send 'hg_bulk_t' over the wire. During encoding stage we
-	 * extract mercury bulk handle from crt_bulk_t, while during decode
-	 * we wrap mercury bulk in a newly allocated crt_bulk_t struct
+	 * Send the provider index before the Mercury handle so decoding can select
+	 * the bulk's class independently of the RPC's transport class.
 	 */
 	switch (proc_op) {
 	case CRT_PROC_ENCODE:
@@ -171,31 +173,72 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 				DL_ERROR(rc, "Failed to do deferred bulk allocation during proc");
 				return rc;
 			}
-			hg_bulk = bulk->hg_bulk_hdl;
+
+			hg_bulk      = bulk->hg_bulk_hdl;
+			provider_idx = bulk->prov_idx;
 		} else {
 			/* RPC can have a NULL bulk. if so, encode a NULL value */
 			hg_bulk = HG_BULK_NULL;
+			prov_data = HG_Class_get_data(hg_proc_get_class(proc));
+			if (prov_data == NULL) {
+				D_ERROR("Missing provider data for null bulk encoding\n");
+				return -DER_INVAL;
+			}
+
+			provider_idx = crt_bulk_provider_index(prov_data->cpg_primary);
 		}
+
+		rc = crt_proc_uint32_t(proc, proc_op, &provider_idx);
+		if (rc != 0)
+			return rc;
 
 		/* Pack mercury bulk handle to send over the wire */
 		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
-		if (hg_ret != HG_SUCCESS)
-			return -DER_HG;
-
-		/* Pack provider index to send over the wire; NOTE: This breaks wire backwards
-		 * compat */
-		rc = crt_proc_uint32_t(proc, proc_op, &bulk->prov_idx);
-		return rc;
+		return hg_ret == HG_SUCCESS ? 0 : -DER_HG;
 
 	case CRT_PROC_DECODE:
-		/* unpack mercury handle and wrap it around crt_bulk_t struct */
-		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
-		if (unlikely(hg_ret != HG_SUCCESS))
-			return -DER_HG;
-
 		/* unpack primary/secondary provider identifier with bulk */
-		rc = crt_proc_uint32_t(proc, proc_op, &tmp);
+		rc = crt_proc_uint32_t(proc, proc_op, &provider_idx);
 		if (unlikely(rc))
+			return rc;
+
+		if (provider_idx > 1) {
+			D_ERROR("Unsupported bulk provider index %u\n", provider_idx);
+			return -DER_INVAL;
+		}
+
+		saved_class = hg_proc_get_class(proc);
+		prov_data   = HG_Class_get_data(saved_class);
+		if (prov_data == NULL) {
+			D_ERROR("Missing provider data for bulk decoding\n");
+			return -DER_INVAL;
+		}
+
+		bulk_class = saved_class;
+		if (provider_idx != crt_bulk_provider_index(prov_data->cpg_primary)) {
+			D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
+
+			if (provider_idx == 0 && crt_gdata.cg_provider_is_primary)
+				bulk_class = crt_gdata.cg_prov_gdata_primary.cpg_bulk_hg_class;
+			else if (provider_idx == 1 && crt_gdata.cg_provider_is_primary &&
+				 crt_gdata.cg_num_secondary_provs > 0)
+				bulk_class = crt_gdata.cg_prov_gdata_secondary[0].cpg_bulk_hg_class;
+			else
+				bulk_class = NULL;
+
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		}
+
+		if (bulk_class == NULL) {
+			D_ERROR("No context available for bulk provider index %u\n", provider_idx);
+			return -DER_INVAL;
+		}
+
+		hg_proc_set_class(proc, bulk_class);
+		hg_ret = hg_proc_hg_bulk_t(proc, &hg_bulk);
+		hg_proc_set_class(proc, saved_class);
+
+		if (unlikely(hg_ret != HG_SUCCESS))
 			return -DER_HG;
 
 		/* don't create a bulk wrapper if null bulk was transmitted */
@@ -206,8 +249,10 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 
 		/* Allocate space for a wrapper struct */
 		D_ALLOC_PTR(bulk);
-		if (unlikely(bulk == NULL))
+		if (unlikely(bulk == NULL)) {
+			(void)HG_Bulk_free(hg_bulk);
 			return -DER_NOMEM;
+		}
 
 		*bulk = (struct crt_bulk){.hg_bulk_hdl = hg_bulk,
 					  .crt_ctx     = NULL,
@@ -216,13 +261,8 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op, crt_bulk_t *pcrt_bul
 					  .bulk_perm   = 0, /* unused */
 					  .refcount    = 1,
 					  .bound       = false,
-					  .deferred    = false};
-
-		hg_ret = crt_proc_uint32_t(proc, proc_op, &bulk->prov_idx);
-		if (hg_ret != HG_SUCCESS) {
-			D_FREE(bulk);
-			return -DER_HG;
-		}
+					  .deferred    = false,
+					  .prov_idx    = provider_idx};
 
 		*pcrt_bulk = bulk;
 
