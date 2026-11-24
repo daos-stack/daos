@@ -697,7 +697,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 						DP_OID(oid), rc);
 					D_GOTO(out, rc);
 				}
-				setbit(tgts_used, target->ta_comp.co_id);
+				setbit(tgts_used, target - root->do_targets);
 				setbit(dom_cur_grp_used, domain - root);
 			} else {
 				curr_pd = jm_obj_shard_pd(jmop, k);

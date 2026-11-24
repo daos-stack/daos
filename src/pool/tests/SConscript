@@ -1,0 +1,22 @@
+"""Build pool client tests"""
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    if not prereqs.test_requested():
+        return
+
+    denv = env.Clone()
+
+    denv.require('protobufc')
+
+    denv.AppendUnique(LIBPATH=[Dir('../../client/api')])
+
+    denv.d_test_program('pool_cli_tests', 'pool_cli_tests.c',
+                        LIBS=['daos', 'daos_common', 'gurt', 'cart', 'uuid', 'cmocka'])
+
+
+if __name__ == "SCons.Script":
+    scons()

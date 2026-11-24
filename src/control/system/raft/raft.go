@@ -470,6 +470,17 @@ func (dt *loggingTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddre
 	return dt.Transport.TimeoutNow(id, target, args, resp)
 }
 
+// Close forwards to the wrapped transport: raft.Shutdown() only closes transports that
+// implement raft.WithClose, which embedding the raft.Transport interface hides.
+func (dt *loggingTransport) Close() error {
+	if c, ok := dt.Transport.(raft.WithClose); ok {
+		return c.Close()
+	}
+	return nil
+}
+
+var _ raft.WithClose = (*loggingTransport)(nil)
+
 // serverAddress returns a raft.ServerAddress representation of
 // the db's replica address.
 func (db *Database) serverAddress() raft.ServerAddress {

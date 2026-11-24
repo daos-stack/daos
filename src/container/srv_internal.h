@@ -56,6 +56,13 @@ dsm_tls_get()
 	return tls;
 }
 
+/* The container does not exist or is being destroyed, expected if racing with a destroy */
+static inline bool
+cont_gone_rc(int rc)
+{
+	return rc == -DER_NONEXIST || rc == -DER_CONT_NONEXIST || rc == -DER_CONT_DESTROYING;
+}
+
 extern bool ec_agg_disabled;
 
 struct rank_eph {
@@ -75,12 +82,14 @@ struct cont_track_eph_leader {
 	d_list_t                 cte_list;
 	int                      cte_servers_num;
 	uint32_t                 cte_deleted : 1;
-	/* Time when this leader started tracking the container. A boundary jump larger
-	 * than the tracking age cannot have been observed by this leader, it comes from
-	 * the stale epoch loaded from rdb at leader step-up, so it is not a real stall.
+	/* TS of the last successful boundary push to the ranks */
+	uint64_t                 cte_refresh_ts;
+	/* Start of the period in which EC boundary progress is accounted for sluggish
+	 * warnings: set when this leader starts tracking the container, moved forward
+	 * while rebuilding or reclaim is disabled. A boundary jump larger than this
+	 * period was not observed by this leader (it was inherited from rdb at leader
+	 * step-up or made during rebuild), so it is not a real stall.
 	 */
-	uint64_t                 cte_start_ts;
-	/* TS to check for ec_agg_eph sluggish warning */
 	uint64_t                 cte_ec_agg_warn_slug_ts;
 };
 

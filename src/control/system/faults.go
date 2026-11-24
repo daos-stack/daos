@@ -56,9 +56,24 @@ func FaultJoinReplaceRankNotFound(nrFieldsNotMatching int) *fault.Fault {
 func FaultJoinMemberExists(newUUID, dbUUID uuid.UUID) *fault.Fault {
 	return systemFault(
 		code.SystemJoinMemberExists,
-		fmt.Sprintf("system member with matching control address, fabric URIs, and fault domain already exists with UUID %s (join request UUID: %s)", dbUUID, newUUID),
-		"format the rank with 'dmg storage format --replace' to update the UUID and rejoin the system",
+		fmt.Sprintf("system member with matching control address, fabric URIs, and fault "+
+			"domain already exists with UUID %s (join request UUID: %s)", dbUUID,
+			newUUID),
+		"format the rank with 'dmg storage format --replace' to update the UUID and "+
+			"rejoin the system",
 	)
+}
+
+// FaultJoinMemberExistsAdminExcluded is similar to FaultJoinMemberExists but the existing rank
+// entry is in an AdminExcluded state. The resolution includes clearing this state before retry.
+func FaultJoinMemberExistsAdminExcluded(newUUID, dbUUID uuid.UUID) *fault.Fault {
+	f := FaultJoinMemberExists(newUUID, dbUUID)
+	f.Description = fmt.Sprintf("%s, rank database entry is in an AdminExcluded state",
+		f.Description)
+	f.Resolution = fmt.Sprintf("clear manual exclusion first with 'dmg system clear-exclude "+
+		"-r <rank>' then %s", f.Resolution)
+
+	return f
 }
 
 func systemFault(code code.Code, desc, res string) *fault.Fault {

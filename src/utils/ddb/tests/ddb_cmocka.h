@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,10 +63,25 @@
 		assert_int_equal((a).rx_idx, (b).rx_idx); \
 	} while (0)
 
-#define assert_string_contains(str, substr) \
-	do { \
-		if (strstr(str, substr) == NULL) \
-			fail_msg("'%s' not found in '%s'", substr, str); \
+#define assert_string_contains(str, substr)                                                        \
+	do {                                                                                       \
+		if (strstr(str, substr) == NULL)                                                   \
+			fail_msg("Expected string '%s' not found in '%s'", substr, str);           \
+	} while (0)
+
+/* All the strings were printed in \a buf, in the given order and without overlap. */
+#define assert_strings_in_order(buf, ...)                                                          \
+	do {                                                                                       \
+		const char *_strs[] = {__VA_ARGS__};                                               \
+		const char *_pos    = (buf);                                                       \
+		int         _i;                                                                    \
+		for (_i = 0; _i < sizeof(_strs) / sizeof(_strs[0]); _i++) {                        \
+			_pos = strstr(_pos, _strs[_i]);                                            \
+			if (_pos == NULL)                                                          \
+				fail_msg("Expected string #%d '%s' not found (in order) in '%s'",  \
+					 _i, _strs[_i], (buf));                                    \
+			_pos += strlen(_strs[_i]);                                                 \
+		}                                                                                  \
 	} while (0)
 
 #define assert_invalid(x) assert_rc_equal(-DER_INVAL, (x))

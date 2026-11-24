@@ -16,7 +16,7 @@
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/mem.h>
-#include <daos/report.h>
+#include <daos/checker.h>
 
 /**
  * KV record of the btree.
@@ -417,14 +417,12 @@ typedef struct {
 	 * \param tins		[IN]	Tree instance which contains the root umem
 	 *				offset and memory class etc.
 	 * \param rec		[IN]	Record to be checked.
-	 * \param report_fn	[IN]	Report function.
-	 * \param report_arg	[IN]	Argument for the report function.
+	 * \param ck		[IN]	Checker.
 	 *
 	 * \retval DER_SUCCESS	Success.
 	 * \retval -DER_*	Errors returned by the fetch callback or the consistency check.
 	 */
-	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec,
-			    report_fn_t report_fn, void *report_arg);
+	int (*to_rec_check)(struct btr_instance *tins, struct btr_record *rec, struct checker *ck);
 } btr_ops_t;
 
 /**
@@ -560,8 +558,7 @@ int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    daos_handle_t coh, void *priv, daos_handle_t *toh);
 
 int
-     dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, void *priv,
-			  report_fn_t report_fn, void *report_arg, bool error_on_non_zero_padding);
+dbtree_check_inplace(struct btr_root *root, struct umem_attr *uma, void *priv, struct checker *ck);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);

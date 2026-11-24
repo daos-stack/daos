@@ -158,7 +158,7 @@ retry_dnf() {
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 # shellcheck disable=SC2154
-                send_mail "Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server " \
+                send_mail "INFO: Command retry successful in $STAGE_NAME after $((attempt + 1)) attempts using ${repo_servers[0]} as initial repo server " \
                           "Command:  ${args[*]}\nAttempts: $attempt\nStatus:   $rc"
             fi
             if [ -n "$ARTIFACTORY_URL" ]; then
@@ -186,7 +186,7 @@ retry_dnf() {
         fi
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
+        send_mail "ERROR: Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server " \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
         echo "Command retry failed in $STAGE_NAME after $attempt attempts using ${repo_server:-nexus} as initial repo server "
         echo "Command:  $*"
@@ -230,7 +230,7 @@ monitor_cmd() {
     fi
     ((duration = SECONDS - start))
     if [ "$duration" -gt "$threshold" ]; then
-        send_mail "Command exceeded ${threshold}s in $STAGE_NAME" \
+        send_mail "WARNING: Command exceeded ${threshold}s in $STAGE_NAME" \
                     "Command:  $*\nReal time: $duration"
     fi
     return 0
@@ -249,7 +249,7 @@ retry_cmd() {
         if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
+                send_mail "INFO: Command retry successful in $STAGE_NAME after $attempt attempts" \
                           "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
             fi
             return 0
@@ -264,7 +264,7 @@ retry_cmd() {
         fi
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
+        send_mail "ERROR: Command retry failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
         echo "Command retry failed in $STAGE_NAME after $attempt attempts"
         echo "Command:  $*"
@@ -286,7 +286,7 @@ timeout_cmd() {
         if [ "$rc" -eq 0 ]; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
-                send_mail "Command timeout successful in $STAGE_NAME after $attempt attempts" \
+                send_mail "INFO: Command timeout successful in $STAGE_NAME after $attempt attempts" \
                           "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
             fi
             return 0
@@ -300,7 +300,7 @@ timeout_cmd() {
         break
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command timeout failed in $STAGE_NAME after $attempt attempts" \
+        send_mail "ERROR: Command timeout failed in $STAGE_NAME after $attempt attempts" \
                   "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
         echo "Command timeout failed in $STAGE_NAME after $attempt attempts"
         echo "Command:  $*"
@@ -412,24 +412,44 @@ post_provision_config_nodes() {
 
     # ConnectX must be 5 or later to support MOFED/DOCA drivers
     # RoCE tests with Mellanox adapters may use MOFED/DOCA drivers.
+    this_pci_bus=''
     last_pci_bus=''
     mellanox_drivers=false
     while IFS= read -r line; do
-        pci_bus="${line%.*}"
-        if [ "$pci_bus" == "$last_pci_bus" ]; then
-            # We only use one interface on a dual interface HBA
-            # Fortunately lspci appears to group them together
-            continue
+        if [[ $line == Slot:* ]]; then
+            # e.g. Slot:   0000:07:00.0
+            if [[ $line =~ ([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2})\.[0-9a-fA-F] ]]; then
+                this_pci_bus="${BASH_REMATCH[1]}"
+            else
+                echo "Unable to determine Infiniband controller PCI address for line: $line"
+                return 1
+            fi
+        elif [[ $line == Device:* ]]; then
+            # e.g. Device: MT2910 Family [ConnectX-7]                   - HW node
+            #      Device: MT28908 Family [ConnectX-6 Virtual Function] - CB node
+            #      Device: ConnectX Family mlx5Gen Virtual Function     - VM node
+            if [ -n "$last_pci_bus" ] && [ "$this_pci_bus" == "$last_pci_bus" ]; then
+                # We only use one interface on a dual interface HBA
+                # Fortunately lspci appears to group them together
+                continue
+            fi
+            last_pci_bus="$this_pci_bus"
+            if [[ $line =~ (ConnectX-|mlx)([0-9]+)(Gen)? ]]; then
+                generation="${BASH_REMATCH[2]}"
+                if [ "$generation" -ge 5 ]; then
+                    mellanox_drivers=true
+                    break
+                fi
+            elif [[ $line == *ConnectX* ]]; then
+                echo "Unable to determine Mellanox driver generation for line: $line"
+                return 1
+            fi
         fi
-        last_pci_bus="$pci_bus"
-        mlnx_type="${line##*ConnectX-}"
-        mlnx_type="${mlnx_type%]*}"
-        mlnx_type="${mlnx_type%% *}"
-        if [ "$mlnx_type" -ge 5 ]; then
-            mellanox_drivers=true
-            break
-        fi
-    done < <(lspci -mm | grep "ConnectX" || true)
+    done < <(
+        lspci -vmm -D |
+        grep -E '^(Slot|Class|Device):' |
+        grep -E 'Class:\sInfiniband controller' -B 1 -A 1 ||
+        true)
 
     if "$mellanox_drivers"; then
         # Remove OPA and install MOFED

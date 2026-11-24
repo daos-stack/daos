@@ -26,8 +26,7 @@ class CartCtlFiveNodeTest(CartTest):
 
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
-        # pylint: disable=broad-except
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-except
             self.log.info("Exception in launching server : %s", error)
             self.fail("Test failed.\n")
 

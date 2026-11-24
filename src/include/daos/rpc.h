@@ -68,7 +68,7 @@ enum daos_module_id {
 
 #define DAOS_VOS_VERSION      1
 #define DAOS_MGMT_VERSION     4
-#define DAOS_POOL_VERSION     7
+#define DAOS_POOL_VERSION     8
 #define DAOS_CONT_VERSION     9
 #define DAOS_OBJ_VERSION      10
 #define DAOS_REBUILD_VERSION  5
@@ -208,13 +208,20 @@ struct daos_req_comm_in {
 	uint64_t	req_in_paddings[4];
 };
 
+enum daos_req_comm_flags {
+	DRCF_DTX_LEADER = (1 << 0),
+};
+
 struct daos_req_comm_out {
 	/** Enqueue ID of the request returned to client, for server overloaded retry */
 	uint64_t	req_out_enqueue_id;
 	daos_version_t  req_out_version;
 	uint32_t        req_out_padding;
+	uint32_t        req_flags;
+	/* For resent modification RPC, it returns the DTX leader target ID. */
+	uint32_t        req_leader;
 	/** Reserved for future extension */
-	uint64_t        req_out_paddings[3];
+	uint64_t        req_out_paddings[2];
 };
 
 

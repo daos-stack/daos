@@ -560,14 +560,14 @@ func TestConfig_FabricValidation(t *testing.T) {
 		"missing provider": {
 			cfg: FabricConfig{
 				Interface:     "bar",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 			expErr: errors.New("provider"),
 		},
 		"missing interface": {
 			cfg: FabricConfig{
 				Provider:      "foo",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 			expErr: errors.New("fabric_iface"),
 		},
@@ -582,7 +582,15 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:      "foo",
 				Interface:     "bar",
-				InterfacePort: -42,
+				InterfacePort: "-42",
+			},
+			expErr: errors.New("fabric_iface_port"),
+		},
+		"signed positive port number": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     "bar",
+				InterfacePort: "+42",
 			},
 			expErr: errors.New("fabric_iface_port"),
 		},
@@ -590,21 +598,21 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:      "foo",
 				Interface:     "bar",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 		},
 		"multi provider/interface/port ok": {
 			cfg: FabricConfig{
 				Provider:      multiProviderString("foo", "bar"),
 				Interface:     multiProviderString("baz", "net"),
-				InterfacePort: 42,
+				InterfacePort: multiProviderString("42", "128"),
 			},
 		},
 		"mismatched num providers": {
 			cfg: FabricConfig{
 				Provider:      "foo",
 				Interface:     multiProviderString("baz", "net"),
-				InterfacePort: 42,
+				InterfacePort: multiProviderString("42", "128"),
 			},
 			expErr: errors.New("same number"),
 		},
@@ -612,7 +620,15 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:      multiProviderString("foo", "bar"),
 				Interface:     "baz",
-				InterfacePort: 42,
+				InterfacePort: multiProviderString("42", "128"),
+			},
+			expErr: errors.New("same number"),
+		},
+		"mismatched num ports": {
+			cfg: FabricConfig{
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: "42",
 			},
 			expErr: errors.New("same number"),
 		},
@@ -620,7 +636,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar"),
 				Interface:             multiProviderString("baz", "net"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128"),
 				NumSecondaryEndpoints: []int{0},
 			},
 			expErr: errors.New("must be > 0"),
@@ -629,7 +645,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar", "baz"),
 				Interface:             multiProviderString("net0", "net1", "net2"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1, 2},
 			},
 		},
@@ -637,7 +653,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar", "baz"),
 				Interface:             multiProviderString("net0", "net1", "net2"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1, 2, 3},
 			},
 			expErr: errors.New("must have one value for each"),
@@ -646,7 +662,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:              multiProviderString("foo", "bar", "baz"),
 				Interface:             multiProviderString("net0", "net1", "net2"),
-				InterfacePort:         42,
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1},
 			},
 			expErr: errors.New("must have one value for each"),
@@ -750,6 +766,56 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 }
 
+func TestEngine_FabricConfig_Normalize(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    *FabricConfig
+		expCfg *FabricConfig
+	}{
+		"unchanged": {
+			cfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+			expCfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+		},
+		"trim whitespace": {
+			cfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs ", "   ofi+tcp "),
+				Interface:     multiProviderString("      if0 ", " if1"),
+				InterfacePort: multiProviderString("\t1234 ", "\n5678    "),
+			},
+			expCfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+		},
+		"remove empty elements": {
+			cfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp", ""),
+				Interface:     multiProviderString("if0", "", "if1"),
+				InterfacePort: multiProviderString("", "1234", "5678"),
+			},
+			expCfg: &FabricConfig{
+				Provider:      multiProviderString("ofi+verbs", "ofi+tcp"),
+				Interface:     multiProviderString("if0", "if1"),
+				InterfacePort: multiProviderString("1234", "5678"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.cfg.Normalize()
+
+			test.CmpAny(t, "updated FabricConfig", tc.expCfg, tc.cfg)
+		})
+	}
+}
+
 func TestFabricConfig_GetProviders(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg          *FabricConfig
@@ -772,12 +838,6 @@ func TestFabricConfig_GetProviders(t *testing.T) {
 		"multi": {
 			cfg: &FabricConfig{
 				Provider: multiProviderString("p1", "p2", "p3"),
-			},
-			expProviders: []string{"p1", "p2", "p3"},
-		},
-		"excessive whitespace": {
-			cfg: &FabricConfig{
-				Provider: multiProviderString(" ", " p1 ", "  p2 ", "p3"),
 			},
 			expProviders: []string{"p1", "p2", "p3"},
 		},
@@ -881,12 +941,6 @@ func TestFabricConfig_GetInterfaces(t *testing.T) {
 			},
 			expInterfaces: []string{"net1", "net2", "net3"},
 		},
-		"excessive whitespace": {
-			cfg: &FabricConfig{
-				Interface: multiProviderString(" net1  ", "", "    net2", "net3", ""),
-			},
-			expInterfaces: []string{"net1", "net2", "net3"},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			interfaces, err := tc.cfg.GetInterfaces()
@@ -937,7 +991,7 @@ func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
 func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg      *FabricConfig
-		expPorts []int
+		expPorts []uint
 		expErr   error
 	}{
 		"nil": {
@@ -949,9 +1003,39 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 		},
 		"single": {
 			cfg: &FabricConfig{
-				InterfacePort: 1234,
+				InterfacePort: "1234",
 			},
-			expPorts: []int{1234},
+			expPorts: []uint{1234},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("1234", "5678", "9012", "65535"),
+			},
+			expPorts: []uint{1234, 5678, 9012, 65535},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("1234   ", "  5678  ", "", " 9012"),
+			},
+			expErr: errors.New("fabric_iface_port item \"1234   \""),
+		},
+		"non-integer port": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("1234", "a123"),
+			},
+			expErr: errors.New("fabric_iface_port item \"a123\""),
+		},
+		"over 16 bits": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("65536", "1234"),
+			},
+			expErr: errors.New("fabric_iface_port item \"65536\""),
+		},
+		"zero": {
+			cfg: &FabricConfig{
+				InterfacePort: multiProviderString("5678", "0", "1234"),
+			},
+			expErr: errors.New("fabric_iface_port item \"0\""),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1024,7 +1108,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			new: FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1032,7 +1116,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			expResult: &FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1042,7 +1126,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			fc: &FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1051,7 +1135,7 @@ func TestFabricConfig_Update(t *testing.T) {
 			expResult: &FabricConfig{
 				Provider:              "provider",
 				Interface:             "iface",
-				InterfacePort:         9999,
+				InterfacePort:         "9999",
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1064,14 +1148,14 @@ func TestFabricConfig_Update(t *testing.T) {
 			new: FabricConfig{
 				Provider:      "provider",
 				Interface:     "iface",
-				InterfacePort: 9999,
+				InterfacePort: "9999",
 				CrtTimeout:    120,
 				DisableSRX:    true,
 			},
 			expResult: &FabricConfig{
 				Provider:      "provider",
 				Interface:     "iface",
-				InterfacePort: 9999,
+				InterfacePort: "9999",
 				CrtTimeout:    60,
 				DisableSRX:    true,
 			},
