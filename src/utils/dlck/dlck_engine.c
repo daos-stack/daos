@@ -22,6 +22,37 @@ int
 extern struct dss_module     vos_srv_module;
 extern struct dss_module_key vos_module_key;
 
+#ifdef DLCK_ENGINE_UNIT_TEST
+struct dss_module_info *
+__wrap_dlck_engine_get_module_info(void);
+void
+__wrap_dlck_engine_register_key(struct dss_module_key *key);
+void
+__wrap_dlck_engine_unregister_key(struct dss_module_key *key);
+
+#define dlck_engine_get_module_info()   __wrap_dlck_engine_get_module_info()
+#define dlck_engine_register_key(KEY)   __wrap_dlck_engine_register_key(KEY)
+#define dlck_engine_unregister_key(KEY) __wrap_dlck_engine_unregister_key(KEY)
+#else
+struct dss_module_info *
+dlck_engine_get_module_info(void)
+{
+	return dss_get_module_info();
+}
+
+void
+dlck_engine_register_key(struct dss_module_key *key)
+{
+	dss_register_key(key);
+}
+
+void
+dlck_engine_unregister_key(struct dss_module_key *key)
+{
+	dss_unregister_key(key);
+}
+#endif
+
 /**
  * Allocate an engine.
  *
@@ -80,7 +111,7 @@ nvme_polling(void *arg)
 	struct dss_module_info *dmi;
 	int                     rc;
 
-	dmi = dss_get_module_info();
+	dmi = dlck_engine_get_module_info();
 	D_ASSERT(dmi != NULL);
 
 	do {
@@ -172,7 +203,7 @@ dlck_engine_xstream_init(struct dlck_xstream *xs)
 	}
 
 	if (dlck_engine_xstream_has_nvme(tgt_id)) {
-		dmi = dss_get_module_info();
+		dmi = dlck_engine_get_module_info();
 		D_ASSERT(dmi != NULL);
 
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
@@ -253,7 +284,7 @@ dlck_engine_xstream_fini(struct dlck_xstream *xs)
 			 */
 		}
 
-		dmi = dss_get_module_info();
+		dmi = dlck_engine_get_module_info();
 		D_ASSERT(dmi != NULL);
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 	}
@@ -498,8 +529,8 @@ dlck_engine_init(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
 		goto fail_engine_free;
 	}
 
-	dss_register_key(&daos_srv_modkey);
-	dss_register_key(&vos_module_key);
+	dlck_engine_register_key(&daos_srv_modkey);
+	dlck_engine_register_key(&vos_module_key);
 
 	rc = vos_srv_module.sm_init();
 	if (rc != DER_SUCCESS) {
@@ -533,8 +564,8 @@ fail_tls_key_delete:
 fail_vos_sm_fini:
 	(void)vos_srv_module.sm_fini();
 fail_unregister_keys:
-	dss_unregister_key(&vos_module_key);
-	dss_unregister_key(&daos_srv_modkey);
+	dlck_engine_unregister_key(&vos_module_key);
+	dlck_engine_unregister_key(&daos_srv_modkey);
 	bio_nvme_fini();
 fail_engine_free:
 	dlck_engine_free(engine);
@@ -559,8 +590,8 @@ dlck_engine_fini(struct dlck_engine *engine)
 		return rc;
 	}
 
-	dss_unregister_key(&vos_module_key);
-	dss_unregister_key(&daos_srv_modkey);
+	dlck_engine_unregister_key(&vos_module_key);
+	dlck_engine_unregister_key(&daos_srv_modkey);
 
 	bio_nvme_fini();
 

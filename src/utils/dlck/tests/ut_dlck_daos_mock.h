@@ -27,6 +27,14 @@ extern struct dss_module_key            daos_srv_modkey;
 extern struct dss_module_key            vos_module_key;
 extern struct dss_module                vos_srv_module;
 
+/** Surface mocks for direct dlck_engine.c helper calls. */
+struct dss_module_info *
+__wrap_dlck_engine_get_module_info(void);
+void
+__wrap_dlck_engine_register_key(struct dss_module_key *key);
+void
+__wrap_dlck_engine_unregister_key(struct dss_module_key *key);
+
 /** TLS primitives */
 
 #define EXPECT_DSS_TLS_INIT(TAG, XS_ID, TGT_ID, DTLS)                                              \
@@ -37,12 +45,10 @@ extern struct dss_module                vos_srv_module;
 		will_return(__wrap_dss_tls_init, DTLS);                                            \
 	} while (0)
 
-/** queue a complete dss_get_module_info() lookup resolving to Mock_dmi */
-#define EXPECT_DSS_GET_MODULE_INFO()                                                               \
+/** queue dlck_engine.c's direct module-info lookup */
+#define EXPECT_DLCK_ENGINE_GET_MODULE_INFO()                                                       \
 	do {                                                                                       \
-		will_return(__wrap_dss_tls_get, &Mock_dtls);                                       \
-		expect_value(__wrap_daos_get_module_key, index, daos_srv_modkey.dmk_index);        \
-		will_return(__wrap_daos_get_module_key, &daos_srv_modkey);                         \
+		will_return(__wrap_dlck_engine_get_module_info, &Mock_dmi);                        \
 	} while (0)
 
 /** BIO primitives */

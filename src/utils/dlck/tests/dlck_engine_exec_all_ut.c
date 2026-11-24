@@ -87,7 +87,7 @@ __wrap_dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
 	assert_ptr_equal(de->exec_one, mock_exec_one);
 	de->join_fail = mock_type(bool);
 
-        return mock_type(int);
+	return mock_type(int);
 }
 
 int
@@ -103,7 +103,7 @@ __wrap_dlck_exec_join(struct dlck_exec *de)
 	assert_ptr_equal(de->exec_one, mock_exec_one);
 	de->join_fail = mock_type(bool);
 
-        return mock_type(int);
+	return mock_type(int);
 }
 
 void

@@ -220,6 +220,7 @@
 - name: dlck
   base: "BUILD_DIR"
   tests:
+    - cmd: ["src/utils/dlck/tests/dlck_abt_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_common_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_macros_ut"]

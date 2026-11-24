@@ -76,24 +76,22 @@ __wrap_ds_tls_key_delete(void)
 	function_called();
 }
 
+struct dss_module_info *
+__wrap_dlck_engine_get_module_info(void)
+{
+	return mock_ptr_type(struct dss_module_info *);
+}
+
 void
-__wrap_daos_register_key(struct daos_module_key *key)
+__wrap_dlck_engine_register_key(struct dss_module_key *key)
 {
 	check_expected_ptr(key);
 }
 
 void
-__wrap_daos_unregister_key(struct daos_module_key *key)
+__wrap_dlck_engine_unregister_key(struct dss_module_key *key)
 {
 	check_expected_ptr(key);
-}
-
-struct daos_module_key *
-__wrap_daos_get_module_key(int index)
-{
-	check_expected(index);
-
-	return mock_ptr_type(struct daos_module_key *);
 }
 
 /** engine mocks */

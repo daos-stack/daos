@@ -39,7 +39,6 @@ dlck_xstream_free(struct dlck_xstream *xs)
 	rc = mock_type(int);
 	if (rc == DER_SUCCESS) {
 		xs->xstream = ABT_XSTREAM_NULL;
-		xs->pool    = ABT_POOL_NULL;
 	}
 	return rc;
 }

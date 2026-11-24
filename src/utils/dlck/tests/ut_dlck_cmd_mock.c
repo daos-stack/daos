@@ -21,10 +21,10 @@ mock_arg_alloc_fn(struct dlck_engine *engine, int idx, void *custom, void **arg)
 {
 	int rc;
 
-        assert_non_null(arg);
 	check_expected_ptr(engine);
 	check_expected(idx);
 	check_expected_ptr(custom);
+	assert_non_null(arg);
 	rc = mock_type(int);
 	if (rc == DER_SUCCESS) {
 		*arg = mock_ptr_type(void *);

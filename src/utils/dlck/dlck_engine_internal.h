@@ -24,17 +24,17 @@ struct dlck_exec {
 
 /**
  * Allocate the per-target resources of a caller-initialized batch.
- * On failure, release allocated resources and report the result to the checker.
+ * On failure, release allocated resources.
  *
- * The caller initializes the callbacks, their arguments, target count and optional checker, and
- * zeroes the remaining state.
+ * The caller initializes the callbacks, their arguments and target count, and zeroes the remaining
+ * state.
  */
 int
 dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de);
 
 /**
- * Start the batch's exec_one ULT per-target and report the start result. On failure, join started
- * ULTs; the caller must still release the batch with dlck_exec_fini().
+ * Start the batch's exec_one ULT per-target. On failure, join started ULTs; the caller must still
+ * release the batch with dlck_exec_fini().
  */
 int
 dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de);
