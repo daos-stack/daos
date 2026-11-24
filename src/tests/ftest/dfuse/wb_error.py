@@ -38,7 +38,7 @@ class DfuseWritebackError(TestWithServers):
         target = os.path.join(dfuse.mount_dir.value, 'wb_error')
         block = bytes(128 * 1024)
         max_bytes = self.params.get('max_bytes', '/run/wb_error/*')
-        self.assertGreater(max_bytes, 0)
+        self.assertGreater(max_bytes, 0, 'max_bytes must be > 0')
 
         self.log_step('Fill the pool until an acknowledged write fails at fsync')
         with ExitStack() as stack:
@@ -61,9 +61,10 @@ class DfuseWritebackError(TestWithServers):
             os.fsync(writer.fileno())
 
             self.log_step('An independently opened handle must report the pending error once')
-            with self.assertRaises(OSError) as raised:
+            with self.assertRaises(OSError, msg='expected fsync to fail') as raised:
                 os.fsync(observer.fileno())
-            self.assertEqual(raised.exception.errno, errno.ENOSPC)
+            self.assertEqual(
+                raised.exception.errno, errno.ENOSPC, 'expected fsync to fail with ENOSPC')
             os.fsync(observer.fileno())
 
             self.log_step('A new open must not inherit historical write-back errors')
