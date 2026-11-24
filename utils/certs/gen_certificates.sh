@@ -16,6 +16,16 @@ function print_usage () {
     >&2 echo "$__usage"
 }
 
+# As root only, and best effort: away from a server the DAOS users and groups don't exist.
+function set_owner () {
+    local user="$1" group="$2"
+    shift 2
+    [[ $EUID -eq 0 ]] || return 0
+    getent passwd "${user}" >/dev/null || return 0
+    getent group "${group}" >/dev/null || return 0
+    chown "${user}:${group}" "$@"
+}
+
 # validity of root CA and keys' certificates
 DAYS=1095
 
@@ -91,13 +101,13 @@ function generate_ca_cert () {
     echo "Generating Private CA Root Certificate"
     # Generate Private key and set permissions
     openssl genrsa -out "${PRIVATE}/daosCA.key" 3072
-    [[ $EUID -eq 0 ]] && chown root.root "${PRIVATE}/daosCA.key" 2>/dev/null
+    set_owner root root "${PRIVATE}/daosCA.key"
     chmod 0400 "${PRIVATE}/daosCA.key"
     # Generate CA Certificate
     openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days ${DAYS} -sha512 \
         -key "${PRIVATE}/daosCA.key" \
         -out "${CERTS}/daosCA.crt" -batch
-    [[ $EUID -eq 0 ]] && chown root.daos_daemons "${CERTS}/daosCA.crt" 2>/dev/null
+    set_owner root daos_daemons "${CERTS}/daosCA.crt"
     chmod 0644 "${CERTS}/daosCA.crt"
     # Reset the the CA index
     rm -f "${CA_HOME}/index.txt" "${CA_HOME}/serial.txt"
@@ -110,8 +120,7 @@ function generate_agent_cert () {
     echo "Generating Agent Certificate"
     # Generate Private key and set its permissions
     openssl genrsa -out "${CERTS}/agent.key" 3072
-    [[ $EUID -eq 0 ]] \
-        && chown daos_agent.daos_agent "${CERTS}/agent.key" 2>/dev/null
+    set_owner daos_agent daos_agent "${CERTS}/agent.key"
     chmod 0400 "${CERTS}/agent.key"
     # Generate a Certificate Signing Request (CRS)
     openssl req -new -config "${CONFIGS}/agent.cnf" -key "${CERTS}/agent.key" \
@@ -121,8 +130,7 @@ function generate_agent_cert () {
         -cert "${CERTS}/daosCA.crt" -policy signing_policy \
         -extensions signing_agent -out "${CERTS}/agent.crt" \
         -outdir "${CERTS}" -in "${CA_HOME}/agent.csr" -batch
-    [[ $EUID -eq 0 ]] \
-        && chown daos_agent.daos_agent "${CERTS}/agent.crt" 2>/dev/null
+    set_owner daos_agent daos_agent "${CERTS}/agent.crt"
     chmod 0644 "${CERTS}/agent.crt"
 
     echo "Required Agent Certificate Files:
@@ -158,7 +166,7 @@ function generate_server_cert () {
     echo "Generating Server Certificate"
     # Generate Private key and set its permissions
     openssl genrsa -out "${CERTS}/server.key" 3072
-    [[ $EUID -eq 0 ]] && chown daos_server.daos_server "${CERTS}/server.key"
+    set_owner daos_server daos_server "${CERTS}/server.key"
     chmod 0400 "${CERTS}/server.key"
     # Generate a Certificate Signing Request (CRS)
     openssl req -new -config "${CONFIGS}/server.cnf" \
@@ -168,7 +176,7 @@ function generate_server_cert () {
         -cert "${CERTS}/daosCA.crt" -policy signing_policy \
         -extensions signing_server -out "${CERTS}/server.crt" \
         -outdir "${CERTS}" -in "${CA_HOME}/server.csr" -batch
-    [[ $EUID -eq 0 ]] && chown daos_server.daos_server "${CERTS}/server.crt"
+    set_owner daos_server daos_server "${CERTS}/server.crt"
     chmod 0644 "${CERTS}/server.crt"
 
     echo "Required Server Certificate Files:
@@ -180,9 +188,9 @@ function generate_server_cert () {
 function populate_clients_dir () {
     mkdir -p                      "${CLIENTS}"
     chmod 700                     "${CLIENTS}"
-    chown daos_server.daos_server "${CLIENTS}"
+    set_owner daos_server daos_server "${CLIENTS}"
     cp "${CERTS}/agent.crt"       "${CLIENTS}/agent.crt"
-    chown daos_server.daos_server "${CLIENTS}/agent.crt"
+    set_owner daos_server daos_server "${CLIENTS}/agent.crt"
     chmod 644                     "${CLIENTS}/agent.crt"
 
     echo "Authorized Clients Certificate Files on DAOS Servers:
