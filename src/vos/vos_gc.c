@@ -312,7 +312,7 @@ gc_extra_pin(struct vos_pool *pool, struct vos_obj_p2_df *p2, struct umem_pin_ha
 		gc_info->gi_pinned_hdl = NULL;
 	}
 
-	rc = vos_bkt_array_pin(pool, &bkts, pin_hdl);
+	rc = vos_bkt_array_pin(pool, &bkts, pin_hdl, true);
 	if (rc != 0) {
 		DL_ERROR(rc, "Failed to re-pin required buckets.");
 		goto out;
@@ -350,7 +350,7 @@ gc_extra_unpin(struct vos_pool *pool, struct umem_pin_handle *pin_hdl)
 		rg.cr_off  = umem_get_mb_base_offset(vos_pool2umm(pool), gc_info->gi_last_pinned);
 		rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 		/* The primary bucket is already pinned, it only adds reference */
-		rc = vos_cache_pin(pool, &rg, 1, false, &gc_info->gi_pinned_hdl);
+		rc = vos_cache_pin(pool, &rg, 1, 0, &gc_info->gi_pinned_hdl, false);
 		if (rc != 0)
 			DL_ERROR(rc, "Failed to restore pin for bucket %u.",
 				 gc_info->gi_last_pinned);
@@ -1578,7 +1578,7 @@ gc_reclaim_pool_p2(struct vos_pool *pool, int *credits, bool *empty_ret)
 			rg.cr_off = umem_get_mb_base_offset(vos_pool2umm(pool), bkt);
 			rg.cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 
-			rc = vos_cache_pin(pool, &rg, 1, false, &gc_info->gi_pinned_hdl);
+			rc = vos_cache_pin(pool, &rg, 1, 0, &gc_info->gi_pinned_hdl, true);
 			if (rc) {
 				DL_ERROR(rc, "Failed to pin bucket %u.", bkt);
 				break;

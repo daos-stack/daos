@@ -463,7 +463,7 @@ obj_pin_bkt(struct vos_pool *pool, struct vos_object *obj)
 	}
 
 	obj->obj_bkt_loading = 1;
-	rc                   = vos_bkt_array_pin(pool, &bkts, &obj->obj_pin_hdl);
+	rc                   = vos_bkt_array_pin(pool, &bkts, &obj->obj_pin_hdl, true);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin object:"DF_UOID".", DP_UOID(obj->obj_id));
 
@@ -1109,7 +1109,7 @@ vos_bkt_array_add(struct vos_bkt_array *bkts, uint32_t bkt_id)
 
 int
 vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
-		  struct umem_pin_handle **pin_hdl)
+		  struct umem_pin_handle **pin_hdl, bool reserve)
 {
 	struct umem_cache_range	 rg_inline[VOS_BKTS_INLINE_MAX];
 	struct umem_cache_range	*ranges;
@@ -1132,7 +1132,7 @@ vos_bkt_array_pin(struct vos_pool *pool, struct vos_bkt_array *bkts,
 		ranges[i].cr_size = vos_pool2store(pool)->cache->ca_page_sz;
 	}
 
-	rc = vos_cache_pin(pool, ranges, bkts->vba_cnt, false, pin_hdl);
+	rc = vos_cache_pin(pool, ranges, bkts->vba_cnt, 0, pin_hdl, reserve);
 	if (rc)
 		DL_ERROR(rc, "Failed to pin %u ranges.", bkts->vba_cnt);
 
@@ -1268,7 +1268,7 @@ vos_pin_objects(daos_handle_t coh, daos_unit_oid_t oids[], int count, struct vos
 		}
 	}
 
-	rc = vos_bkt_array_pin(pool, &bkts, &vos_hdl->vph_pin_hdl);
+	rc = vos_bkt_array_pin(pool, &bkts, &vos_hdl->vph_pin_hdl, true);
 	if (rc) {
 		DL_ERROR(rc, "Failed to pin %u objects.", vos_hdl->vph_acquired);
 		goto error;
@@ -1304,7 +1304,7 @@ obj_repin_bkt(struct vos_object *obj)
 	 * Old buckets are already pinned by object cache, newly added spillover bucket is
 	 * pinned also, so following pin operation won't yield.
 	 */
-	rc = vos_bkt_array_pin(pool, &bkts, &obj->obj_pin_hdl);
+	rc = vos_bkt_array_pin(pool, &bkts, &obj->obj_pin_hdl, false);
 	if (rc) {
 		DL_ERROR(rc, "Failed to repin object:" DF_UOID ".", DP_UOID(obj->obj_id));
 		obj->obj_pin_hdl = old_hdl;
