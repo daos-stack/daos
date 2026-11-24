@@ -5,6 +5,15 @@
 """Build versioned object store tests"""
 
 
+def build_dlck_engine_macros_ut(henv):
+    """Build dlck_engine_macros_ut"""
+    henv.Append(OBJPREFIX="dlck_engine_macros_ut_")
+    henv.require('argobots', 'cmocka')
+
+    henv.d_test_program('dlck_engine_macros_ut', ['dlck_engine_macros_ut.c'],
+                        LIBS=['gurt', 'cmocka'])
+
+
 def build_dlck_engine_ut(henv):
     """Build dlck_engine_ut"""
     henv.Append(OBJPREFIX="dlck_engine_ut_")
@@ -166,6 +175,7 @@ def scons():
     build_dlck_checker_macros_ut(env.Clone())
     build_dlck_checker_main_ut(env.Clone())
     build_dlck_checker_worker_ut(env.Clone())
+    build_dlck_engine_macros_ut(env.Clone())
     build_dlck_engine_ut(env.Clone())
 
 
