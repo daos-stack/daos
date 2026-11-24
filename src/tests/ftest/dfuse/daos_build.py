@@ -117,7 +117,7 @@ def run_build_test(self, cache_mode, il_lib=None):
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
     repo_distro = re.sub(r"([A-Za-z])(?=\d)", r"\1-", distro, count=1)
-    disable_distro = f"daos-stack-deps{repo_distro}-stable-local-artifactory"
+    disable_distro = f"daos-stack-deps-{repo_distro}-stable-local-artifactory"
 
     cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
