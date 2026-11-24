@@ -16,7 +16,6 @@ DFS
 DSO
 DataLoader
 Datamover
-Deduplicate
 EL
 Enakta
 EOF
@@ -516,7 +515,6 @@ unlinking
 unmangle
 unmount
 unordered
-untrusted
 unwritable
 uri
 url

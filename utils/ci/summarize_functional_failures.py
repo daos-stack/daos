@@ -35,8 +35,7 @@ import argparse
 import os
 import re
 import sys
-# Only ever parses JUnit XML written by this repo's own test suite (test-results/),
-# never external/untrusted input -- see B405/B314 in ci/bandit.config.
+# Only parses the JUnit XML files of our own test suite, see B405/B314 in ci/bandit.config
 import xml.etree.ElementTree as ET  # nosec B405
 from pathlib import Path
 
@@ -90,26 +89,21 @@ def build_summary_md(failures):
     if not failures:
         return '#### PASS All functional unit tests passed\n'
 
-    # cmocka-level entries (specific test function names) take precedence over binary-level entries
-    # for the same suite.
     cmocka_entries = [f for f in failures if not f['is_binary']]
     binary_entries = [f for f in failures if f['is_binary']]
 
-    # A suite's binary-level entry is only known to be fully redundant with its cmocka-level
-    # entry/entries when exactly one binary failed in that suite -- with more than one, we can't
-    # tell which is already covered by a cmocka-level entry, so nothing is suppressed for that suite
-    # in that (rarer) case.
+    # The cmocka entries are more specific than the binary entry of their suite, but they only
+    # replace it when it is the single failing binary of the suite: with several, we cannot tell
+    # which one they come from
     cmocka_suites = {f['suite'] for f in cmocka_entries}
     binary_names_by_suite = {}
     for entry in binary_entries:
         binary_names_by_suite.setdefault(entry['suite'], set()).add(entry['name'])
-    # Drop entries for cmocka suites that have only a single binary
     binary_entries = [
         entry for entry in binary_entries
         if entry['suite'] not in cmocka_suites or len(binary_names_by_suite[entry['suite']]) != 1
     ]
 
-    # Deduplicate while preserving order (e.g. accidental double-reporting of the exact same entry).
     seen = set()
     items = []
     for entry in cmocka_entries + binary_entries:
