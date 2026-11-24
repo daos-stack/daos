@@ -24,7 +24,7 @@ const (
 	MaxUserOnlyKeyPerm os.FileMode = 0400
 	MaxGroupKeyPerm    os.FileMode = 0440
 	MaxCertPerm        os.FileMode = 0664
-	// Others may read a cert directory but not write to it, or they could plant a cert.
+	// Only the owner can write to it, otherwise a different user could plant a cert.
 	MaxDirPerm os.FileMode = 0755
 )
 
