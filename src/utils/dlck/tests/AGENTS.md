@@ -83,20 +83,21 @@
 
 ## DLCK Engine Batch
 
-- Exercise batch initialization, execution, joining and finalization separately in
-  `dlck_engine_ut`. Test `dlck_engine_exec_all()` orchestration in `dlck_engine_exec_all_ut`,
-  mocking every function declared in `dlck_engine_internal.h`. The start message spans
-  initialization and execution; joining reports its own result.
+- Exercise batch initialization, execution, joining and finalization in `dlck_engine_ut`.  
+- Test `dlck_engine_exec_all()` orchestration in `dlck_engine_exec_all_ut`,  
+  mocking every function declared in `dlck_engine_internal.h`. The start message spans  
+  initialization and execution; joining reports its own result. 
 - The caller owns and initializes `dlck_exec`, including its ULT callback, allocation callbacks,
   target count and optional checker. `dlck_exec_fini()` releases resources, not the structure.
 - After execution or joining, propagate the batch's `join_fail` to the engine before finalization.
-  Finalization must not free arguments belonging to ULTs that have not joined.
+- Finalization must not free arguments belonging to ULTs that have not joined.
 - Test allocation and partial-start failures, join failures, and cleanup with distinct resources
-  for each target. Allocation cleanup may call the free callback with a null argument.
-- The `dlck_engine_ut` binary replaces `dlck_abt.c` with the `ut_dlck_abt_mock.c` mocks. Its
-  `dlck_ult_create` mock runs successful ULTs synchronously, so queue their expectations before
-  creating them. Use per-stream sentinels for retained handles; transient ULTs can share
-  `Mock_thread`.
+  for each target.
+- Allocation cleanup may call the free callback with a null argument.
+- The `dlck_engine_ut` binary replaces `dlck_abt.c` with the `ut_dlck_abt_mock.c` mocks.
+- `dlck_ult_create` mock runs successful ULTs synchronously, so queue their expectations before
+  creating them.
+-  Use per-stream sentinels for retained handles; transient ULTs can share `Mock_thread`.
 
 ## DLCK Checker Tests
 

@@ -28,8 +28,8 @@ dlck_engine_exec_all(struct dlck_engine *engine, arg_alloc_fn_t arg_alloc_fn,
 
 	CK_PRINTF(ck, "Start targets... ");
 	rc = dlck_exec_init(engine, &de);
-	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
+		CK_APPENDL_RC(ck, rc);
 		return rc;
 	}
 

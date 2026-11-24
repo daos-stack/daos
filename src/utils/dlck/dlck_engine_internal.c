@@ -9,7 +9,7 @@
 
 #include "dlck_engine_internal.h"
 
-static void
+void
 dlck_exec_join_no_error(struct dlck_exec *de)
 {
 	int rc;
@@ -101,8 +101,7 @@ dlck_exec_join(struct dlck_exec *de)
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_JOIN)) { /** fault injection */
 		de->join_fail = true;
 		dlck_exec_join_no_error(de);
-		rc = daos_errno2der(daos_fail_value_get());
-		goto report;
+		return daos_errno2der(daos_fail_value_get());
 	}
 
 	for (int i = 0; i < de->targets; ++i) {
@@ -122,7 +121,6 @@ dlck_exec_join(struct dlck_exec *de)
 		de->ults[i].thread = ABT_THREAD_NULL;
 	}
 
-report:
 	return rc;
 }
 

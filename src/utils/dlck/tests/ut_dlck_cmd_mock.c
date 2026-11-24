@@ -21,6 +21,7 @@ mock_arg_alloc_fn(struct dlck_engine *engine, int idx, void *custom, void **arg)
 {
 	int rc;
 
+        assert_non_null(arg);
 	check_expected_ptr(engine);
 	check_expected(idx);
 	check_expected_ptr(custom);

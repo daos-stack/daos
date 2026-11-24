@@ -262,28 +262,59 @@ setup(void **unused)
 	return 0;
 }
 
+static int
+setup_engine_exec_build_prep(void **unused)
+{
+	int rc;
+
+	rc = setup(unused);
+	if (rc != 0) {
+		return rc;
+	}
+
+	engine_build(2);
+	exec_prepare(2);
+
+	return 0;
+}
+
+static int
+setup_engine_exec_build(void **unused)
+{
+	int rc;
+
+	rc = setup(unused);
+	if (rc != 0) {
+		return rc;
+	}
+
+	engine_build(2);
+	exec_build(2);
+
+	return 0;
+}
+
 /** tests - dlck_engine_xstream_arg_alloc/free */
 
 /** verify a successfully allocated argument points at the right execution stream */
 static void
 test_dlck_engine_xstream_arg_alloc_success(void **unused)
 {
-	struct dlck_xstream xss[2] = {{.tgt_id = 0}, {.tgt_id = 1}};
-	struct dlck_engine  engine = {.targets = 2, .xss = xss};
-	struct xstream_arg  xa     = {0};
-	int                 ctrl;
-	void               *arg = NULL;
-	int                 rc;
+	struct xstream_arg xa = {0};
+	int                ctrl;
+	void              *arg = NULL;
+	int                rc;
 
+	engine_build(2);
 	EXPECT_D_CALLOC(1, sizeof(struct xstream_arg), &xa);
 
-	rc = dlck_engine_xstream_arg_alloc(&engine, 1, &ctrl, &arg);
+	rc = dlck_engine_xstream_arg_alloc(&Engine_buf, 1, &ctrl, &arg);
 
 	assert_int_equal(rc, DER_SUCCESS);
 	assert_ptr_equal(arg, &xa);
 	assert_ptr_equal(xa.ctrl, &ctrl);
-	assert_ptr_equal(xa.engine, &engine);
-	assert_ptr_equal(xa.xs, &xss[1]);
+	assert_ptr_equal(xa.engine, &Engine_buf);
+	assert_ptr_equal(xa.xs, &Xss_buf[1]);
 	assert_int_equal(xa.status.rc, DER_SUCCESS);
 }
 
@@ -291,15 +322,14 @@ test_dlck_engine_xstream_arg_alloc_success(void **unused)
 static void
 test_dlck_engine_xstream_arg_alloc_failure(void **unused)
 {
-	struct dlck_xstream xss[2] = {{.tgt_id = 0}, {.tgt_id = 1}};
-	struct dlck_engine  engine = {.targets = 2, .xss = xss};
-	int                 ctrl;
-	void               *arg = NULL;
-	int                 rc;
+	int   ctrl;
+	void *arg = NULL;
+	int   rc;
 
+	engine_build(2);
 	EXPECT_D_CALLOC(1, sizeof(struct xstream_arg), NULL);
 
-	rc = dlck_engine_xstream_arg_alloc(&engine, 1, &ctrl, &arg);
+	rc = dlck_engine_xstream_arg_alloc(&Engine_buf, 1, &ctrl, &arg);
 
 	assert_int_equal(rc, -DER_NOMEM);
 	assert_null(arg);
@@ -321,11 +351,11 @@ test_dlck_engine_xstream_arg_free_null(void **unused)
 static void
 test_dlck_engine_xstream_arg_free_collects_outputs(void **unused)
 {
-	struct dlck_xstream   xss[2] = {{.tgt_id = 0}, {.tgt_id = 1}};
-	struct xstream_arg    xa     = {.xs = &xss[1]};
+	struct xstream_arg    xa     = {.xs = &Xss_buf[1]};
 	struct checker_status sts[2] = {{0}};
 	void                 *arg    = &xa;
 
+	engine_build(2);
 	xa.status.rc           = -DER_IO;
 	xa.status.warnings_num = 3;
 	xa.status.errors_num   = 2;
@@ -348,8 +378,6 @@ test_dlck_exec_init_success(void **unused)
 	struct dlck_exec *de = &Exec_buf;
 	int               rc;
 
-	engine_build(2);
-	exec_prepare(2);
 	EXPECT_EXEC_INIT_ALLOC(2);
 	for (int i = 0; i < 2; ++i) {
 		EXPECT_mock_arg_alloc_fn(&Engine_buf, i, DER_SUCCESS, &Payload[i]);
@@ -381,8 +409,6 @@ test_dlck_exec_init_ults_alloc_failure(void **unused)
 	struct dlck_exec *de = &Exec_buf;
 	int               rc;
 
-	engine_build(2);
-	exec_prepare(2);
 	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), NULL);
 
 	rc = dlck_exec_init(&Engine_buf, de);
@@ -398,8 +424,6 @@ test_dlck_exec_init_args_alloc_failure(void **unused)
 	struct dlck_exec *de = &Exec_buf;
 	int               rc;
 
-	engine_build(2);
-	exec_prepare(2);
 	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), Ults_buf);
 	EXPECT_D_CALLOC(2, sizeof(void *), NULL);
 	expect_value(__wrap_d_free, ptr, Ults_buf);
@@ -418,8 +442,6 @@ test_dlck_exec_init_arg_alloc_failure(void **unused)
 	struct dlck_exec *de = &Exec_buf;
 	int               rc;
 
-	engine_build(2);
-	exec_prepare(2);
 	EXPECT_EXEC_INIT_ALLOC(2);
 	EXPECT_mock_arg_alloc_fn(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_mock_arg_alloc_fn(&Engine_buf, 1, -DER_IO, NULL);
@@ -436,14 +458,12 @@ test_dlck_exec_init_arg_alloc_failure(void **unused)
 
 /** tests - dlck_engine_exec */
 
-/** verify every target gets its ULT started on its own execution stream */
+/** verify each successful ULT handle is retained in its target's batch entry */
 static void
 test_dlck_engine_exec_success(void **unused)
 {
 	int rc;
 
-	engine_build(2);
-	exec_build(2);
 	for (int i = 0; i < 2; ++i) {
 		EXPECT_DLCK_ULT_CREATE(MOCK_POOL(i), DER_SUCCESS, MOCK_THREAD(i));
 		expect_value(mock_exec_one, arg, &Payload[i]);
@@ -453,7 +473,7 @@ test_dlck_engine_exec_success(void **unused)
 
 	assert_int_equal(rc, DER_SUCCESS);
 	for (int i = 0; i < 2; ++i) {
-		assert_ptr_equal(Ults_buf[i].thread, MOCK_THREAD(i));
+		assert_ptr_equal(Exec_buf.ults[i].thread, MOCK_THREAD(i));
 	}
 	assert_false(Exec_buf.join_fail);
 }
@@ -464,8 +484,6 @@ test_dlck_engine_exec_ult_create_failure(void **unused)
 {
 	int rc;
 
-	engine_build(2);
-	exec_build(2);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
 	expect_value(mock_exec_one, arg, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), -DER_NOMEM, NULL);
@@ -476,27 +494,48 @@ test_dlck_engine_exec_ult_create_failure(void **unused)
 	rc = dlck_engine_exec(&Engine_buf, &Exec_buf);
 
 	assert_int_equal(rc, -DER_NOMEM);
-	assert_ptr_equal(Ults_buf[0].thread, ABT_THREAD_NULL);
+	for (int i = 0; i < 2; ++i) {
+		assert_ptr_equal(Exec_buf.ults[i].thread, ABT_THREAD_NULL);
+	}
 	assert_false(Exec_buf.join_fail);
 }
 
-/** verify a join failure during the cleanup keeps the thread and marks the batch */
+/** tests - dlck_exec_join_no_error */
+
+/** verify successfully joined ULTs are freed without setting join_fail */
 static void
-test_dlck_engine_exec_cleanup_join_failure(void **unused)
+test_dlck_exec_join_no_error_success(void **unused)
 {
-	int rc;
-
-	engine_build(2);
 	exec_build(2);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	expect_value(mock_exec_one, arg, &Payload[0]);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), -DER_NOMEM, NULL);
+	for (int i = 0; i < 2; ++i) {
+		Exec_buf.ults[i].thread = MOCK_THREAD(i);
+		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
+		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
+	}
+
+	dlck_exec_join_no_error(&Exec_buf);
+
+	for (int i = 0; i < 2; ++i) {
+		assert_ptr_equal(Exec_buf.ults[i].thread, ABT_THREAD_NULL);
+	}
+	assert_false(Exec_buf.join_fail);
+}
+
+/** verify a failed join preserves its thread while later ULTs are still joined */
+static void
+test_dlck_exec_join_no_error_join_failure(void **unused)
+{
+	exec_build(2);
+	Exec_buf.ults[0].thread = MOCK_THREAD(0);
+	Exec_buf.ults[1].thread = MOCK_THREAD(1);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
+	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
+	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(1), ABT_SUCCESS);
 
-	rc = dlck_engine_exec(&Engine_buf, &Exec_buf);
+	dlck_exec_join_no_error(&Exec_buf);
 
-	assert_int_equal(rc, -DER_NOMEM);
-	assert_ptr_equal(Ults_buf[0].thread, MOCK_THREAD(0));
+	assert_ptr_equal(Exec_buf.ults[0].thread, MOCK_THREAD(0));
+	assert_ptr_equal(Exec_buf.ults[1].thread, ABT_THREAD_NULL);
 	assert_true(Exec_buf.join_fail);
 }
 
@@ -510,7 +549,7 @@ test_dlck_exec_join_success(void **unused)
 
 	exec_build(2);
 	for (int i = 0; i < 2; ++i) {
-		Ults_buf[i].thread = MOCK_THREAD(i);
+		Exec_buf.ults[i].thread = MOCK_THREAD(i);
 		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
 		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
 	}
@@ -519,7 +558,7 @@ test_dlck_exec_join_success(void **unused)
 
 	assert_int_equal(rc, DER_SUCCESS);
 	for (int i = 0; i < 2; ++i) {
-		assert_ptr_equal(Ults_buf[i].thread, ABT_THREAD_NULL);
+		assert_ptr_equal(Exec_buf.ults[i].thread, ABT_THREAD_NULL);
 	}
 	assert_false(Exec_buf.join_fail);
 }
@@ -531,8 +570,8 @@ test_dlck_exec_join_join_failure(void **unused)
 	int rc;
 
 	exec_build(2);
-	Ults_buf[0].thread = MOCK_THREAD(0);
-	Ults_buf[1].thread = MOCK_THREAD(1);
+	Exec_buf.ults[0].thread = MOCK_THREAD(0);
+	Exec_buf.ults[1].thread = MOCK_THREAD(1);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(1), ABT_SUCCESS);
@@ -540,9 +579,9 @@ test_dlck_exec_join_join_failure(void **unused)
 	rc = dlck_exec_join(&Exec_buf);
 
 	assert_int_equal(rc, -DER_INVAL);
+	assert_ptr_equal(Exec_buf.ults[0].thread, MOCK_THREAD(0));
+	assert_ptr_equal(Exec_buf.ults[1].thread, ABT_THREAD_NULL);
 	assert_true(Exec_buf.join_fail);
-	assert_ptr_equal(Ults_buf[0].thread, MOCK_THREAD(0));
-	assert_ptr_equal(Ults_buf[1].thread, ABT_THREAD_NULL);
 }
 
 /** verify a thread free failure is reported but the joined ULT's handle is abandoned */
@@ -552,8 +591,8 @@ test_dlck_exec_join_thread_free_failure(void **unused)
 	int rc;
 
 	exec_build(2);
-	Ults_buf[0].thread = MOCK_THREAD(0);
-	Ults_buf[1].thread = MOCK_THREAD(1);
+	Exec_buf.ults[0].thread = MOCK_THREAD(0);
+	Exec_buf.ults[1].thread = MOCK_THREAD(1);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
@@ -563,7 +602,7 @@ test_dlck_exec_join_thread_free_failure(void **unused)
 
 	assert_int_equal(rc, -DER_INVAL);
 	assert_false(Exec_buf.join_fail);
-	assert_ptr_equal(Ults_buf[0].thread, ABT_THREAD_NULL);
+	assert_ptr_equal(Exec_buf.ults[0].thread, ABT_THREAD_NULL);
 }
 
 /** tests - dlck_exec_fini */
@@ -585,7 +624,7 @@ static void
 test_dlck_exec_fini_skips_unjoined(void **unused)
 {
 	exec_build(2);
-	Ults_buf[0].thread = MOCK_THREAD(0);
+	Exec_buf.ults[0].thread = MOCK_THREAD(0);
 	EXPECT_mock_arg_free_fn(&Payload[1]);
 	EXPECT_EXEC_FINI_FREE();
 
@@ -1135,48 +1174,51 @@ test_dlck_engine_stop_fini_ult_create_failure(void **unused)
 	assert_int_equal(rc, -DER_NOMEM);
 }
 
-#define TEST(ID, FUNC) {"DLCK_ENGINE_" #ID ": " #FUNC, FUNC, setup, NULL, NULL}
+#define TEST_WITH_SETUP(ID, FUNC, TEST_SETUP)                                                      \
+	{"DLCK_ENGINE_" #ID ": " #FUNC, FUNC, TEST_SETUP, NULL, NULL}
+#define TEST(ID, FUNC) TEST_WITH_SETUP(ID, FUNC, setup)
 
 static const struct CMUnitTest dlck_engine_tests[] = {
     TEST(101, test_dlck_engine_xstream_arg_alloc_success),
     TEST(102, test_dlck_engine_xstream_arg_alloc_failure),
     TEST(103, test_dlck_engine_xstream_arg_free_null),
     TEST(104, test_dlck_engine_xstream_arg_free_collects_outputs),
-    TEST(105, test_dlck_exec_init_success),
-    TEST(106, test_dlck_exec_init_ults_alloc_failure),
-    TEST(107, test_dlck_exec_init_args_alloc_failure),
-    TEST(108, test_dlck_exec_init_arg_alloc_failure),
-    TEST(109, test_dlck_engine_exec_success),
-    TEST(110, test_dlck_engine_exec_ult_create_failure),
-    TEST(111, test_dlck_engine_exec_cleanup_join_failure),
-    TEST(112, test_dlck_exec_join_success),
-    TEST(113, test_dlck_exec_join_join_failure),
-    TEST(114, test_dlck_exec_join_thread_free_failure),
-    TEST(115, test_dlck_exec_fini_success),
-    TEST(116, test_dlck_exec_fini_skips_unjoined),
-    TEST(117, test_dlck_engine_start_success),
-    TEST(118, test_dlck_engine_start_success_no_nvme),
-    TEST(119, test_dlck_engine_start_engine_alloc_failure),
-    TEST(120, test_dlck_engine_start_xss_alloc_failure),
-    TEST(121, test_dlck_engine_start_dbtree_classes_failure),
-    TEST(122, test_dlck_engine_start_bio_nvme_init_failure),
-    TEST(123, test_dlck_engine_start_sm_init_failure),
-    TEST(124, test_dlck_engine_start_tls_key_create_failure),
-    TEST(125, test_dlck_engine_start_vos_tls_init_failure),
-    TEST(126, test_dlck_engine_start_vos_sys_db_init_failure),
-    TEST(127, test_dlck_engine_start_xs_create_failure),
-    TEST(128, test_dlck_engine_start_xs_init_tls_failure),
-    TEST(129, test_dlck_engine_start_xs_init_xsctxt_failure),
-    TEST(130, test_dlck_engine_start_xs_init_eventual_failure),
-    TEST(131, test_dlck_engine_start_xs_init_polling_ult_failure),
-    TEST(132, test_dlck_engine_start_polling_eventual_test_failure),
-    TEST(133, test_dlck_engine_stop_success),
-    TEST(134, test_dlck_engine_stop_join_fail),
-    TEST(135, test_dlck_engine_stop_fini_failure),
-    TEST(136, test_dlck_engine_stop_pool_not_empty),
-    TEST(137, test_dlck_engine_stop_xs_free_failure),
-    TEST(138, test_dlck_engine_stop_sm_fini_failure),
-    TEST(139, test_dlck_engine_stop_fini_ult_create_failure),
+    TEST_WITH_SETUP(105, test_dlck_exec_init_success, setup_engine_exec_build_prep),
+    TEST_WITH_SETUP(106, test_dlck_exec_init_ults_alloc_failure, setup_engine_exec_build_prep),
+    TEST_WITH_SETUP(107, test_dlck_exec_init_args_alloc_failure, setup_engine_exec_build_prep),
+    TEST_WITH_SETUP(108, test_dlck_exec_init_arg_alloc_failure, setup_engine_exec_build_prep),
+    TEST_WITH_SETUP(109, test_dlck_engine_exec_success, setup_engine_exec_build),
+    TEST_WITH_SETUP(110, test_dlck_engine_exec_ult_create_failure, setup_engine_exec_build),
+    TEST(111, test_dlck_exec_join_no_error_success),
+    TEST(112, test_dlck_exec_join_no_error_join_failure),
+    TEST(113, test_dlck_exec_join_success),
+    TEST(114, test_dlck_exec_join_join_failure),
+    TEST(115, test_dlck_exec_join_thread_free_failure),
+    TEST(116, test_dlck_exec_fini_success),
+    TEST(117, test_dlck_exec_fini_skips_unjoined),
+    TEST(118, test_dlck_engine_start_success),
+    TEST(119, test_dlck_engine_start_success_no_nvme),
+    TEST(120, test_dlck_engine_start_engine_alloc_failure),
+    TEST(121, test_dlck_engine_start_xss_alloc_failure),
+    TEST(122, test_dlck_engine_start_dbtree_classes_failure),
+    TEST(123, test_dlck_engine_start_bio_nvme_init_failure),
+    TEST(124, test_dlck_engine_start_sm_init_failure),
+    TEST(125, test_dlck_engine_start_tls_key_create_failure),
+    TEST(126, test_dlck_engine_start_vos_tls_init_failure),
+    TEST(127, test_dlck_engine_start_vos_sys_db_init_failure),
+    TEST(128, test_dlck_engine_start_xs_create_failure),
+    TEST(129, test_dlck_engine_start_xs_init_tls_failure),
+    TEST(130, test_dlck_engine_start_xs_init_xsctxt_failure),
+    TEST(131, test_dlck_engine_start_xs_init_eventual_failure),
+    TEST(132, test_dlck_engine_start_xs_init_polling_ult_failure),
+    TEST(133, test_dlck_engine_start_polling_eventual_test_failure),
+    TEST(134, test_dlck_engine_stop_success),
+    TEST(135, test_dlck_engine_stop_join_fail),
+    TEST(136, test_dlck_engine_stop_fini_failure),
+    TEST(137, test_dlck_engine_stop_pool_not_empty),
+    TEST(138, test_dlck_engine_stop_xs_free_failure),
+    TEST(139, test_dlck_engine_stop_sm_fini_failure),
+    TEST(140, test_dlck_engine_stop_fini_ult_create_failure),
 };
 
 int

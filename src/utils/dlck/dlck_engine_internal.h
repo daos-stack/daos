@@ -40,6 +40,13 @@ int
 dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de);
 
 /**
+ * Join all started ULTs without returning an error. Failed joins set join_fail and leave their
+ * thread handles intact; successfully joined threads are freed.
+ */
+void
+dlck_exec_join_no_error(struct dlck_exec *de);
+
+/**
  * Join the batch and report the result. A failed join sets join_fail of \p de; the caller must
  * propagate it to the engine.
  */

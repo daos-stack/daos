@@ -76,8 +76,6 @@ __wrap_dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de)
 int
 __wrap_dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
 {
-	int rc;
-
 	check_expected_ptr(engine);
 	assert_non_null(de);
 	check_expected(de->targets);
@@ -87,17 +85,14 @@ __wrap_dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
 	assert_ptr_equal(de->arg_alloc_fn, mock_arg_alloc_fn);
 	assert_ptr_equal(de->arg_free_fn, mock_arg_free_fn);
 	assert_ptr_equal(de->exec_one, mock_exec_one);
-	rc            = mock_type(int);
 	de->join_fail = mock_type(bool);
 
-	return rc;
+        return mock_type(int);
 }
 
 int
 __wrap_dlck_exec_join(struct dlck_exec *de)
 {
-	int rc;
-
 	assert_non_null(de);
 	check_expected(de->targets);
 	check_expected_ptr(de->arg_alloc_fn_arg);
@@ -106,10 +101,9 @@ __wrap_dlck_exec_join(struct dlck_exec *de)
 	assert_ptr_equal(de->arg_alloc_fn, mock_arg_alloc_fn);
 	assert_ptr_equal(de->arg_free_fn, mock_arg_free_fn);
 	assert_ptr_equal(de->exec_one, mock_exec_one);
-	rc            = mock_type(int);
 	de->join_fail = mock_type(bool);
 
-	return rc;
+        return mock_type(int);
 }
 
 void
