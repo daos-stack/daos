@@ -1,0 +1,53 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+
+timeout: 600
+
+setup:
+  start_servers_once: false
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      log_file: daos_server1.log
+      storage: auto
+
+pool:
+  size: 90%
+  svcn: 3
+  rebuild_timeout: 120
+  pool_query_timeout: 30
+
+container:
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
+  file_oclass: EC_16P2GX
+  dir_oclass: EC_16P2GX
+
+ior:
+  client_processes:
+    np: 48
+  test_file: /testFile
+  repetitions: 1
+  dfs_destroy: false
+  flags: "-w -F -k -G 1"
+  api: DFS
+  dfs_oclass: EC_16P2GX
+  transfer_size: 4000
+  block_size: 5000000
+
+aggregation:
+  test_with_aggregation: true
+
+rebuild:
+  test_with_rebuild: true
