@@ -39,6 +39,9 @@
 # Outputs mounted back to the host runner:
 #   /home/daos/sanitizer-logs/ -- per-PID log files (asan.<pid>, ubsan.<pid>, tsan.<pid>)
 #   /home/daos/test-results/   -- JUnit XML files + exit_status
+#
+# Both directories are emptied when the tests start, except with --list, so that they only hold
+# the results of this run.
 
 set -uo pipefail
 
@@ -84,6 +87,14 @@ done
 RESULTS_DIR=/home/daos/test-results
 LOG_DIR=/home/daos/sanitizer-logs
 mkdir -p "${RESULTS_DIR}" "${LOG_DIR}"
+
+# The verdicts are read from these directories: the files of a previous run would be reported as
+# findings of this one. Empty them rather than remove them, they are usually mount points.
+# --list runs nothing, so it keeps the previous results.
+if [ "${LIST_MODE}" -eq 0 ] && ! find "${RESULTS_DIR}" "${LOG_DIR}" -mindepth 1 -delete; then
+	echo "$(basename "$0"): cannot empty ${RESULTS_DIR} and ${LOG_DIR}" >&2
+	exit 1
+fi
 
 if [ "${MODE}" = "--standard" ]; then
 	# No sanitizer runtime: run every suite not explicitly excluded from GHA
