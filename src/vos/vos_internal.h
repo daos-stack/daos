@@ -301,11 +301,8 @@ struct vos_pool {
 	struct d_ulink		vp_hlink;
 	/** number of openers */
 	uint32_t                vp_opened;
-	uint32_t                vp_dying:1,
-				vp_opening:1,
-	/** exclusive handle (see VOS_POF_EXCL) */
-				vp_excl:1,
-				vp_gc_nospc:1;
+	uint32_t                vp_dying : 1, vp_opening : 1, vp_for_check : 1, vp_gc_nospc : 1,
+	    vp_excl : 1 /** exclusive handle (see VOS_POF_EXCL) */;
 	ABT_mutex		vp_mutex;
 	ABT_cond		vp_cond;
 	/* this pool is for sysdb */
@@ -419,6 +416,8 @@ struct vos_container {
 	daos_epoch_t		vc_mod_epoch_bound;
 	/* Last timestamp when VOS reject DTX because of stale epoch. */
 	uint64_t		vc_dtx_reject_ts;
+	/* Last timestamp when warning DTX resync version. */
+	uint64_t                 vc_dtx_resync_ts;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/** Index for timestamp lookup */
@@ -493,18 +492,13 @@ struct vos_dtx_act_ent {
 
 	/* The capacity of dae_oids if it points to new allocated area. */
 	uint32_t                         dae_oid_cap;
+	/* The known max version used by DTX check. Abort DTX with old version will be refused. */
+	uint32_t                         dae_known_max_version;
 
-	unsigned int			 dae_committable:1,
-					 dae_committing:1,
-					 dae_committed:1,
-					 dae_aborting:1,
-					 dae_aborted:1,
-					 dae_maybe_shared:1,
-					 /* Need validation on leader before commit/committable. */
-					 dae_need_validation:1,
-					 dae_need_release:1,
-					 dae_preparing:1,
-					 dae_prepared:1;
+	uint32_t dae_committable : 1, dae_committing : 1, dae_committed : 1, dae_aborting : 1,
+	    dae_aborted : 1, dae_maybe_shared : 1, dae_need_release : 1, dae_to_be_abort : 1,
+	    dae_need_validation : 1 /* Need validation on leader before commit/committable. */,
+	    dae_preparing : 1, dae_prepared : 1;
 };
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
@@ -1244,8 +1238,7 @@ struct vos_iter_ops {
 	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op_t op,
 			       void *args);
 	/** Check the current record */
-	int (*iop_check)(struct vos_iterator *iter, report_fn_t report_fn, void *report_arg,
-			 bool error_on_non_zero_padding);
+	int (*iop_check)(struct vos_iterator *iter, struct checker *ck);
 	/**
 	 * Optional, the iterator has no element.
 	 *

@@ -1268,12 +1268,15 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_
 		ptr = iov[i].iov_buf;
 		for (j = 1; j < iods[i].iod_nr; j++) {
 			daos_recx_t	*recx = &iods[i].iod_recxs[j];
+			daos_epoch_t     eph  = migrate_parity_epoch(mrone, ephs[i][j], encode);
 
-			/* Merge the recx if there are in the same stripe */
+			/* Merge contiguous recxs in the same stripe only when they are
+			 * written at the same epoch, so that replica extents enumerated
+			 * from a parity shard keep their own epochs.
+			 */
 			if (offset + size == recx->rx_idx &&
-			    offset / stride_nr == recx->rx_idx / stride_nr) {
+			    offset / stride_nr == recx->rx_idx / stride_nr && eph == parity_eph) {
 				size += recx->rx_nr;
-				parity_eph = max(ephs[i][j], parity_eph);
 				continue;
 			}
 
@@ -1284,12 +1287,15 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh, daos_
 			ptr += size * iods[i].iod_size;
 			offset = recx->rx_idx;
 			size = recx->rx_nr;
-			parity_eph = migrate_parity_epoch(mrone, ephs[i][j], encode);
+			parity_eph = eph;
 		}
 
-		if (size > 0)
+		if (size > 0) {
 			rc = migrate_update_parity(mrone, parity_eph, ds_cont, ptr, offset,
 						   size, &tmp_iod, p_bufs, csummer, encode);
+			if (rc)
+				D_GOTO(out, rc);
+		}
 	}
 out:
 	for (i = 0; i < iods_num; i++) {
@@ -3015,9 +3021,10 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	 * be able to be merged here.
 	 */
 	d_list_for_each_entry(mo, &arg->merge_list, mo_list) {
-		if (daos_oid_cmp(mo->mo_oid.id_pub,
-				 io->ui_oid.id_pub) == 0 &&
+		if (daos_oid_cmp(mo->mo_oid.id_pub, io->ui_oid.id_pub) == 0 &&
 		    mo->mo_version == io->ui_version &&
+		    mo->mo_from_parity ==
+			is_ec_parity_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) &&
 		    daos_key_match(&mo->mo_dkey, &io->ui_dkey)) {
 			rc = migrate_try_merge_recx(mo, obj, io);
 			if (rc < 0)
@@ -3168,6 +3175,7 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 	uint32_t		 enum_flags;
 	uint32_t		 num;
 	int                       waited = 0;
+	bool                      pinned = false;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, DF_RB ": migrate obj " DF_UOID " shard %u eph " DF_X64 "-" DF_X64 "\n",
@@ -3291,7 +3299,7 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 					DP_RB_MPT(tls), DP_UOID(arg->oid), waited);
 			rc = 0;
 			continue;
-		} else if (rc && rc != -DER_SHUTDOWN &&
+		} else if (rc && rc != -DER_SHUTDOWN && !pinned &&
 			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
 				enum_flags &= ~DIOF_TO_LEADER;
@@ -3304,8 +3312,8 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 				 * uncommitted records, or it will choose a new leader
 				 * once the pool map is updated.
 				 */
-				D_DEBUG(DB_REBUILD, DF_RB ": retry leader " DF_UOID "\n",
-					DP_RB_MPT(tls), DP_UOID(arg->oid));
+				D_DEBUG(DB_REBUILD, DF_RB ": retry leader " DF_UOID ": " DF_RC "\n",
+					DP_RB_MPT(tls), DP_UOID(arg->oid), DP_RC(rc));
 			}
 			continue;
 		} else if (rc == -DER_UPDATE_AGAIN) {
@@ -3321,8 +3329,12 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 		} else if (rc) {
 			/* To avoid reclaim and retry rebuild, let's retry until the pool map
 			 * being changed due to further failure.
+			 *
+			 * Once the enumeration is pinned to a shard (see below) it must not
+			 * fall back to another replica, so a leader that is still resyncing
+			 * (-DER_INPROGRESS) is retried in place as well.
 			 */
-			if (rc == -DER_TIMEDOUT &&
+			if ((rc == -DER_TIMEDOUT || (pinned && rc == -DER_INPROGRESS)) &&
 			    tls->mpt_version + 1 >= tls->mpt_pool->spc_map_version) {
 				D_WARN(DF_RB ": retry " DF_UOID " " DF_RC "\n", DP_RB_MPT(tls),
 				       DP_UOID(arg->oid), DP_RC(rc));
@@ -3379,6 +3391,27 @@ migrate_obj_epoch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg, daos_e
 
 		if (daos_anchor_is_eof(&dkey_anchor))
 			break;
+
+		/*
+		 * The anchors (dkey/akey/recx) returned by a replica are only valid on
+		 * the shard that produced them: the recx anchor is the last visible
+		 * extent and replicas split/merge extents differently, so re-probing
+		 * it on another replica silently skips extents (data loss on the
+		 * rebuilt shard). The first batch may have come from the leader or,
+		 * after a leader error, from a random non-leader replica; from now on
+		 * stay on the shard that served it (recorded in dkey_anchor by the
+		 * client, see obj_list_obj_cb()) instead of going back to the leader
+		 * or picking another random replica.
+		 */
+		if (!pinned && !daos_oclass_is_ec(&unpack_arg.oc_attr)) {
+			enum_flags &= ~(DIOF_TO_LEADER | DIOF_TO_SPEC_GROUP);
+			enum_flags |= DIOF_TO_SPEC_SHARD;
+			pinned = true;
+			D_DEBUG(DB_REBUILD, DF_RB ": pin enumeration of " DF_UOID " to shard %u\n",
+				DP_RB_MPT(tls), DP_UOID(arg->oid),
+				dc_obj_anchor2shard(&dkey_anchor));
+			continue;
+		}
 
 		/* Restore leader flag to always try the leader first */
 		enum_flags |= DIOF_TO_LEADER;
@@ -3933,6 +3966,14 @@ struct migrate_ult_arg {
 	uint32_t	version;
 };
 
+static bool
+migrate_discard_wait_stop(void *arg)
+{
+	struct migrate_pool_tls *pool_tls = arg;
+
+	return pool_tls->mpt_fini;
+}
+
 static void
 migrate_ult(void *arg)
 {
@@ -3942,21 +3983,15 @@ migrate_ult(void *arg)
 
 	D_ASSERT(pool_tls != NULL);
 	pool = pool_tls->mpt_pool;
-	while (atomic_load(&pool->spc_pool->sp_discarding) != 0) {
-		D_DEBUG(DB_REBUILD, DF_RB ": wait for discard to finish.\n", DP_RB_MPT(pool_tls));
-		dss_sleep(2 * 1000);
-		if (pool_tls->mpt_fini)
-			D_GOTO(out, rc);
-
-		ABT_mutex_lock(pool->spc_pool->sp_mutex);
-		if (pool->spc_pool->sp_discard_status) {
-			rc = pool->spc_pool->sp_discard_status;
-			ABT_mutex_unlock(pool->spc_pool->sp_mutex);
-			D_DEBUG(DB_REBUILD, DF_RB ": discard failure: " DF_RC "\n",
-				DP_RB_MPT(pool_tls), DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-		ABT_mutex_unlock(pool->spc_pool->sp_mutex);
+	rc   = ds_pool_wait_discard(pool->spc_pool, 0, true, migrate_discard_wait_stop, pool_tls,
+				    NULL);
+	if (rc != 0) {
+		/* a finished migration is not an error */
+		if (rc == -DER_SHUTDOWN)
+			rc = 0;
+		else
+			DL_ERROR(rc, DF_RB ": wait for discard failed", DP_RB_MPT(pool_tls));
+		D_GOTO(out, rc);
 	}
 
 	rc =

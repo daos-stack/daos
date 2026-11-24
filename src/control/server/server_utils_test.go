@@ -2068,6 +2068,10 @@ func TestServer_processFabricProvider(t *testing.T) {
 			cfgFabric: "ucx+ud",
 			expFabric: "ucx+ud",
 		},
+		"multiprovider": {
+			cfgFabric: "ofi+verbs,ofi+tcp",
+			expFabric: "ofi+verbs;ofi_rxm,ofi+tcp",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := &config.Server{

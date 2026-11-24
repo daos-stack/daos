@@ -608,7 +608,7 @@ following `daos_server` log entries to indicate the parameters are written to
 the engine's NVMe config:
 
 ```bash
-DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugRanges:[] Hostname:wolf-310.wolf.example.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
 Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
 ```
 
@@ -728,6 +728,19 @@ dev-replace operation performed successfully on the following host: boro-11:1000
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
 be for testing or for accidental device eviction.
+
+- Restricting hotplug to a PCI domain/bus-ID range:
+
+When hotplug is enabled, each engine only reacts to hotplug events on NVMe SSDs whose PCI
+domain and bus-ID fall within one of a set of ranges that are derived automatically from the
+combined `bdev_list` of all of the engine's nvme-class storage tiers; this matches exactly the
+devices the engine was formatted with (up to a fixed limit of 64 filter entries per engine),
+including on multi-PCI-segment platforms where a single engine's SSDs span more than one
+non-zero PCI domain. If Volume Management Devices (VMD) are enabled, no PCI-domain/bus-ID
+filtering is applied at all, since VMD backing device addresses are unrelated to the owning
+NUMA node's PCI domain.
+
+This filter is not intended to be configured manually, and admins should not need to set it.
 
 #### Identification
 
@@ -1147,6 +1160,28 @@ If storage metadata for a rank is lost, for example after losing PMem contents a
 or after an SSD failure in MD-on-SSD mode, storage for that rank will need to be formatted and rank
 metadata regenerated. If other hardware on the storage server has not changed, the old rank can be
 "reused" by formatting using the `dmg storage format --replace` option.
+
+#### Selecting the Rank to Replace
+
+By default, `dmg storage format --replace` auto-detects which excluded rank to reuse by matching
+the joining engine's control address, fabric URIs/contexts, and fault domain against the existing
+system membership. A specific rank may instead be supplied explicitly with `--rank`:
+
+```bash
+$ dmg storage format -l storage-server-16 --replace --rank 2
+```
+
+- `--rank` is only valid in combination with `--replace`; it is rejected otherwise.
+- When `--rank` is supplied, the Management Service verifies the given rank is excluded from all
+  pools it belongs to and that the joining engine's UUID differs from the existing member's (i.e.
+  this is a genuine replacement, not a duplicate join).
+- When `--rank` is omitted, the same validation is performed against whichever member is found to
+  match the joining engine's connection details; if no unique match can be found, the join is
+  rejected.
+- As a safety check, if the engine's on-disk superblock already has a valid rank assigned, the
+  replace request is refused with `cannot replace: superblock already has valid rank <N>
+  (reformat required)` rather than silently reusing or overwriting it. This guards against
+  accidentally running `--replace` against an engine that was never actually reset.
 
 #### PMem (DCPM) Failure Recovery Workflow
 

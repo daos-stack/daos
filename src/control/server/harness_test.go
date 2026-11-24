@@ -141,7 +141,7 @@ func TestServer_Harness_Start(t *testing.T) {
 		},
 		"delayed failure occurs before notify ready": {
 			dontNotifyReady: true,
-			waitTimeout:     30 * testShortTimeout,
+			waitTimeout:     60 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
 				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
@@ -325,6 +325,24 @@ func TestServer_Harness_Start(t *testing.T) {
 				close(done)
 			}(ctx)
 
+			// Notify storage ready for instances awaiting format
+			go func(ctxIn context.Context) {
+				for {
+					for _, ei := range instances {
+						if ei.(*EngineInstance).isAwaitingFormat() {
+							// Pass nil rank pointer for non-replace
+							// case
+							ei.(*EngineInstance).NotifyStorageReady(nil)
+						}
+					}
+					select {
+					case <-time.After(testShortTimeout):
+					case <-ctxIn.Done():
+						return
+					}
+				}
+			}(ctx)
+
 			waitDrpcReady := make(chan struct{})
 			t.Log("waiting for dRPC to be ready")
 			go func(ctxIn context.Context) {
@@ -414,9 +432,6 @@ func TestServer_Harness_Start(t *testing.T) {
 			<-done
 			if gotErr != context.Canceled || tc.expStartErr != nil {
 				CmpErr(t, tc.expStartErr, gotErr)
-				if tc.expStartErr != nil {
-					return
-				}
 			}
 
 			joinMu.Lock()
@@ -439,7 +454,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					t.Fatalf("unexpected rank for instance %d (-want, +got):\n%s\n",
 						ei.Index(), diff)
 				}
-				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
+				CmpErr(t, tc.expIoErrs[ei.Index()], ei.lastErr())
 			}
 			members, err := membership.Members(nil)
 			if err != nil {

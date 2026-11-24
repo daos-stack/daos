@@ -104,77 +104,74 @@ MS leader receives request (SystemErase handler)
       |
       +-- 1. getPeersAndFanout(): resolve peer addrs + build a ResetFormatRanks
       |      fanout request excluding the leader's own rank and all replica
-      |      peers' ranks (they handle themselves; see 4.3)
+      |      peers' ranks (they handle themselves; see 4.3). Must run before
+      |      the raft DB is stopped, since rank/host resolution needs it.
       |
-      +-- 2. wipeEngineSuperblocks(): fan out ResetFormatRanks to all
+      +-- 2. eraseNonReplicaEngines(): fan out ResetFormatRanks to all
       |      remaining (non-leader, non-replica) engine ranks, *while the
-      |      leader's own raft DB is still up*. Doing this before the
-      |      leader erases its own DB means rpcFanout()'s
-      |      UpdateMemberStates() call always has a live, leader-side raft
-      |      DB to persist member state changes through -- no special-casing
-      |      for a leaderless/DB-erased window is needed (see 4.7).
+      |      leader's own raft DB is still up*. Doing this before any raft DB
+      |      is touched means rpcFanout()'s UpdateMemberStates() call always
+      |      has a live, leader-side raft DB to persist member state changes
+      |      through -- no special-casing for a leaderless/DB-erased window
+      |      is needed (see 4.7). If any rank in the fanout result reports an
+      |      error, the operation stops here, before anything MS-side has
+      |      been erased, rather than proceeding past the point of no return.
       |
-      +-- 3. eraseSysdb(): stop + remove the LEADER's own raft DB files
+      +-- 3. eraseReplicas(): send an internal SystemErase RPC to each MS
+      |      replica peer. Each peer wipes its own local engines, then erases
+      |      its own raft DB, acks, and restarts (exec) independently in the
+      |      background -- the leader does NOT wait for peers to finish
+      |      restarting, only for them to ack that erase is done. Any error
+      |      from a peer, including a retryable connection error, is treated
+      |      as a hard failure of the whole operation (see 4.3).
+      |
+      +-- 4. eraseLocalEngines(): stop + wipe the LEADER's own local engines
+      |      (superblocks, and the control_metadata root in MD-on-SSD mode).
+      |      Storage (replica and leader) is always erased before any raft
+      |      DB, so the leader's raft DB stays usable for as long as
+      |      possible; there is no storage/DB race left to guard against by
+      |      erasing DBs first (see 4.3).
+      |
+      +-- 5. eraseSysdb(): stop + remove the LEADER's own raft DB files
       |      *** POINT OF NO RETURN: raft is now down on the leader ***
       |
-      +-- 4. scheduleControlPlaneRestart(): called explicitly right here,
-      |      immediately after the point of no return, rather than via a
-      |      handler-wide defer. This arms a background goroutine that
-      |      drains in-flight gRPC calls (i.e. waits for this handler's own
-      |      response to be sent) before exec()-ing to restart -- so a
-      |      restart is only ever armed once the leader's DB erase has
-      |      actually succeeded, and any failure in steps 5-6 below still
-      |      results in a restart (it must, since there is no going back).
-      |
-      +-- 5. eraseReplicas(): send an internal SystemErase RPC to each MS
-      |      replica peer, marked `Forwarded: true` (see 4.3). Each peer
-      |      erases its own DB + local engines synchronously, then acks,
-      |      then restarts (exec) independently in the background -- the
-      |      leader does NOT wait for peers to finish restarting, only for
-      |      them to ack that erase is done.
-      |
-      +-- 6. resetLocalEngines(): stop + wipe the LEADER's own local engines
-             (superblocks, and control_metadata dir in MD-on-SSD mode).
-             Partial failures (e.g. one instance fails to stop) are
-             accumulated and returned as a joined error rather than merely
-             logged, so they are surfaced to the admin.
+      +-- 6. scheduleControlPlaneRestart(): called once the point of no
+             return is reached, arming a background goroutine that drains
+             in-flight gRPC calls (i.e. waits for this handler's own
+             response to be sent) before exec()-ing to restart.
 ```
 
 ### 4.3 Non-Leader Replica Path
 
-The leader marks each peer-forwarded `SystemErase` RPC with
-`SystemEraseReq.Forwarded = true` (`lib/control/system.go`). On the
-receiving replica, `SystemErase()` keys its code path off this `Forwarded`
-flag rather than the replica's own `svc.sysdb.IsLeader()` state, since the
-latter could race with a concurrent leadership change (e.g. if this host has
-itself just been elected leader by the time the forwarded request is
-handled) — a forwarded request must always take the "erase self and
-restart" path regardless. When it lands on a (non-leader, or
-concurrently-elected) replica:
+The leader and each replica are distinguished at the gRPC layer via the
+caller's component in the context (`build.FromContext(ctx)`), not via any
+field on the request itself (see Section 5): a `SystemErase` RPC arriving
+from another `ComponentServer` is always treated as a forwarded
+leader-to-replica call and takes the "erase self and restart" path below,
+regardless of this replica's own `svc.sysdb.IsLeader()` state (which could
+race with a concurrent leadership change, e.g. if this host has itself just
+been elected leader by the time the forwarded request is handled). When it
+lands on a (non-leader, or concurrently-elected) replica:
 
-1. `eraseSysdb(errOnFail=true, ...)` — stop and remove this replica's own
-   raft DB files. *** POINT OF NO RETURN for this replica ***
-2. `scheduleControlPlaneRestart()` — called explicitly right here,
-   immediately after the point of no return (not via a handler-wide defer),
-   arming a background goroutine that drains in-flight gRPC calls (i.e.
-   waits for this handler's own response to be sent) before `exec()`-ing to
-   restart the control-plane process.
-3. `resetLocalEngines()` — stop local engines, remove superblocks and (in
+1. `eraseLocalEngines()` — stop local engines, remove superblocks and (in
    MD-on-SSD mode) the `control_metadata` directory.
+2. `eraseSysdb()` — stop and remove this replica's own raft DB files.
+   *** POINT OF NO RETURN for this replica ***
+3. `scheduleControlPlaneRestart()` — arms a background goroutine that
+   drains in-flight gRPC calls (i.e. waits for this handler's own response
+   to be sent) before `exec()`-ing to restart the control-plane process.
 4. Return success to the leader.
 
-On the client side, `control.SystemErase()` skips its expanded
-MS-unavailability retry criteria (used to ride out a new-leader-election
-window on external requests) whenever `Forwarded` is set: a forwarding
-leader calling a specific peer has no "wait for a new leader" scenario to
-retry through, since the peer has already wiped its own DB by the time it
-acks — retrying would only block the leader for the full context timeout
-against a peer that is restarting or briefly unreachable.
-`eraseReplicas()` treats any error from that one-shot call, including a
-retryable connection error, as a hard failure of the overall operation: a
-connection error can't be distinguished from "the peer never received the
-request and still has its DB intact" versus "the peer erased successfully
-but the ack was lost", so it is not safe to assume success and continue.
+`control.SystemErase()` (`lib/control/system.go`), the client function used
+for both the external `dmg`-initiated call and the leader's internal
+peer-to-peer calls, retries on `system.IsUnavailable(err)` regardless of
+caller — there is no retry-skipping special case for the leader-to-replica
+path. `eraseReplicas()` instead treats any error from its one-shot call to
+a peer, including a retryable connection error, as a hard failure of the
+overall operation: a connection error can't be distinguished from "the peer
+never received the request and still has its DB intact" versus "the peer
+erased successfully but the ack was lost", so it is not safe to assume
+success and continue.
 
 Each replica restarts and re-execs **independently** of the others and of
 the leader — there is no synchronization between replicas' restarts, only
@@ -183,15 +180,17 @@ between each replica and the leader's single "did you erase yet?" RPC.
 ### 4.4 Why the Leader Restarts Last
 
 The leader deliberately restarts its own process *last*, after driving the
-rest of the operation (`eraseReplicas()`, `resetLocalEngines()`). This is
-**not** because the leader happens to be the bootstrap replica (it
-frequently isn't) — it is simply a consequence of the fact that whichever
-replica is leader when the erase RPC arrives is the one responsible for
-driving the whole operation. Its own restart is armed only once the point
-of no return (erasing its own DB) is reached (Section 4.2 step 4), and the
-restart goroutine's actual `exec()` only proceeds once this gRPC handler
-invocation itself returns and is drained, i.e. once `eraseReplicas()` and
-`resetLocalEngines()` have both completed (successfully or not).
+rest of the operation (`eraseNonReplicaEngines()`, `eraseReplicas()`,
+`eraseLocalEngines()`). This is **not** because the leader happens to be the
+bootstrap replica (it frequently isn't) — it is simply a consequence of the
+fact that whichever replica is leader when the erase RPC arrives is the one
+responsible for driving the whole operation. Its own restart is armed only
+once the point of no return (erasing its own DB, Section 4.2 step 5) is
+reached, and the restart goroutine's actual `exec()` only proceeds once this
+gRPC handler invocation itself returns and is drained — by which point
+`eraseNonReplicaEngines()`, `eraseReplicas()`, and `eraseLocalEngines()` have
+all already completed (successfully, or the operation would have stopped
+before reaching the point of no return at all).
 
 ### 4.5 Post-Erase Raft Cluster Reformation
 
@@ -244,9 +243,9 @@ member state via raft — which requires a live, leader-side raft DB.
 svc.sysdb.IsLeader()` guard around the `UpdateMemberStates()` call, skipping
 it (and thus the state-update/Addr-fill) entirely when raft was down. That
 guard has since been removed: `UpdateMemberStates()` is now always called
-unconditionally, because the Section 4.2 reordering (fanning out
-`wipeEngineSuperblocks()` to non-replica engines *before* the leader erases
-its own DB, not after) means `rpcFanout()` is, by construction, never
+unconditionally, because the Section 4.2 ordering (fanning out
+`eraseNonReplicaEngines()` to non-replica engines *before* any raft DB is
+erased, not after) means `rpcFanout()` is, by construction, never
 invoked during a leaderless/DB-erased window in the first place — there is
 no longer a case within `SystemErase()`'s flow where the old guard would
 have mattered.
@@ -287,12 +286,10 @@ state.
 No on-disk or wire format changes are introduced. The internal,
 leader-to-replica `SystemErase` RPC reuses the existing
 `mgmt.SystemEraseReq`/`SystemEraseResp` protobuf messages used for the
-external, admin-initiated request; the two cases are distinguished at
-runtime via the caller's component in the gRPC context
-(`build.FromContext(ctx)`), not via a protocol change. The client-side
-`control.SystemEraseReq` gains a `Forwarded bool` field (unexported from
-the wire protocol, used only by `eraseReplicas()` to mark its own
-leader-to-replica calls; see 4.3).
+external, admin-initiated request; the two cases are distinguished purely
+at runtime via the caller's component in the gRPC context
+(`build.FromContext(ctx)`, see Section 4.3), not via any new request field
+or other protocol change.
 
 The gRPC method-authorization map (`security/grpc_authorization.go`) for
 `/mgmt.MgmtSvc/SystemErase` now additionally authorizes `ComponentServer`
@@ -313,7 +310,7 @@ authenticate as a server component, not as an admin.
 - `dmg storage format`, the expected follow-up to `dmg system erase`, no
   longer requires `--replace` to tolerate missing per-engine
   `control_metadata` subdirectories/superblocks (which is exactly the state
-  `ResetFormatRanks`/`resetLocalEngines` leave each erased engine in, Section
+  `ResetFormatRanks`/`eraseLocalEngines` leave each erased engine in, Section
   4.6/4.2-4.3): any engine found in that state now has its subdirectory
   (re)created automatically regardless of `--replace`. The only remaining
   effect of `--replace` in this context is that the engine rejoins with its
@@ -342,17 +339,17 @@ related change.
 
 ### 8.1 Risks and Mitigations
 
-- Erasing the leader's own raft DB (Section 4.2 step 3) is an explicit
+- Erasing the leader's own raft DB (Section 4.2 step 5) is an explicit
   **point of no return**: once stopped, the leader cannot safely handle a
   leadership change for the remainder of the operation. If the leader
   process crashes between this point and completion, manual recovery is
   required (Appendix A). A restart is only ever armed
   (`scheduleControlPlaneRestart()`) once this point is actually reached
-  (Section 4.2 step 4) rather than unconditionally at handler entry, so a
-  failure *before* this point (e.g. `wipeEngineSuperblocks()` fanout to
-  non-replica hosts failing in step 2) leaves the leader's own DB and
-  control-plane process untouched and the whole operation safely retryable
-  from scratch.
+  (Section 4.2 step 6) rather than unconditionally at handler entry, so a
+  failure *before* this point (e.g. `eraseNonReplicaEngines()` fanout to
+  non-replica hosts failing in step 2, or `eraseReplicas()` failing in
+  step 3) leaves the leader's own DB and control-plane process untouched
+  and the whole operation safely retryable from scratch.
 
 ### 8.2 Future Work
 

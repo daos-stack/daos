@@ -120,6 +120,12 @@ struct pool_component {
 	uint32_t	co_nr;
 };
 
+static inline bool
+pool_dtx_leader_candidate_status(uint32_t status)
+{
+	return status == PO_COMP_ST_UPIN || status == PO_COMP_ST_DRAIN;
+}
+
 /**
  * True if the DOWNOUT component was inserted as DOWNOUT at pool creation and never
  * successfully reintegrated. Signature is `co_fseq == co_ver`: real DOWNOUT goes through

@@ -1093,7 +1093,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		xs_ctxt, DP_UUID(pool_id));
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
-	CK_PRINTL_RC(ck, rc, "Open BIO meta context");
+	CK_PRINTFL_RC(ck, rc, "Open BIO meta context");
 	if (rc) {
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID", "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -1106,18 +1106,19 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 umem_open:
 	pop = umempobj_open(path, layout, UMEMPOBJ_ENABLE_STATS, &store);
 	rc  = (pop == NULL) ? daos_errno2der(errno) : DER_SUCCESS;
-	CK_PRINTL_RC(ck, rc, "Open the pool");
+	CK_PRINTFL_RC(ck, rc, "Open the pool");
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
 	}
+	CK_ERR_NUM_INC(ck);
 
 	D_ASSERT(rc != 0);
 
 	if (store.stor_priv != NULL) {
 		ret = bio_mc_close(store.stor_priv);
 		if (ret) {
-			CK_PRINTL_RC(ck, ret, BIO_META_CLOSE_FAIL_STR);
+			CK_PRINTFL_RC(ck, ret, BIO_META_CLOSE_FAIL_STR);
 			D_ERROR(BIO_META_CLOSE_FAIL_STR ". " DF_RC "\n", DP_RC(ret));
 		}
 	}
@@ -1670,6 +1671,9 @@ pool_open_prep(uuid_t uuid, unsigned int flags, struct vos_pool **p_pool)
 	pool->vp_rdb = !!(flags & VOS_POF_RDB);
 	pool->vp_ext_chkpt = !!(flags & VOS_POF_EXTERNAL_CHKPT);
 
+	if (flags & VOS_POF_FOR_CHECK)
+		pool->vp_for_check = 1;
+
 	/*
 	 * Insert the pool into the uuid hash table before full opened, because subsequent
 	 * pool_open process maybe yield and other pool_lookup for the same UUID will find
@@ -1696,11 +1700,13 @@ static int
 pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned int flags,
 	       void *metrics, struct vos_pool *pool, struct checker *ck, int ret)
 {
-	struct umem_attr	*uma;
-	const bool               error_on_non_zero_padding =
-	    (IS_CHECKER(ck) ? (ck->ck_options.cko_non_zero_padding == CHECKER_EVENT_ERROR) : false);
-	daos_handle_t            poh;
-	int			 rc;
+	struct umem_attr *uma;
+	bool              fi_reenable;
+	const uint64_t    exp_fail_locs[] = {DAOS_FAULT_CONT_TREE_INV_CLASS,
+					     DAOS_FAULT_CONT_TREE_UNREG_CLASS,
+					     DAOS_FAULT_CONT_TREE_FEATURES, 0};
+	daos_handle_t     poh;
+	int               rc;
 
 	if (ret != 0)
 		D_GOTO(out, rc = ret);
@@ -1737,10 +1743,12 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	}
 
 	if (IS_CHECKER(ck)) {
-		CK_PRINT(ck, CK_CONT_TREE_STR "...\n");
-		CK_INDENT(ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma, pool,
-							ck_report, ck, error_on_non_zero_padding));
-		CK_PRINTL_RC(ck, rc, CK_CONT_TREE_STR);
+		checker_fi_entry(exp_fail_locs, &fi_reenable);
+		CK_PRINTF(ck, CK_CONT_TREE_STR "...\n");
+		CK_INDENT(
+		    ck, rc = dbtree_check_inplace(&pool_df->pd_cont_root, &pool->vp_uma, pool, ck));
+		CK_PRINTFL_RC(ck, rc, CK_CONT_TREE_STR);
+		checker_fi_exit(fi_reenable);
 		if (rc != DER_SUCCESS) {
 			goto out;
 		}
@@ -1849,7 +1857,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	rc = pool_lookup(&ukey, &pool, true);
 	if (rc == 0) {
 		CK_ASSERT(ck, "Pool is not NULL... ", pool != NULL);
-		CK_PRINT(ck, "Pool is already opened.\n");
+		CK_PRINTF(ck, "Pool is already opened.\n");
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
 		if (pool->vp_dying) {
@@ -1857,11 +1865,20 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
-		if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
-		    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
+		if (!(flags & VOS_POF_FOR_CHECK) && ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 			vos_pool_decref(pool);
 			return -DER_BUSY;
 		}
+
+		/*
+		 * Set vp_for_check only for the first opener with VOS_POF_FOR_CHECK flag. If the
+		 * pool has already been opened without such flag, then current VOS_POF_FOR_CHECK
+		 * will not set vp_for_check. Conversely, if the pool was formerly open with such
+		 * flag but now is double opened without such flag, then clear vp_for_check.
+		 */
+		if (!(flags & VOS_POF_FOR_CHECK))
+			pool->vp_for_check = 0;
+
 		pool->vp_opened++;
 		*poh = vos_pool2hdl(pool);
 		checker_print_indent_dec(ck);
@@ -1873,7 +1890,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		return rc;
 
 	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
-	CK_PRINTL_RC(ck, rc, "NVMe devices (if applicable)");
+	CK_PRINTFL_RC(ck, rc, "NVMe devices (if applicable)");
 	if (rc) {
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		goto out;
@@ -1887,7 +1904,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 	pool_df = vos_pool_pop2df(ph);
-	CK_PRINT(ck, "Magic... ");
+	CK_PRINTF(ck, "Magic... ");
 	if (pool_df->pd_magic != POOL_DF_MAGIC || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_MAGIC)) {
 		CK_APPENDFL_ERR(ck, "invalid (%#x)", pool_df->pd_magic);
 		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
@@ -1896,7 +1913,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 	CK_APPENDL_OK(ck);
 
-	CK_PRINT(ck, "Version... ");
+	CK_PRINTF(ck, "Version... ");
 	if (pool_df->pd_version > POOL_DF_VERSION || pool_df->pd_version < POOL_DF_VER_1 ||
 	    DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_VERSION)) {
 		CK_APPENDFL_ERR(ck, "unsupported (%#x)", pool_df->pd_version);
@@ -1910,7 +1927,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 	CK_APPENDL_OK(ck);
 
-	CK_PRINT(ck, "UUID... ");
+	CK_PRINTF(ck, "UUID... ");
 	if (uuid_compare(uuid, pool_df->pd_id) || DAOS_FAIL_CHECK(DAOS_FAULT_POOL_OPEN_UUID)) {
 		CK_APPENDFL_ERR(ck, "mismatch (requested=" DF_UUIDF ", received=" DF_UUIDF ")",
 				DP_UUID(uuid), DP_UUID(pool_df->pd_id));
@@ -1927,7 +1944,7 @@ out:
 		*poh = vos_pool2hdl(pool);
 
 		checker_print_indent_dec(ck);
-		CK_PRINTL_RC(ck, rc, "Check pool");
+		CK_PRINTFL_RC(ck, rc, "Check pool");
 	}
 
 	/* Close this local handle, if it hasn't been consumed nor already
