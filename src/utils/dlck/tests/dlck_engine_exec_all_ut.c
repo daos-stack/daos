@@ -25,34 +25,34 @@ static struct dlck_engine Engine_buf;
 static int                Custom_alloc;
 static int                Custom_free;
 
-#define EXPECT_EXEC_STATE(MOCK, TARGETS)                                                            \
-	do {                                                                                         \
-		expect_value(MOCK, de->targets, TARGETS);                                             \
-		expect_value(MOCK, de->arg_alloc_fn_arg, &Custom_alloc);                              \
-		expect_value(MOCK, de->arg_free_fn_arg, &Custom_free);                                \
-		expect_value(MOCK, de->ck, NULL);                                                     \
+#define EXPECT_EXEC_STATE(MOCK, TARGETS)                                                           \
+	do {                                                                                       \
+		expect_value(MOCK, de->targets, TARGETS);                                          \
+		expect_value(MOCK, de->arg_alloc_fn_arg, &Custom_alloc);                           \
+		expect_value(MOCK, de->arg_free_fn_arg, &Custom_free);                             \
+		expect_value(MOCK, de->ck, NULL);                                                  \
 	} while (0)
 
 #define EXPECT_EXEC_INIT(ENGINE, RC)                                                               \
-	do {                                                                                         \
-		expect_value(__wrap_dlck_exec_init, engine, ENGINE);                                  \
-		EXPECT_EXEC_STATE(__wrap_dlck_exec_init, TARGET_COUNT);                              \
-		will_return(__wrap_dlck_exec_init, RC);                                              \
+	do {                                                                                       \
+		expect_value(__wrap_dlck_exec_init, engine, ENGINE);                               \
+		EXPECT_EXEC_STATE(__wrap_dlck_exec_init, TARGET_COUNT);                            \
+		will_return(__wrap_dlck_exec_init, RC);                                            \
 	} while (0)
 
-#define EXPECT_ENGINE_EXEC(ENGINE, RC, JOIN_FAIL)                                                   \
-	do {                                                                                         \
-		expect_value(__wrap_dlck_engine_exec, engine, ENGINE);                               \
-		EXPECT_EXEC_STATE(__wrap_dlck_engine_exec, TARGET_COUNT);                            \
-		will_return(__wrap_dlck_engine_exec, RC);                                           \
-		will_return(__wrap_dlck_engine_exec, JOIN_FAIL);                                    \
+#define EXPECT_ENGINE_EXEC(ENGINE, RC, JOIN_FAIL)                                                  \
+	do {                                                                                       \
+		expect_value(__wrap_dlck_engine_exec, engine, ENGINE);                             \
+		EXPECT_EXEC_STATE(__wrap_dlck_engine_exec, TARGET_COUNT);                          \
+		will_return(__wrap_dlck_engine_exec, RC);                                          \
+		will_return(__wrap_dlck_engine_exec, JOIN_FAIL);                                   \
 	} while (0)
 
-#define EXPECT_EXEC_JOIN(RC, JOIN_FAIL)                                                             \
-	do {                                                                                         \
-		EXPECT_EXEC_STATE(__wrap_dlck_exec_join, TARGET_COUNT);                             \
-		will_return(__wrap_dlck_exec_join, RC);                                             \
-		will_return(__wrap_dlck_exec_join, JOIN_FAIL);                                      \
+#define EXPECT_EXEC_JOIN(RC, JOIN_FAIL)                                                            \
+	do {                                                                                       \
+		EXPECT_EXEC_STATE(__wrap_dlck_exec_join, TARGET_COUNT);                            \
+		will_return(__wrap_dlck_exec_join, RC);                                            \
+		will_return(__wrap_dlck_exec_join, JOIN_FAIL);                                     \
 	} while (0)
 
 #define EXPECT_EXEC_FINI() EXPECT_EXEC_STATE(__wrap_dlck_exec_fini, TARGET_COUNT)
@@ -87,7 +87,7 @@ __wrap_dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
 	assert_ptr_equal(de->arg_alloc_fn, mock_arg_alloc_fn);
 	assert_ptr_equal(de->arg_free_fn, mock_arg_free_fn);
 	assert_ptr_equal(de->exec_one, mock_exec_one);
-	rc = mock_type(int);
+	rc            = mock_type(int);
 	de->join_fail = mock_type(bool);
 
 	return rc;
@@ -106,7 +106,7 @@ __wrap_dlck_exec_join(struct dlck_exec *de)
 	assert_ptr_equal(de->arg_alloc_fn, mock_arg_alloc_fn);
 	assert_ptr_equal(de->arg_free_fn, mock_arg_free_fn);
 	assert_ptr_equal(de->exec_one, mock_exec_one);
-	rc = mock_type(int);
+	rc            = mock_type(int);
 	de->join_fail = mock_type(bool);
 
 	return rc;
@@ -241,12 +241,12 @@ test_exec_all_preserves_engine_join_failure(void **unused)
 #define TEST(ID, FUNC) {"DLCK_ENGINE_EXEC_ALL_" #ID ": " #FUNC, FUNC, setup, NULL, NULL}
 
 static const struct CMUnitTest dlck_engine_exec_all_tests[] = {
-	TEST(101, test_exec_all_init_failure),
-	TEST(102, test_exec_all_exec_failure),
-	TEST(103, test_exec_all_exec_join_failure),
-	TEST(104, test_exec_all_success),
-	TEST(105, test_exec_all_join_failure),
-	TEST(106, test_exec_all_preserves_engine_join_failure),
+    TEST(101, test_exec_all_init_failure),
+    TEST(102, test_exec_all_exec_failure),
+    TEST(103, test_exec_all_exec_join_failure),
+    TEST(104, test_exec_all_success),
+    TEST(105, test_exec_all_join_failure),
+    TEST(106, test_exec_all_preserves_engine_join_failure),
 };
 
 int
