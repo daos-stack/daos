@@ -64,6 +64,13 @@ def add_command_line_options():
               default='no',
               help="Automatically download and build sources.  (fetch|yes|no|only) [no]")
 
+    AddOption('--build-test-deps',
+              dest='build_test_deps',
+              type='choice',
+              choices=['yes', 'no', 'only'],
+              default='no',
+              help="Build missing test dependencies.  (yes|no|only) [no]")
+
     AddOption('--skip-download',
               dest='skip_download',
               action='store_true',
@@ -470,9 +477,9 @@ def scons():
     # This will add a final 'DEPS' value to opts but it will not be persistent.
     prereqs.run_build(opts)
 
-    if GetOption('build_deps') == 'only':
+    if GetOption('build_deps') == 'only' or GetOption('build_test_deps') == 'only':
         prereqs.save_build_info()
-        print('Exiting because --build-deps=only was set')
+        print('Exiting after dependency build')
         Exit(0)
 
     env = deps_env.Clone(tools=['extra', 'textfile', 'daos_builder', 'compiler_setup'])
