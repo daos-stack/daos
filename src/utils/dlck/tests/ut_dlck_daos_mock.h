@@ -15,7 +15,7 @@
  * wraps for the TLS, engine, BIO and VOS calls controlled by the test binary.
  */
 
-/** Sentinel NVMe context installed and checked by the BIO mocks. */
+/** Mock NVMe context used by the BIO mocks. */
 extern struct bio_xs_context *const     Mock_xs_ctxt;
 
 /** Thread-local storage shared by all mocked execution streams. */

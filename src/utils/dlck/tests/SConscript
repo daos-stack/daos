@@ -31,11 +31,13 @@ def build_dlck_engine_ut(henv):
     libs = ['gurt', 'daos_common_pmem', 'cmocka', 'uuid', 'abt', 'pthread']
     srcs = [
         'dlck_engine_ut.c',
-        'ut_dlck_daos_mock.c',
-        'ut_dlck_abt_mock.c',
         'ut_abt_mock.c',
+        'ut_dlck_abt_mock.c',
+        'ut_dlck_cmd_mock.c',
+        'ut_dlck_daos_mock.c',
         'ut_mem_mock.c',
         '../dlck_engine.c',
+        '../dlck_engine_internal.c',
     ]
     henv.d_test_program('dlck_engine_ut', srcs, LIBS=libs)
 
@@ -59,6 +61,7 @@ def build_dlck_test_helper(henv):
         '../dlck_args_files.c',
         '../dlck_args_parse.c',
         '../dlck_engine.c',
+        '../dlck_engine_internal.c',
         '../dlck_pool.c',
         '../dlck_tls.c',
         '../../../dtx/tests/srv_mock.c',

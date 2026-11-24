@@ -15,7 +15,7 @@
 
 #include "ut_dlck_daos_mock.h"
 
-/** sentinels */
+/** Mock handles */
 struct bio_xs_context *const     Mock_xs_ctxt = (struct bio_xs_context *)0xdef0;
 
 /** thread-local storage shared by all mocked execution streams */

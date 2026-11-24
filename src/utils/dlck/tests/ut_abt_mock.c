@@ -12,7 +12,7 @@
 
 #include "ut_abt_mock.h"
 
-/** sentinels */
+/** Mock handles */
 const ABT_mutex  Mock_mutex_handle = (ABT_mutex)0x1234;
 const ABT_thread Mock_thread       = (ABT_thread)0x5678;
 

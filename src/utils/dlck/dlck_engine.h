@@ -102,45 +102,6 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
 typedef void (*arg_free_fn_t)(void *custom, void **arg);
 
-struct dlck_exec {
-	arg_alloc_fn_t   arg_alloc_fn;
-	void            *arg_alloc_fn_arg;
-	arg_free_fn_t    arg_free_fn;
-	void            *arg_free_fn_arg;
-	dlck_ult_func    exec_one;
-	struct checker  *ck;
-	unsigned         targets;
-	struct dlck_ult *ults;
-	void           **ult_args;
-	bool             join_fail;
-};
-
-/**
- * Allocate the per-target resources of a caller-initialized batch. The caller initializes the
- * callbacks, their arguments, target count and optional checker, and zeroes the remaining state.
- * On failure, release allocated resources and report the result to the checker.
- */
-int
-dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de);
-
-/**
- * Start the batch's exec_one ULT per target and report the start result. On failure, join started
- * ULTs; the caller must still release the batch with dlck_exec_fini().
- */
-int
-dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de);
-
-/**
- * Join the batch and report the result. A failed join sets join_fail; the caller must propagate
- * it to the engine before releasing the batch.
- */
-int
-dlck_exec_join(struct dlck_exec *de);
-
-/** Release batch resources, leaving arguments of potentially running ULTs untouched. */
-void
-dlck_exec_fini(struct dlck_exec *de);
-
 /**
  * \brief Run the \p exec_one function as a set of ULTs on all the daos_io_* execution streams
  * of the \p engine.

@@ -13,7 +13,7 @@
  * calls controlled by the test binary.
  */
 
-/** Sentinel handles installed and checked by the ABT mocks. */
+/** Mock handles used by the ABT mocks. */
 extern const ABT_mutex  Mock_mutex_handle;
 extern const ABT_thread Mock_thread;
 

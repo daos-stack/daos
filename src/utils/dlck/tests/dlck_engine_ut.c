@@ -23,9 +23,11 @@
 
 #include "../dlck_args.h"
 #include "../dlck_engine.h"
+#include "../dlck_engine_internal.h"
 #include "dlck_ut.h"
 #include "ut_abt_mock.h"
 #include "ut_dlck_abt_mock.h"
+#include "ut_dlck_cmd_mock.h"
 #include "ut_dlck_daos_mock.h"
 #include "ut_mem_mock.h"
 
@@ -57,60 +59,7 @@ static struct dlck_args_engine Args = {.numa_node          = 1,
 				       .storage_path       = "mock-storage-path",
 				       .nvme_conf          = "mock-nvme-conf"};
 
-/** test doubles for the dlck_engine_exec_all() callbacks */
-
-static void
-test_exec_one(void *arg)
-{
-	check_expected_ptr(arg);
-}
-
-static int
-test_arg_alloc_fn(struct dlck_engine *engine, int idx, void *custom, void **arg)
-{
-	int rc;
-
-	check_expected_ptr(engine);
-	check_expected(idx);
-	check_expected_ptr(custom);
-	rc = mock_type(int);
-	if (rc == DER_SUCCESS) {
-		*arg = mock_ptr_type(void *);
-	}
-
-	return rc;
-}
-
-static void
-test_arg_free_fn(void *custom, void **arg)
-{
-	void *ptr;
-
-	check_expected_ptr(custom);
-	assert_non_null(arg);
-	ptr = *arg;
-	check_expected_ptr(ptr);
-	*arg = NULL;
-}
-
 /** composite expectation helpers */
-
-#define EXPECT_TEST_ARG_ALLOC_FN(ENGINE, IDX, RC, PTR)                                             \
-	do {                                                                                       \
-		expect_value(test_arg_alloc_fn, engine, ENGINE);                                   \
-		expect_value(test_arg_alloc_fn, idx, IDX);                                         \
-		expect_value(test_arg_alloc_fn, custom, &Custom_alloc);                            \
-		will_return(test_arg_alloc_fn, RC);                                                \
-		if ((RC) == DER_SUCCESS) {                                                         \
-			will_return(test_arg_alloc_fn, PTR);                                       \
-		}                                                                                  \
-	} while (0)
-
-#define EXPECT_TEST_ARG_FREE_FN(PTR)                                                               \
-	do {                                                                                       \
-		expect_value(test_arg_free_fn, custom, &Custom_free);                              \
-		expect_value(test_arg_free_fn, ptr, PTR);                                          \
-	} while (0)
 
 #define EXPECT_EXEC_INIT_ALLOC(T)                                                                  \
 	do {                                                                                       \
@@ -274,11 +223,11 @@ engine_build_nvme(unsigned targets)
 static void
 exec_prepare(unsigned targets)
 {
-	Exec_buf.arg_alloc_fn     = test_arg_alloc_fn;
+	Exec_buf.arg_alloc_fn     = mock_arg_alloc_fn;
 	Exec_buf.arg_alloc_fn_arg = &Custom_alloc;
-	Exec_buf.arg_free_fn      = test_arg_free_fn;
+	Exec_buf.arg_free_fn      = mock_arg_free_fn;
 	Exec_buf.arg_free_fn_arg  = &Custom_free;
-	Exec_buf.exec_one         = test_exec_one;
+	Exec_buf.exec_one         = mock_exec_one;
 	Exec_buf.ck               = NULL;
 	Exec_buf.targets          = targets;
 	Exec_buf.join_fail        = false;
@@ -412,7 +361,7 @@ test_dlck_exec_init_success(void **unused)
 	exec_prepare(2);
 	EXPECT_EXEC_INIT_ALLOC(2);
 	for (int i = 0; i < 2; ++i) {
-		EXPECT_TEST_ARG_ALLOC_FN(&Engine_buf, i, DER_SUCCESS, &Payload[i]);
+		EXPECT_mock_arg_alloc_fn(&Engine_buf, i, DER_SUCCESS, &Payload[i]);
 	}
 
 	rc = dlck_exec_init(&Engine_buf, de);
@@ -420,10 +369,10 @@ test_dlck_exec_init_success(void **unused)
 	assert_int_equal(rc, DER_SUCCESS);
 	assert_ptr_equal(de, &Exec_buf);
 	assert_int_equal(de->targets, 2);
-	assert_ptr_equal(de->exec_one, test_exec_one);
-	assert_ptr_equal(de->arg_alloc_fn, test_arg_alloc_fn);
+	assert_ptr_equal(de->exec_one, mock_exec_one);
+	assert_ptr_equal(de->arg_alloc_fn, mock_arg_alloc_fn);
 	assert_ptr_equal(de->arg_alloc_fn_arg, &Custom_alloc);
-	assert_ptr_equal(de->arg_free_fn, test_arg_free_fn);
+	assert_ptr_equal(de->arg_free_fn, mock_arg_free_fn);
 	assert_ptr_equal(de->arg_free_fn_arg, &Custom_free);
 	assert_ptr_equal(de->ults, Ults_buf);
 	assert_ptr_equal(de->ult_args, Ult_args_buf);
@@ -462,8 +411,8 @@ test_dlck_engine_exec_all_ults_alloc_failure(void **unused)
 	engine_build(2);
 	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), NULL);
 
-	rc = dlck_engine_exec_all(&Engine_buf, test_arg_alloc_fn, &Custom_alloc, test_arg_free_fn,
-				  &Custom_free, test_exec_one, NULL);
+	rc = dlck_engine_exec_all(&Engine_buf, mock_arg_alloc_fn, &Custom_alloc, mock_arg_free_fn,
+				  &Custom_free, mock_exec_one, NULL);
 
 	assert_int_equal(rc, -DER_NOMEM);
 	assert_false(Engine_buf.join_fail);
@@ -516,10 +465,10 @@ test_dlck_exec_init_arg_alloc_failure(void **unused)
 	engine_build(2);
 	exec_prepare(2);
 	EXPECT_EXEC_INIT_ALLOC(2);
-	EXPECT_TEST_ARG_ALLOC_FN(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
-	EXPECT_TEST_ARG_ALLOC_FN(&Engine_buf, 1, -DER_IO, NULL);
-	EXPECT_TEST_ARG_FREE_FN(&Payload[0]);
-	EXPECT_TEST_ARG_FREE_FN(NULL);
+	EXPECT_mock_arg_alloc_fn(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
+	EXPECT_mock_arg_alloc_fn(&Engine_buf, 1, -DER_IO, NULL);
+	EXPECT_mock_arg_free_fn(&Payload[0]);
+	EXPECT_mock_arg_free_fn(NULL);
 	EXPECT_EXEC_FINI_FREE();
 
 	rc = dlck_exec_init(&Engine_buf, de);
@@ -541,7 +490,7 @@ test_dlck_engine_exec_success(void **unused)
 	exec_build(2);
 	for (int i = 0; i < 2; ++i) {
 		EXPECT_DLCK_ULT_CREATE(MOCK_POOL(i), DER_SUCCESS, MOCK_THREAD(i));
-		expect_value(test_exec_one, arg, &Payload[i]);
+		expect_value(mock_exec_one, arg, &Payload[i]);
 	}
 
 	rc = dlck_engine_exec(&Engine_buf, &Exec_buf);
@@ -562,7 +511,7 @@ test_dlck_engine_exec_ult_create_failure(void **unused)
 	engine_build(2);
 	exec_build(2);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	expect_value(test_exec_one, arg, &Payload[0]);
+	expect_value(mock_exec_one, arg, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), -DER_NOMEM, NULL);
 	/** cleanup: the started ULT is joined and freed */
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
@@ -584,7 +533,7 @@ test_dlck_engine_exec_cleanup_join_failure(void **unused)
 	engine_build(2);
 	exec_build(2);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	expect_value(test_exec_one, arg, &Payload[0]);
+	expect_value(mock_exec_one, arg, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), -DER_NOMEM, NULL);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
 
@@ -689,8 +638,8 @@ static void
 test_dlck_exec_fini_success(void **unused)
 {
 	exec_build(2);
-	EXPECT_TEST_ARG_FREE_FN(&Payload[0]);
-	EXPECT_TEST_ARG_FREE_FN(&Payload[1]);
+	EXPECT_mock_arg_free_fn(&Payload[0]);
+	EXPECT_mock_arg_free_fn(&Payload[1]);
 	EXPECT_EXEC_FINI_FREE();
 
 	dlck_exec_fini(&Exec_buf);
@@ -702,7 +651,7 @@ test_dlck_exec_fini_skips_unjoined(void **unused)
 {
 	exec_build(2);
 	Ults_buf[0].thread = MOCK_THREAD(0);
-	EXPECT_TEST_ARG_FREE_FN(&Payload[1]);
+	EXPECT_mock_arg_free_fn(&Payload[1]);
 	EXPECT_EXEC_FINI_FREE();
 
 	dlck_exec_fini(&Exec_buf);
@@ -718,16 +667,16 @@ test_dlck_engine_exec_all_success(void **unused)
 
 	engine_build(1);
 	EXPECT_EXEC_INIT_ALLOC(1);
-	EXPECT_TEST_ARG_ALLOC_FN(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
+	EXPECT_mock_arg_alloc_fn(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	expect_value(test_exec_one, arg, &Payload[0]);
+	expect_value(mock_exec_one, arg, &Payload[0]);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_TEST_ARG_FREE_FN(&Payload[0]);
+	EXPECT_mock_arg_free_fn(&Payload[0]);
 	EXPECT_EXEC_FINI_FREE();
 
-	rc = dlck_engine_exec_all(&Engine_buf, test_arg_alloc_fn, &Custom_alloc, test_arg_free_fn,
-				  &Custom_free, test_exec_one, NULL);
+	rc = dlck_engine_exec_all(&Engine_buf, mock_arg_alloc_fn, &Custom_alloc, mock_arg_free_fn,
+				  &Custom_free, mock_exec_one, NULL);
 
 	assert_int_equal(rc, DER_SUCCESS);
 	assert_false(Engine_buf.join_fail);
@@ -741,13 +690,13 @@ test_dlck_engine_exec_all_exec_failure(void **unused)
 
 	engine_build(1);
 	EXPECT_EXEC_INIT_ALLOC(1);
-	EXPECT_TEST_ARG_ALLOC_FN(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
+	EXPECT_mock_arg_alloc_fn(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), -DER_NOMEM, NULL);
-	EXPECT_TEST_ARG_FREE_FN(&Payload[0]);
+	EXPECT_mock_arg_free_fn(&Payload[0]);
 	EXPECT_EXEC_FINI_FREE();
 
-	rc = dlck_engine_exec_all(&Engine_buf, test_arg_alloc_fn, &Custom_alloc, test_arg_free_fn,
-				  &Custom_free, test_exec_one, NULL);
+	rc = dlck_engine_exec_all(&Engine_buf, mock_arg_alloc_fn, &Custom_alloc, mock_arg_free_fn,
+				  &Custom_free, mock_exec_one, NULL);
 
 	assert_int_equal(rc, -DER_NOMEM);
 	assert_false(Engine_buf.join_fail);
@@ -763,17 +712,17 @@ test_dlck_engine_exec_all_fault_join(void **unused)
 	daos_fail_loc_set(DLCK_FAULT_ENGINE_JOIN | DAOS_FAIL_ONCE);
 	daos_fail_value_set(EBUSY);
 	EXPECT_EXEC_INIT_ALLOC(1);
-	EXPECT_TEST_ARG_ALLOC_FN(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
+	EXPECT_mock_arg_alloc_fn(&Engine_buf, 0, DER_SUCCESS, &Payload[0]);
 	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	expect_value(test_exec_one, arg, &Payload[0]);
+	expect_value(mock_exec_one, arg, &Payload[0]);
 	/** cleanup */
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
-	EXPECT_TEST_ARG_FREE_FN(&Payload[0]);
+	EXPECT_mock_arg_free_fn(&Payload[0]);
 	EXPECT_EXEC_FINI_FREE();
 
-	rc = dlck_engine_exec_all(&Engine_buf, test_arg_alloc_fn, &Custom_alloc, test_arg_free_fn,
-				  &Custom_free, test_exec_one, NULL);
+	rc = dlck_engine_exec_all(&Engine_buf, mock_arg_alloc_fn, &Custom_alloc, mock_arg_free_fn,
+				  &Custom_free, mock_exec_one, NULL);
 
 	assert_int_equal(rc, -DER_BUSY);
 	assert_true(Engine_buf.join_fail);
