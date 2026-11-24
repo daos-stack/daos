@@ -240,11 +240,13 @@ exec_build(struct engine_ut_ctx *ctx, unsigned targets)
 static struct engine_ut_ctx *
 ctx_reset(void **state)
 {
-	struct engine_ut_ctx *ctx = &Ctx;
+	struct engine_ut_ctx *ctx     = &Ctx;
+	unsigned              targets = (unsigned)(uintptr_t)*state;
 
 	memset(ctx, 0, sizeof(*ctx));
 	memset(&Mock_dmi, 0, sizeof(Mock_dmi));
 
+	ctx->args.targets            = targets;
 	ctx->args.numa_node          = 1;
 	ctx->args.max_dma_buf_size   = 262144;
 	ctx->args.nvme_hugepage_size = 2048;
@@ -265,34 +267,12 @@ setup_reset(void **state)
 }
 
 static int
-setup_init(void **state, unsigned targets)
-{
-	struct engine_ut_ctx *ctx = ctx_reset(state);
-
-	ctx->args.targets = targets;
-
-	return 0;
-}
-
-static int
-setup_init_0(void **state)
-{
-	return setup_init(state, 0);
-}
-
-static int
-setup_init_2(void **state)
-{
-	return setup_init(state, 2);
-}
-
-static int
 setup_engine_exec_build_prep(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	engine_build(ctx, 2);
-	exec_prepare(ctx, 2);
+	engine_build(ctx, ctx->args.targets);
+	exec_prepare(ctx, ctx->args.targets);
 
 	return 0;
 }
@@ -302,62 +282,30 @@ setup_engine_exec_build(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	engine_build(ctx, 2);
-	exec_build(ctx, 2);
+	engine_build(ctx, ctx->args.targets);
+	exec_build(ctx, ctx->args.targets);
 
 	return 0;
 }
 
 static int
-setup_engine_build(void **state, unsigned targets)
+setup_engine_build(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	ctx->args.targets = targets;
-	engine_build(ctx, targets);
+	engine_build(ctx, ctx->args.targets);
 
 	return 0;
 }
 
 static int
-setup_engine_build_0(void **state)
-{
-	return setup_engine_build(state, 0);
-}
-
-static int
-setup_engine_build_1(void **state)
-{
-	return setup_engine_build(state, 1);
-}
-
-static int
-setup_engine_build_2(void **state)
-{
-	return setup_engine_build(state, 2);
-}
-
-static int
-setup_engine_build_nvme(void **state, unsigned targets)
+setup_engine_build_nvme(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	ctx->args.targets = targets;
-	engine_build_nvme(ctx, targets);
+	engine_build_nvme(ctx, ctx->args.targets);
 
 	return 0;
-}
-
-static int
-setup_engine_build_nvme_0(void **state)
-{
-	return setup_engine_build_nvme(state, 0);
-}
-
-static int
-setup_engine_build_nvme_1(void **state)
-{
-	return setup_engine_build_nvme(state, 1);
 }
 
 /** tests - dlck_engine_xstream_arg_alloc/free */
@@ -1219,53 +1167,52 @@ test_dlck_engine_stop_fini_ult_create_failure(void **state)
 	assert_int_equal(rc, -DER_NOMEM);
 }
 
-#define TEST_WITH_SETUP(ID, FUNC, TEST_SETUP)                                                      \
-	{"DLCK_ENGINE_" #ID ": " #FUNC, FUNC, TEST_SETUP, NULL, NULL}
-#define TEST(ID, FUNC) TEST_WITH_SETUP(ID, FUNC, setup_reset)
+/** the target count is passed as the CMocka initial state and read by the setups */
+#define TEST_TARGETS(ID, FUNC, TEST_SETUP, TARGETS)                                                \
+	{"DLCK_ENGINE_" #ID ": " #FUNC, FUNC, TEST_SETUP, NULL, (void *)(uintptr_t)(TARGETS)}
 
 static const struct CMUnitTest dlck_engine_tests[] = {
-    TEST_WITH_SETUP(101, test_dlck_engine_xstream_arg_alloc_success, setup_engine_build_2),
-    TEST_WITH_SETUP(102, test_dlck_engine_xstream_arg_alloc_failure, setup_engine_build_2),
-    TEST(103, test_dlck_engine_xstream_arg_free_null),
-    TEST_WITH_SETUP(104, test_dlck_engine_xstream_arg_free_collects_outputs, setup_engine_build_2),
-    TEST_WITH_SETUP(105, test_dlck_exec_init_success, setup_engine_exec_build_prep),
-    TEST_WITH_SETUP(106, test_dlck_exec_init_ults_alloc_failure, setup_engine_exec_build_prep),
-    TEST_WITH_SETUP(107, test_dlck_exec_init_args_alloc_failure, setup_engine_exec_build_prep),
-    TEST_WITH_SETUP(108, test_dlck_exec_init_arg_alloc_failure, setup_engine_exec_build_prep),
-    TEST_WITH_SETUP(109, test_dlck_engine_exec_success, setup_engine_exec_build),
-    TEST_WITH_SETUP(110, test_dlck_engine_exec_ult_create_failure, setup_engine_exec_build),
-    TEST_WITH_SETUP(111, test_dlck_exec_join_no_error_success, setup_engine_exec_build),
-    TEST_WITH_SETUP(112, test_dlck_exec_join_no_error_join_failure, setup_engine_exec_build),
-    TEST_WITH_SETUP(113, test_dlck_exec_join_success, setup_engine_exec_build),
-    TEST_WITH_SETUP(114, test_dlck_exec_join_join_failure, setup_engine_exec_build),
-    TEST_WITH_SETUP(115, test_dlck_exec_join_thread_free_failure, setup_engine_exec_build),
-    TEST_WITH_SETUP(116, test_dlck_exec_fini_success, setup_engine_exec_build),
-    TEST_WITH_SETUP(117, test_dlck_exec_fini_skips_unjoined, setup_engine_exec_build),
-    TEST_WITH_SETUP(118, test_dlck_engine_init_success, setup_init_2),
-    TEST_WITH_SETUP(119, test_dlck_engine_init_success_no_nvme, setup_init_0),
-    TEST_WITH_SETUP(120, test_dlck_engine_init_engine_alloc_failure, setup_init_2),
-    TEST_WITH_SETUP(121, test_dlck_engine_init_xss_alloc_failure, setup_init_2),
-    TEST_WITH_SETUP(122, test_dlck_engine_init_dbtree_classes_failure, setup_init_2),
-    TEST_WITH_SETUP(123, test_dlck_engine_init_bio_nvme_init_failure, setup_init_2),
-    TEST_WITH_SETUP(124, test_dlck_engine_init_sm_init_failure, setup_init_2),
-    TEST_WITH_SETUP(125, test_dlck_engine_init_tls_key_create_failure, setup_init_2),
-    TEST_WITH_SETUP(126, test_dlck_engine_init_vos_tls_init_failure, setup_init_2),
-    TEST_WITH_SETUP(127, test_dlck_engine_init_vos_sys_db_init_failure, setup_init_2),
-    TEST_WITH_SETUP(128, test_dlck_engine_start_xs_create_failure, setup_engine_build_0),
-    TEST_WITH_SETUP(129, test_dlck_engine_start_xs_init_tls_failure, setup_engine_build_0),
-    TEST_WITH_SETUP(130, test_dlck_engine_start_xs_init_xsctxt_failure, setup_engine_build_1),
-    TEST_WITH_SETUP(131, test_dlck_engine_start_xs_init_eventual_failure, setup_engine_build_0),
-    TEST_WITH_SETUP(132, test_dlck_engine_start_xs_init_polling_ult_failure, setup_engine_build_0),
-    TEST_WITH_SETUP(133, test_dlck_engine_start_polling_eventual_test_success,
-		    setup_engine_build_0),
-    TEST_WITH_SETUP(134, test_dlck_engine_stop_success, setup_engine_build_nvme_1),
-    TEST_WITH_SETUP(135, test_dlck_engine_stop_join_fail, setup_engine_build_0),
-    TEST_WITH_SETUP(136, test_dlck_engine_stop_fini_failure, setup_engine_build_nvme_0),
-    TEST_WITH_SETUP(137, test_dlck_engine_stop_pool_not_empty, setup_engine_build_0),
-    TEST_WITH_SETUP(138, test_dlck_engine_stop_xs_free_failure, setup_engine_build_0),
-    TEST_WITH_SETUP(139, test_dlck_engine_fini_success, setup_engine_build_0),
-    TEST_WITH_SETUP(140, test_dlck_engine_fini_sm_fini_failure, setup_engine_build_0),
-    TEST_WITH_SETUP(141, test_dlck_engine_stop_fini_ult_create_failure, setup_engine_build_0),
+    TEST_TARGETS(101, test_dlck_engine_xstream_arg_alloc_success, setup_engine_build, 2),
+    TEST_TARGETS(102, test_dlck_engine_xstream_arg_alloc_failure, setup_engine_build, 2),
+    TEST_TARGETS(103, test_dlck_engine_xstream_arg_free_null, setup_reset, 0),
+    TEST_TARGETS(104, test_dlck_engine_xstream_arg_free_collects_outputs, setup_engine_build, 2),
+    TEST_TARGETS(105, test_dlck_exec_init_success, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(106, test_dlck_exec_init_ults_alloc_failure, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(107, test_dlck_exec_init_args_alloc_failure, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(108, test_dlck_exec_init_arg_alloc_failure, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(109, test_dlck_engine_exec_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(110, test_dlck_engine_exec_ult_create_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(111, test_dlck_exec_join_no_error_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(112, test_dlck_exec_join_no_error_join_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(113, test_dlck_exec_join_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(114, test_dlck_exec_join_join_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(115, test_dlck_exec_join_thread_free_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(116, test_dlck_exec_fini_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(117, test_dlck_exec_fini_skips_unjoined, setup_engine_exec_build, 2),
+    TEST_TARGETS(118, test_dlck_engine_init_success, setup_reset, 2),
+    TEST_TARGETS(119, test_dlck_engine_init_success_no_nvme, setup_reset, 0),
+    TEST_TARGETS(120, test_dlck_engine_init_engine_alloc_failure, setup_reset, 2),
+    TEST_TARGETS(121, test_dlck_engine_init_xss_alloc_failure, setup_reset, 2),
+    TEST_TARGETS(122, test_dlck_engine_init_dbtree_classes_failure, setup_reset, 2),
+    TEST_TARGETS(123, test_dlck_engine_init_bio_nvme_init_failure, setup_reset, 2),
+    TEST_TARGETS(124, test_dlck_engine_init_sm_init_failure, setup_reset, 2),
+    TEST_TARGETS(125, test_dlck_engine_init_tls_key_create_failure, setup_reset, 2),
+    TEST_TARGETS(126, test_dlck_engine_init_vos_tls_init_failure, setup_reset, 2),
+    TEST_TARGETS(127, test_dlck_engine_init_vos_sys_db_init_failure, setup_reset, 2),
+    TEST_TARGETS(128, test_dlck_engine_start_xs_create_failure, setup_engine_build, 0),
+    TEST_TARGETS(129, test_dlck_engine_start_xs_init_tls_failure, setup_engine_build, 0),
+    TEST_TARGETS(130, test_dlck_engine_start_xs_init_xsctxt_failure, setup_engine_build, 1),
+    TEST_TARGETS(131, test_dlck_engine_start_xs_init_eventual_failure, setup_engine_build, 0),
+    TEST_TARGETS(132, test_dlck_engine_start_xs_init_polling_ult_failure, setup_engine_build, 0),
+    TEST_TARGETS(133, test_dlck_engine_start_polling_eventual_test_success, setup_engine_build, 0),
+    TEST_TARGETS(134, test_dlck_engine_stop_success, setup_engine_build_nvme, 1),
+    TEST_TARGETS(135, test_dlck_engine_stop_join_fail, setup_engine_build, 0),
+    TEST_TARGETS(136, test_dlck_engine_stop_fini_failure, setup_engine_build_nvme, 0),
+    TEST_TARGETS(137, test_dlck_engine_stop_pool_not_empty, setup_engine_build, 0),
+    TEST_TARGETS(138, test_dlck_engine_stop_xs_free_failure, setup_engine_build, 0),
+    TEST_TARGETS(139, test_dlck_engine_fini_success, setup_engine_build, 0),
+    TEST_TARGETS(140, test_dlck_engine_fini_sm_fini_failure, setup_engine_build, 0),
+    TEST_TARGETS(141, test_dlck_engine_stop_fini_ult_create_failure, setup_engine_build, 0),
 };
 
 int
