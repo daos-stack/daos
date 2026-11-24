@@ -295,9 +295,15 @@ dlck_cmd_check(struct dlck_control *ctrl)
 	CK_PRINTF(ck, "Log directory: %s\n", ctrl->log_dir);
 
 	CK_PRINTF(ck, "Start the engine... ");
-	rc = dlck_engine_start(&ctrl->engine, &engine);
+	rc = dlck_engine_init(&ctrl->engine, &engine);
+	if (rc == DER_SUCCESS) {
+		rc = dlck_engine_start(engine);
+	}
 	CK_APPENDL_RC(ck, rc);
 	if (rc != DER_SUCCESS) {
+		if (engine != NULL) {
+			(void)dlck_engine_fini(engine);
+		}
 		return rc;
 	}
 
@@ -339,6 +345,9 @@ dlck_cmd_check(struct dlck_control *ctrl)
 
 	CK_PRINTF(ck, "Stop the engine... ");
 	rc = dlck_engine_stop(engine);
+	if (rc == DER_SUCCESS) {
+		rc = dlck_engine_fini(engine);
+	}
 	CK_APPENDL_RC(ck, rc);
 
 	/** Ignore an error for now to print the collected results. */
@@ -351,7 +360,9 @@ dlck_cmd_check(struct dlck_control *ctrl)
 err_free_sts:
 	D_FREE(sts);
 err_stop_engine:
-	(void)dlck_engine_stop(engine);
+	if (dlck_engine_stop(engine) == DER_SUCCESS) {
+		(void)dlck_engine_fini(engine);
+	}
 
 	return rc;
 }

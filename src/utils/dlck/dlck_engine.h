@@ -36,18 +36,13 @@ struct dlck_engine {
 
 typedef void (*dlck_ult_func)(void *arg);
 
-/**
- * Start an engine.
- *
- * \param[in]	args		Engine's arguments.
- * \param[out]	engine_ptr	Started engine.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_NOMEM	Out of memory.
- * \retval -DER_*	Other errors.
- */
+/** Initialize the non-xstream resources of an engine. */
 int
-dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
+dlck_engine_init(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
+
+/** Start the execution streams of an initialized engine. */
+int
+dlck_engine_start(struct dlck_engine *engine);
 
 /**
  * Stop an engine.
@@ -60,6 +55,10 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
  */
 int
 dlck_engine_stop(struct dlck_engine *engine);
+
+/** Finalize the non-xstream resources of an engine after it has stopped. */
+int
+dlck_engine_fini(struct dlck_engine *engine);
 
 /** dlck_abt.c */
 

@@ -44,15 +44,15 @@ static int                Custom_free;
 	do {                                                                                       \
 		expect_value(__wrap_dlck_engine_exec, engine, ENGINE);                             \
 		EXPECT_EXEC_STATE(__wrap_dlck_engine_exec, TARGET_COUNT);                          \
-		will_return(__wrap_dlck_engine_exec, RC);                                          \
 		will_return(__wrap_dlck_engine_exec, JOIN_FAIL);                                   \
+		will_return(__wrap_dlck_engine_exec, RC);                                          \
 	} while (0)
 
 #define EXPECT_EXEC_JOIN(RC, JOIN_FAIL)                                                            \
 	do {                                                                                       \
 		EXPECT_EXEC_STATE(__wrap_dlck_exec_join, TARGET_COUNT);                            \
-		will_return(__wrap_dlck_exec_join, RC);                                            \
 		will_return(__wrap_dlck_exec_join, JOIN_FAIL);                                     \
+		will_return(__wrap_dlck_exec_join, RC);                                            \
 	} while (0)
 
 #define EXPECT_EXEC_FINI() EXPECT_EXEC_STATE(__wrap_dlck_exec_fini, TARGET_COUNT)

@@ -342,12 +342,16 @@ xstream_init(struct dlck_xstream *xs)
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
-static int
-xstream_start_all(struct dlck_engine *engine)
+int
+dlck_engine_start(struct dlck_engine *engine)
 {
 	const int            daos_sys_idx = engine->targets; /** the last one is daos_sys_0 */
 	struct dlck_xstream *xs;
 	int                  rc;
+
+	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) { /** fault injection */
+		return daos_errno2der(daos_fail_value_get());
+	}
 
 	/** create all daos_io_* and daos_sys_0 XSes */
 	for (int i = 0; i <= engine->targets; ++i) {
@@ -400,14 +404,19 @@ xstream_stop_all:
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
-static int
-xstream_stop_all(struct dlck_engine *engine)
+int
+dlck_engine_stop(struct dlck_engine *engine)
 {
 	struct dlck_xstream *xs;
 	struct dlck_ult      fini_ult;
 	ABT_bool             is_empty;
 	int                  rc = DER_SUCCESS;
 	int                  rc_abt;
+
+	if (engine->join_fail) {
+		/** Cannot stop the engine in this case. It will probably crash. */
+		return -DER_BUSY;
+	}
 
 	/** Note: daos_sys_0 XS is the last and it has to be stopped as the last one. */
 	for (int i = 0; i <= engine->targets; ++i) {
@@ -464,16 +473,14 @@ xstream_free_all:
 }
 
 int
-dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
+dlck_engine_init(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
 {
 	struct dlck_engine *engine;
 	const bool          bypass_health_chk = false;
 	int                 tag               = DAOS_SERVER_TAG - DAOS_TGT_TAG;
 	int                 rc;
 
-	if (DAOS_FAIL_CHECK(DLCK_FAULT_ENGINE_START)) { /** fault injection */
-		return daos_errno2der(daos_fail_value_get());
-	}
+	*engine_ptr = NULL;
 
 	rc = dlck_engine_alloc(args->targets, &engine);
 	if (rc != DER_SUCCESS) {
@@ -515,17 +522,10 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 		goto fail_vos_tls_fini;
 	}
 
-	rc = xstream_start_all(engine);
-	if (rc != DER_SUCCESS) {
-		goto fail_vos_fini;
-	}
-
 	*engine_ptr = engine;
 
-	return 0;
+	return DER_SUCCESS;
 
-fail_vos_fini:
-	vos_db_fini();
 fail_vos_tls_fini:
 	vos_standalone_tls_fini();
 fail_tls_key_delete:
@@ -543,20 +543,9 @@ fail_engine_free:
 }
 
 int
-dlck_engine_stop(struct dlck_engine *engine)
+dlck_engine_fini(struct dlck_engine *engine)
 {
 	int rc;
-
-	if (engine->join_fail) {
-		/** Cannot stop the engine in this case. It will probably crash. */
-		return -DER_BUSY;
-	}
-
-	rc = xstream_stop_all(engine);
-	if (rc != DER_SUCCESS) {
-		/** not all execution streams were stopped - can't pull out other resources */
-		return rc;
-	}
 
 	vos_db_fini();
 
