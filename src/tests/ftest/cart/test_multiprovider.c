@@ -8,10 +8,10 @@
  * and a secondary context. They exchange primary URIs through files, then rank 0
  * requests rank 1's secondary URI over the primary provider and publishes attach
  * information for both fabrics. Separate clients ping both ranks over each
- * provider and verify the receiving context. The secondary client also sends a
- * bound bulk to rank 0, which forwards it to rank 1 over the primary provider.
- * Rank 1 pulls and verifies the data over the secondary provider before replying.
- * A primary client then stops the servers.
+ * provider and verify the receiving context. Each client also sends a bound
+ * bulk to rank 0, which forwards it to rank 1 over the primary provider.
+ * Rank 1 selects the bulk's provider context to pull and verify the data before
+ * replying. A primary client then stops the servers.
  */
 
 #include <semaphore.h>
@@ -44,8 +44,10 @@ enum {
 #define CRT_ISEQ_SHUTDOWN ((uint32_t)(unused)CRT_VAR)
 #define CRT_OSEQ_SHUTDOWN ((uint32_t)(unused)CRT_VAR)
 #define CRT_ISEQ_BULK                                                                              \
-	((crt_bulk_t)(bulk)CRT_VAR)((crt_bulk_t)(null_bulk)CRT_VAR)((uint32_t)(marker)CRT_VAR)
-#define CRT_OSEQ_BULK ((uint32_t)(verified)CRT_VAR)((uint32_t)(marker)CRT_VAR)
+	((crt_bulk_t)(bulk)CRT_VAR)((crt_bulk_t)(null_bulk)CRT_VAR)((uint32_t)(marker)CRT_VAR)      \
+	((uint32_t)(provider)CRT_VAR)
+#define CRT_OSEQ_BULK                                                                              \
+	((uint32_t)(verified)CRT_VAR)((uint32_t)(marker)CRT_VAR)((uint32_t)(provider)CRT_VAR)
 
 CRT_RPC_DECLARE(GET_URI, CRT_ISEQ_GET_URI, CRT_OSEQ_GET_URI)
 CRT_RPC_DEFINE(GET_URI, CRT_ISEQ_GET_URI, CRT_OSEQ_GET_URI)
@@ -112,6 +114,7 @@ forward_bulk_complete(const struct crt_cb_info *info)
 	crt_req_decref(request);
 }
 
+/* Forward the borrowed bound bulk over primary while retaining the incoming RPC. */
 static void
 forward_bulk_handler(crt_rpc_t *rpc)
 {
@@ -121,11 +124,13 @@ forward_bulk_handler(crt_rpc_t *rpc)
 	crt_rpc_t      *request;
 	uint32_t        index;
 
-	D_ASSERT(self_rank == 0 && !crt_context_is_primary(rpc->cr_ctx));
+	D_ASSERT(self_rank == 0);
 	D_ASSERT(in->null_bulk == CRT_BULK_NULL && in->marker == BULK_MARKER);
-	D_ASSERT(crt_bulk_get_provider_index(in->bulk, &index) == 0 && index == 1);
+	D_ASSERT(crt_bulk_get_provider_index(in->bulk, &index) == 0);
+	D_ASSERT(index == in->provider && index == (crt_context_is_primary(rpc->cr_ctx) ? 0U : 1U));
 
-	DBG_PRINT("Rank 0 forwarding secondary bound bulk to rank 1 over primary provider\n");
+	DBG_PRINT("Rank 0 forwarding %s bound bulk to rank 1 over primary provider\n",
+		  index == 0 ? "primary" : "secondary");
 	D_ASSERT(crt_req_create(contexts[0], &ep, OP_PULL_BULK, &request) == 0);
 
 	forward  = crt_req_get(request);
@@ -140,9 +145,11 @@ forward_bulk_handler(crt_rpc_t *rpc)
 struct bulk_transfer {
 	crt_rpc_t    *request;
 	crt_bulk_t    local;
+	uint32_t      provider;
 	unsigned char buffer[BULK_SIZE];
 };
 
+/* Verify the pulled bytes and return the selected provider to the client. */
 static int
 pull_bulk_complete(const struct crt_bulk_cb_info *info)
 {
@@ -150,7 +157,7 @@ pull_bulk_complete(const struct crt_bulk_cb_info *info)
 	struct BULK_out      *out      = crt_reply_get(transfer->request);
 	uint32_t              i;
 
-	D_ASSERTF(info->bci_rc == 0, "Secondary bulk transfer failed: %d\n", info->bci_rc);
+	D_ASSERTF(info->bci_rc == 0, "Bulk transfer failed: %d\n", info->bci_rc);
 
 	for (i = 0; i < BULK_SIZE; i++)
 		D_ASSERTF(transfer->buffer[i] == bulk_pattern(i),
@@ -159,7 +166,9 @@ pull_bulk_complete(const struct crt_bulk_cb_info *info)
 
 	out->verified = BULK_SIZE;
 	out->marker   = BULK_MARKER;
-	DBG_PRINT("Rank 1 verified %u forwarded bulk bytes over secondary provider\n", BULK_SIZE);
+	out->provider = transfer->provider;
+	DBG_PRINT("Rank 1 verified %u forwarded bulk bytes over %s provider\n", BULK_SIZE,
+		  transfer->provider == 0 ? "primary" : "secondary");
 
 	D_ASSERT(crt_bulk_free(transfer->local) == 0);
 	D_ASSERT(crt_reply_send(transfer->request) == 0);
@@ -170,6 +179,7 @@ pull_bulk_complete(const struct crt_bulk_cb_info *info)
 	return 0;
 }
 
+/* Select both the local bulk and transfer context from the decoded bulk's provider. */
 static void
 pull_bulk_handler(crt_rpc_t *rpc)
 {
@@ -182,16 +192,18 @@ pull_bulk_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(self_rank == 1 && crt_context_is_primary(rpc->cr_ctx));
 	D_ASSERT(in->null_bulk == CRT_BULK_NULL && in->marker == BULK_MARKER);
-	D_ASSERT(crt_bulk_get_provider_index(in->bulk, &index) == 0 && index == 1);
+	D_ASSERT(crt_bulk_get_provider_index(in->bulk, &index) == 0);
+	D_ASSERT(index < ARRAY_SIZE(contexts) && index == in->provider);
 
 	D_ALLOC_PTR(transfer);
 	D_ASSERT(transfer != NULL);
 
-	transfer->request = rpc;
+	transfer->request  = rpc;
+	transfer->provider = index;
 	d_iov_set(&iov, transfer->buffer, sizeof(transfer->buffer));
 
 	/* Register the destination with the bulk provider, not the incoming RPC provider. */
-	D_ASSERT(crt_bulk_create(contexts[1], &sgl, CRT_BULK_RW, &transfer->local) == 0);
+	D_ASSERT(crt_bulk_create(contexts[index], &sgl, CRT_BULK_RW, &transfer->local) == 0);
 
 	desc.bd_rpc        = rpc;
 	desc.bd_bulk_op    = CRT_BULK_GET;
@@ -200,8 +212,9 @@ pull_bulk_handler(crt_rpc_t *rpc)
 	desc.bd_len        = BULK_SIZE;
 
 	crt_req_addref(rpc);
-	DBG_PRINT("Rank 1 received primary RPC; pulling bound bulk over secondary provider\n");
-	D_ASSERT(crt_bulk_bind_transfer_ctx(contexts[1], &desc, pull_bulk_complete, transfer,
+	DBG_PRINT("Rank 1 received primary RPC; pulling bound bulk over %s provider\n",
+		  index == 0 ? "primary" : "secondary");
+	D_ASSERT(crt_bulk_bind_transfer_ctx(contexts[index], &desc, pull_bulk_complete, transfer,
 					    NULL) == 0);
 }
 
@@ -231,6 +244,7 @@ struct rpc_result {
 	char     uri[URI_SIZE];
 };
 
+/* Copy reply data before the RPC storage is released and wake the waiting caller. */
 static void
 rpc_complete(const struct crt_cb_info *info)
 {
@@ -256,13 +270,15 @@ rpc_complete(const struct crt_cb_info *info)
 
 		result->verified = out->verified;
 		result->marker   = out->marker;
+		result->provider = out->provider;
 	}
 
 	sem_post(&result->sem);
 }
 
+/* Bind a bulk on this client fabric and verify the forwarded pull used that fabric. */
 static void
-send_forwarded_bulk(crt_context_t ctx, crt_group_t *group)
+send_forwarded_bulk(crt_context_t ctx, crt_group_t *group, bool secondary)
 {
 	unsigned char    *buffer;
 	struct rpc_result result = {0};
@@ -290,17 +306,20 @@ send_forwarded_bulk(crt_context_t ctx, crt_group_t *group)
 	in->bulk      = bulk;
 	in->null_bulk = CRT_BULK_NULL;
 	in->marker    = BULK_MARKER;
+	in->provider  = secondary ? 1 : 0;
 
 	D_ASSERT(sem_init(&result.sem, 0, 0) == 0);
 	D_ASSERT(crt_req_set_timeout(rpc, 15) == 0);
-	DBG_PRINT("Sending %u bound bulk bytes over secondary provider for primary forwarding\n",
-		  BULK_SIZE);
+	DBG_PRINT("Sending %u bound bulk bytes over %s provider for primary forwarding\n",
+		  BULK_SIZE, secondary ? "secondary" : "primary");
 	D_ASSERT(crt_req_send(rpc, rpc_complete, &result) == 0);
 
 	D_ASSERT(crtu_sem_timedwait(&result.sem, 20, __LINE__) == 0);
 	D_ASSERTF(result.rc == 0, "Forwarded bulk test failed: %d\n", result.rc);
-	D_ASSERT(result.verified == BULK_SIZE && result.marker == BULK_MARKER);
-	DBG_PRINT("Forwarded bulk passed: %u bytes verified\n", result.verified);
+	D_ASSERT(result.verified == BULK_SIZE && result.marker == BULK_MARKER &&
+		 result.provider == (secondary ? 1U : 0U));
+	DBG_PRINT("Forwarded bulk passed over %s provider: %u bytes verified\n",
+		  secondary ? "secondary" : "primary", result.verified);
 
 	D_ASSERT(sem_destroy(&result.sem) == 0);
 	D_ASSERT(crt_bulk_free(bulk) == 0);
@@ -514,6 +533,7 @@ server(const char *workdir, const char *primary_dir, const char *secondary_dir, 
 	return 0;
 }
 
+/* Exercise both ranks; non-shutdown clients also send a forwarded bulk. */
 static int
 client(const char *attach_dir, char *provider, char *interface, char *domain, bool secondary,
        bool shutdown)
@@ -559,8 +579,8 @@ client(const char *attach_dir, char *provider, char *interface, char *domain, bo
 		}
 	}
 
-	if (secondary && !shutdown)
-		send_forwarded_bulk(ctx, group);
+	if (!shutdown)
+		send_forwarded_bulk(ctx, group, secondary);
 
 	crtu_progress_stop();
 	D_ASSERT(pthread_join(thread, NULL) == 0);
