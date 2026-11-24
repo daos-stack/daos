@@ -83,9 +83,10 @@
 
 ## DLCK Engine Batch
 
-- Exercise batch initialization, execution, joining and finalization separately as well as through
-  `dlck_engine_exec_all()`. The start message spans initialization and execution; joining reports
-  its own result.
+- Exercise batch initialization, execution, joining and finalization separately in
+  `dlck_engine_ut`. Test `dlck_engine_exec_all()` orchestration in `dlck_engine_exec_all_ut`,
+  mocking every function declared in `dlck_engine_internal.h`. The start message spans
+  initialization and execution; joining reports its own result.
 - The caller owns and initializes `dlck_exec`, including its ULT callback, allocation callbacks,
   target count and optional checker. `dlck_exec_fini()` releases resources, not the structure.
 - After execution or joining, propagate the batch's `join_fail` to the engine before finalization.

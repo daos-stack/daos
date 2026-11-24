@@ -5,6 +5,22 @@
 """Build versioned object store tests"""
 
 
+def build_dlck_engine_exec_all_ut(henv):
+    """Build dlck_engine_exec_all_ut"""
+    henv.Append(OBJPREFIX="dlck_engine_exec_all_ut_")
+    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dlck_exec_init', '-Wl,--wrap=dlck_engine_exec',
+                                 '-Wl,--wrap=dlck_exec_join', '-Wl,--wrap=dlck_exec_fini'])
+    henv.require('argobots', 'cmocka')
+
+    libs = ['gurt', 'cmocka']
+    srcs = [
+        'dlck_engine_exec_all_ut.c',
+        'ut_dlck_cmd_mock.c',
+        '../dlck_engine_exec_all.c',
+    ]
+    henv.d_test_program('dlck_engine_exec_all_ut', srcs, LIBS=libs)
+
+
 def build_dlck_engine_ut(henv):
     """Build dlck_engine_ut"""
     henv.Append(OBJPREFIX="dlck_engine_ut_")
@@ -61,6 +77,7 @@ def build_dlck_test_helper(henv):
         '../dlck_args_files.c',
         '../dlck_args_parse.c',
         '../dlck_engine.c',
+        '../dlck_engine_exec_all.c',
         '../dlck_engine_internal.c',
         '../dlck_pool.c',
         '../dlck_tls.c',
@@ -169,6 +186,7 @@ def scons():
     build_dlck_checker_macros_ut(env.Clone())
     build_dlck_checker_main_ut(env.Clone())
     build_dlck_checker_worker_ut(env.Clone())
+    build_dlck_engine_exec_all_ut(env.Clone())
     build_dlck_engine_ut(env.Clone())
 
 
