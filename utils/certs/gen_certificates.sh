@@ -16,6 +16,8 @@ function print_usage () {
     >&2 echo "$__usage"
 }
 
+set -e
+
 # As root only, and best effort: away from a server the DAOS users and groups don't exist.
 function set_owner () {
     local user="$1" group="$2"
@@ -211,6 +213,8 @@ function main () {
       echo "$CA_HOME already exists, exiting."
       exit 1
     fi
+    # A failed run removes the half-made CA, so the next run can start over.
+    trap '[[ $? -eq 0 ]] || rm -rf "${CA_HOME}"' EXIT
     setup_directories
     generate_ca_cnf
     generate_ca_cert
