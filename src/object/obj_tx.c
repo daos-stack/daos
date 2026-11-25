@@ -3314,6 +3314,10 @@ dc_tx_per_akey_existence_parent_cb(tse_task_t *task, void *data)
 		D_MUTEX_UNLOCK(&tx->tx_lock);
 	}
 
+	/* dc_tx_convert_post() handles the restart; see dc_tx_convert_cb(). */
+	if (rc == -DER_TX_RESTART && tx->tx_for_convert)
+		task->dt_result = 0;
+
 	dc_tx_post(tx, obj, args->task, args->opc, rc, 0);
 	obj_decref(obj);
 
@@ -3374,6 +3378,10 @@ out:
 
 		D_FREE(args->tmp_iods);
 	}
+
+	/* dc_tx_convert_post() handles the restart; see dc_tx_convert_cb(). */
+	if (rc == -DER_TX_RESTART && tx->tx_for_convert)
+		task->dt_result = 0;
 
 	dc_tx_post(tx, obj, args->task, args->opc, rc, 0);
 	obj_decref(obj);
