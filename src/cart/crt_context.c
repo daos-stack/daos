@@ -1377,7 +1377,16 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-	d_gettime_coarse(&ts_now);
+	rc = d_gettime_coarse(&ts_now);
+	if (rc != 0) {
+		D_MUTEX_UNLOCK(&epi->epi_mutex);
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+		d_hash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
+		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+		if (quota_rc == 0)
+			put_quota_resource(crt_ctx, CRT_QUOTA_RPCS);
+		return rc;
+	}
 	crt_set_timeout(rpc_priv, &ts_now);
 	rpc_priv->crp_epi = epi;
 	RPC_ADDREF(rpc_priv);
@@ -1504,7 +1513,6 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 static void
 add_rpc_to_list(struct crt_rpc_priv *rpc_priv, d_list_t *submit_list)
 {
-	struct crt_context     *crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	struct crt_ep_inflight *epi     = rpc_priv->crp_epi;
 
 	D_ASSERT(epi != NULL);
@@ -1515,23 +1523,11 @@ add_rpc_to_list(struct crt_rpc_priv *rpc_priv, d_list_t *submit_list)
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	if (rpc_priv->crp_state == RPC_STATE_QUEUED) {
 		bool submit_rpc = true;
-		int  rc;
 
 		rpc_priv->crp_state = RPC_STATE_INITED;
 		/* RPC got cancelled or timed out before it got here */
-		if (d_timenull(&rpc_priv->crp_deadline)) {
+		if (d_timenull(&rpc_priv->crp_deadline))
 			submit_rpc = false;
-		} else {
-			struct timespec ts_now;
-			d_gettime_coarse(&ts_now);
-			crt_set_timeout(rpc_priv, &ts_now);
-
-			D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-			rc = crt_req_timeout_track(rpc_priv);
-			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-			if (rc != 0)
-				RPC_ERROR(rpc_priv, "crt_req_timeout_track failed, rc: %d.\n", rc);
-		}
 
 		d_list_move_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
 		/* add to submit list if not cancelled or timed out already  */
@@ -1550,10 +1546,17 @@ add_rpc_to_list(struct crt_rpc_priv *rpc_priv, d_list_t *submit_list)
 }
 
 static void
-dispatch_rpc(struct crt_rpc_priv *rpc) {
-	int rc;
+crt_context_req_untrack_to_list(struct crt_rpc_priv *rpc_priv, d_list_t *submit_list);
+
+static void
+dispatch_rpc(struct crt_rpc_priv *rpc, d_list_t *submit_list)
+{
+	struct crt_context *ctx;
+	struct timespec     ts_now;
+	int                 rc;
 
 	D_ASSERTF(rpc != NULL, "rpc is NULL\n");
+	ctx = rpc->crp_pub.cr_ctx;
 
 	crt_rpc_lock(rpc);
 
@@ -1563,25 +1566,34 @@ dispatch_rpc(struct crt_rpc_priv *rpc) {
 		return;
 	}
 
-	rc = crt_req_send_internal(rpc);
+	rc = d_gettime_coarse(&ts_now);
+	if (rc == 0) {
+		crt_set_timeout(rpc, &ts_now);
+		D_MUTEX_LOCK(&ctx->cc_mutex);
+		rc = crt_req_timeout_track(rpc);
+		D_MUTEX_UNLOCK(&ctx->cc_mutex);
+		if (rc != 0)
+			RPC_ERROR(rpc, "crt_req_timeout_track failed, rc: %d.\n", rc);
+	}
+	if (rc == 0)
+		rc = crt_req_send_internal(rpc);
 	if (rc == 0) {
 		crt_rpc_unlock(rpc);
 	} else {
 		RPC_ADDREF(rpc);
-		RPC_ERROR(rpc, "crt_req_send_internal failed, rc: %d\n", rc);
+		RPC_ERROR(rpc, "RPC dispatch failed, rc: %d\n", rc);
 		rpc->crp_state = RPC_STATE_INITED;
-		crt_context_req_untrack_internal(rpc);
+		crt_context_req_untrack_to_list(rpc, submit_list);
 		/* for error case here */
 		crt_rpc_complete_and_unlock(rpc, rc);
 	}
 }
 
-void
-crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
+static void
+crt_context_req_untrack_to_list(struct crt_rpc_priv *rpc_priv, d_list_t *submit_list)
 {
 	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
 	struct crt_ep_inflight	*epi;
-	d_list_t		 submit_list;
 	struct crt_rpc_priv     *tmp_rpc;
 
 	D_ASSERT(crt_ctx != NULL);
@@ -1598,9 +1610,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 				   struct crt_rpc_priv, crp_waitq_link);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	D_INIT_LIST_HEAD(&submit_list);
 	if (tmp_rpc != NULL) {
-		add_rpc_to_list(tmp_rpc, &submit_list);
+		add_rpc_to_list(tmp_rpc, submit_list);
 		CRT_METRIC_DEC_GAUGE(crt_ctx, CM_RPC_WAITQ_DEPTH, 1);
 	} else {
 		put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
@@ -1610,7 +1621,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* done if ep credit flow control is disabled */
 	if (crt_gdata.cg_credit_ep_ctx == 0)
-		goto out;
+		return;
 
 	/* process waitq */
 	D_MUTEX_LOCK(&epi->epi_mutex);
@@ -1623,17 +1634,26 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		D_ASSERTF(epi->epi_req_num >= epi->epi_reply_num, "req %jd reply %jd\n",
 			  epi->epi_req_num, epi->epi_reply_num);
 		D_MUTEX_UNLOCK(&epi->epi_mutex);
-		add_rpc_to_list(tmp_rpc, &submit_list);
+		add_rpc_to_list(tmp_rpc, submit_list);
 		D_MUTEX_LOCK(&epi->epi_mutex);
 	}
 
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
+}
 
-out:
+void
+crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
+{
+	d_list_t             submit_list;
+	struct crt_rpc_priv *tmp_rpc;
+
+	D_INIT_LIST_HEAD(&submit_list);
+	crt_context_req_untrack_to_list(rpc_priv, &submit_list);
+
 	/* re-submit the rpc req */
 	while (
 	    (tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link_submit))) {
-		dispatch_rpc(tmp_rpc);
+		dispatch_rpc(tmp_rpc, &submit_list);
 		/* addref done above during d_list_add_tail */
 		RPC_DECREF(tmp_rpc);
 	}
@@ -1811,6 +1831,7 @@ crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 {
 	struct timespec now;
 	int rc = 0;
+	int time_rc;
 
 	/**
 	 * call progress once w/o any timeout before processing timed out
@@ -1824,7 +1845,9 @@ crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 	 * process timeout and progress callback after this initial call to
 	 * progress
 	 */
-	d_gettime_coarse(&now);
+	time_rc = d_gettime_coarse(&now);
+	if (time_rc != 0)
+		return time_rc;
 	crt_context_timeout_check(ctx, &now);
 	if (ctx->cc_prog_cb != NULL) {
 		struct timespec deadline = now, *deadline_p = NULL;
@@ -1940,7 +1963,9 @@ crt_progress_cond_legacy(struct crt_context *ctx, int64_t timeout, crt_progress_
 	while ((rc = cond_cb(arg)) == 0) {
 		struct timespec ts_now;
 
-		d_gettime_coarse(&ts_now);
+		rc = d_gettime_coarse(&ts_now);
+		if (rc != 0)
+			return rc;
 		crt_context_timeout_check(ctx, &ts_now);
 		if (ctx->cc_prog_cb != NULL) {
 			struct timespec deadline = ts_now, *deadline_p = NULL;
@@ -2056,8 +2081,16 @@ crt_progress_event_cond(struct crt_context *ctx, int64_t timeout_us, crt_progres
 		if (unlikely(rc < 0))
 			return rc;
 
-	} while ((timeout_us < 0) ||
-		 (timeout_us > 0 && d_gettime_coarse(&now) == 0 && d_timeless(&now, &deadline)));
+		if (timeout_us == 0)
+			break;
+		if (timeout_us > 0) {
+			rc = d_gettime_coarse(&now);
+			if (rc != 0)
+				return rc;
+			if (!d_timeless(&now, &deadline))
+				break;
+		}
+	} while (true);
 
 	return -DER_TIMEDOUT;
 }
