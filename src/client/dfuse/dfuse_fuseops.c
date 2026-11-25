@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -96,11 +96,13 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	dfuse_show_flags(dfuse_info, conn->capable, conn->want);
 
 	conn->time_gran            = 1;
-	conn->max_background       = 16;
-	conn->congestion_threshold = 8;
+	conn->max_background       = dfuse_info->di_max_background;
+	conn->congestion_threshold = dfuse_info->di_congestion_threshold;
 
-	DFUSE_TRA_INFO(dfuse_info, "max_background %d", conn->max_background);
-	DFUSE_TRA_INFO(dfuse_info, "congestion_threshold %d", conn->congestion_threshold);
+	/* The kernel may lower these without telling us */
+	DFUSE_TRA_INFO(dfuse_info, "max_background %u (requested)", conn->max_background);
+	DFUSE_TRA_INFO(dfuse_info, "congestion_threshold %u (requested)",
+		       conn->congestion_threshold);
 }
 
 static void

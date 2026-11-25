@@ -150,9 +150,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				in.DaosData.Configs = []*DaosConfig{
 					{
 						Method: "hotplug_busid_range",
-						Params: &HotplugBusidRangeParams{
-							Begin: 0,
-							End:   7,
+						Params: &HotplugFilterParams{
+							{Domain: 0, Begin: 1, End: 1},
 						},
 					},
 				}
@@ -269,9 +268,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				in.DaosData.Configs = []*DaosConfig{
 					{
 						Method: "hotplug_busid_range",
-						Params: &HotplugBusidRangeParams{
-							Begin: 128,
-							End:   143,
+						Params: &HotplugFilterParams{
+							{Domain: 0, Begin: 0x80, End: 0x8f},
 						},
 					},
 				}
@@ -313,15 +311,6 @@ func TestBackend_writeJSONFile(t *testing.T) {
 			}).WithStorageEnableHotplug(true),
 			enableVmd: true,
 			expCfg: genSpdkCfg(defaultSpdkConfig(), func(in *SpdkConfig) *SpdkConfig {
-				in.DaosData.Configs = []*DaosConfig{
-					{
-						Method: "hotplug_busid_range",
-						Params: &HotplugBusidRangeParams{
-							Begin: 0,
-							End:   255,
-						},
-					},
-				}
 				in.Subsystems[0].Configs = append(in.Subsystems[0].Configs,
 					&SpdkSubsystemConfig{
 						Method: "bdev_nvme_attach_controller",
@@ -444,9 +433,9 @@ func TestBackend_writeJSONFile(t *testing.T) {
 
 			cfgOutputPath := filepath.Join(testDir, "outfile")
 
-			req, err := storage.BdevWriteConfigRequestFromConfig(test.Context(t), log,
+			req, err := storage.BdevWriteConfigRequestFromConfig(log,
 				&(tc.confIn.WithStorageConfigOutputPath(cfgOutputPath)).Storage,
-				tc.enableVmd, storage.MockGetTopology)
+				tc.enableVmd)
 			if err != nil {
 				t.Fatal(err)
 			}

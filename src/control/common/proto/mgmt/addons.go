@@ -68,6 +68,17 @@ func (p *PoolProperty) SetValueBytes(byteVal []byte) {
 	}
 }
 
+// FindPoolProperty searches for a PoolProperty with the given number in the provided slice.
+// It returns a pointer to the PoolProperty and true if found, or nil and false if not found.
+func FindPoolProperty(props []*PoolProperty, number uint32) (*PoolProperty, bool) {
+	for _, prop := range props {
+		if prop.GetNumber() == number {
+			return prop, true
+		}
+	}
+	return nil, false
+}
+
 // The following set of addons implements the poolServiceReq interface
 // in mgmt_pool.go.
 

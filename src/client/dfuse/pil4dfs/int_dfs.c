@@ -6257,6 +6257,26 @@ out_err:
 	return (-1);
 }
 
+/* DFS does not store atime, so only the mtime of a utimensat()/futimens() request is applied. */
+static int
+utimens_get_mtime(const struct timespec times[2], struct timespec *mtime, bool *set_mtime)
+{
+	int i;
+
+	for (i = 0; times != NULL && i < 2; i++) {
+		if (times[i].tv_nsec != UTIME_NOW && times[i].tv_nsec != UTIME_OMIT &&
+		    (times[i].tv_nsec < 0 || times[i].tv_nsec >= NSEC_PER_SEC))
+			return EINVAL;
+	}
+
+	*set_mtime = (times == NULL || times[1].tv_nsec != UTIME_OMIT);
+	if (times == NULL || times[1].tv_nsec == UTIME_NOW)
+		clock_gettime(CLOCK_REALTIME, mtime);
+	else
+		*mtime = times[1];
+	return 0;
+}
+
 static int
 utimens_timespec(const char *path, const struct timespec times[2], int flags)
 {
@@ -6264,8 +6284,8 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	dfs_obj_t         *obj;
 	mode_t             mode;
 	struct stat        stbuf;
-	struct timespec    times_loc;
-	struct timeval     times_us[2];
+	struct timespec    mtime;
+	bool               set_mtime;
 	char               item_name[DFS_MAX_NAME];
 	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
@@ -6277,17 +6297,13 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	if (rc)
 		D_GOTO(out_err, rc);
 	if (!is_target_path) {
-		if (next_utimes == NULL) {
-			next_utimes = dlsym(RTLD_NEXT, "utimes");
-			D_ASSERT(next_utimes != NULL);
-		}
-		times_us[0].tv_sec  = times[0].tv_sec;
-		times_us[0].tv_usec = times[0].tv_nsec / 1000;
-		times_us[1].tv_sec  = times[1].tv_sec;
-		times_us[1].tv_usec = times[1].tv_nsec / 1000;
 		FREE(parent_dir);
-		return next_utimes(path, times_us);
+		return next_utimensat(AT_FDCWD, path, times, flags);
 	}
+
+	rc = utimens_get_mtime(times, &mtime, &set_mtime);
+	if (rc)
+		D_GOTO(out_err, rc);
 
 	flags |= O_RDWR;
 	/* POSIX API uses AT_SYMLINK_NOFOLLOW; DFS dfs_lookup() uses O_NOFOLLOW. */
@@ -6301,23 +6317,13 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	if (times == NULL) {
-		clock_gettime(CLOCK_REALTIME, &times_loc);
-		stbuf.st_atim.tv_sec  = times_loc.tv_sec;
-		stbuf.st_atim.tv_nsec = times_loc.tv_nsec;
-		stbuf.st_mtim.tv_sec  = times_loc.tv_sec;
-		stbuf.st_mtim.tv_nsec = times_loc.tv_nsec;
-	} else {
-		stbuf.st_atim.tv_sec  = times[0].tv_sec;
-		stbuf.st_atim.tv_nsec = times[0].tv_nsec;
-		stbuf.st_mtim.tv_sec  = times[1].tv_sec;
-		stbuf.st_mtim.tv_nsec = times[1].tv_nsec;
-	}
-
-	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
-	if (rc) {
-		dfs_release(obj);
-		D_GOTO(out_err, rc);
+	if (set_mtime) {
+		stbuf.st_mtim = mtime;
+		rc            = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
+		if (rc) {
+			dfs_release(obj);
+			D_GOTO(out_err, rc);
+		}
 	}
 
 	rc = dfs_release(obj);
@@ -6339,10 +6345,8 @@ out_err:
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
-	int              idx_dfs, error = 0, rc;
-	char            *full_path = NULL;
-	struct timespec  times_loc[2];
-	struct timespec *times_ptr;
+	int   idx_dfs, error = 0, rc;
+	char *full_path = NULL;
 
 	if (next_utimensat == NULL) {
 		next_utimensat = dlsym(RTLD_NEXT, "utimensat");
@@ -6361,29 +6365,23 @@ utimensat(int dirfd, const char *path, const struct timespec times[2], int flags
 	_Pragma("GCC diagnostic pop")
 
 	    /* clang-format off */
-
-	if (times == NULL) {
-		clock_gettime(CLOCK_REALTIME, &times_loc[0]);
-		times_loc[1].tv_sec = times_loc[0].tv_sec;
-		times_loc[1].tv_nsec = times_loc[0].tv_nsec;
-		times_ptr = times_loc;
-	} else {
-		times_ptr = (struct timespec *)times;
-	}
+	/* as the kernel does, nothing to change means the path is not even checked */
+	if (times != NULL && times[0].tv_nsec == UTIME_OMIT && times[1].tv_nsec == UTIME_OMIT)
+		return 0;
 	/* clang-format on */
 
 	/* absolute path, dirfd is ignored */
 	if (path[0] == '/')
-		return utimens_timespec(path, times_ptr, flags);
+		return utimens_timespec(path, times, flags);
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
 		goto out_err;
 
 	if (idx_dfs >= 0)
-		rc = utimens_timespec(full_path, times_ptr, flags);
+		rc = utimens_timespec(full_path, times, flags);
 	else
-		rc = next_utimensat(dirfd, path, times_ptr, flags);
+		rc = next_utimensat(dirfd, path, times, flags);
 
 	error = errno;
 	if (full_path) {
@@ -6402,8 +6400,8 @@ futimens(int fd, const struct timespec times[2])
 {
 	int             rc;
 	int             fd_directed;
-	struct timespec times_loc;
 	struct stat     stbuf;
+	bool            set_mtime;
 
 	if (next_futimens == NULL) {
 		next_futimens = dlsym(RTLD_NEXT, "futimens");
@@ -6415,18 +6413,13 @@ futimens(int fd, const struct timespec times[2])
 	if (fd_directed < FD_FILE_BASE)
 		return next_futimens(fd, times);
 
-	if (times == NULL) {
-		clock_gettime(CLOCK_REALTIME, &times_loc);
-		stbuf.st_atim.tv_sec  = times_loc.tv_sec;
-		stbuf.st_atim.tv_nsec = times_loc.tv_nsec;
-		stbuf.st_mtim.tv_sec  = times_loc.tv_sec;
-		stbuf.st_mtim.tv_nsec = times_loc.tv_nsec;
-	} else {
-		stbuf.st_atim.tv_sec  = times[0].tv_sec;
-		stbuf.st_atim.tv_nsec = times[0].tv_nsec;
-		stbuf.st_mtim.tv_sec  = times[1].tv_sec;
-		stbuf.st_mtim.tv_nsec = times[1].tv_nsec;
+	rc = utimens_get_mtime(times, &stbuf.st_mtim, &set_mtime);
+	if (rc) {
+		errno = rc;
+		return (-1);
 	}
+	if (!set_mtime)
+		return 0;
 
 	rc = dfs_osetattr(d_file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
 			  d_file_list[fd_directed - FD_FILE_BASE]->file, &stbuf,

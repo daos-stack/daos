@@ -52,7 +52,7 @@
  * (This exclusion detection protocol could be piggybacked on all RPCs, after
  * optimizing away the rank lookup when group versions match and speeding up
  * the rank lookup when group versions differ. The main difficulty is that we
- * would need to expand crt_common_hdr.)
+ * would need to expand the request and reply headers.)
  */
 #define CRT_OSEQ_RPC_SWIM	/* output fields */		 \
 	((int32_t)		     (rc)		CRT_VAR) \
@@ -421,7 +421,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 
 	crt_swim_update_last_unpack_hlc(csm, hlc);
 
-	from_id = rpc_priv->crp_req_hdr.cch_src_rank;
+	from_id = rpc_priv->crp_req_hdr.crh_src_rank;
 
 	/* Initialize empty array in case of error in reply */
 	rpc_out->upds.ca_arrays = NULL;
@@ -445,8 +445,8 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	 * crt_hg_unpack_header may have failed to synchronize the HLC with
 	 * this request.
 	 */
-	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
+	if (hlc > rpc_priv->crp_req_hdr.crh_common.chc_hlc)
+		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_req_hdr.crh_common.chc_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "incoming %s with %zu updates with %u ms delay. %lu: %lu <= %lu\n",
@@ -607,8 +607,8 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 	}
 
-	if (hlc > rpc_priv->crp_reply_hdr.cch_hlc)
-		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_reply_hdr.cch_hlc);
+	if (hlc > rpc_priv->crp_reply_hdr.crh_common.chc_hlc)
+		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_reply_hdr.crh_common.chc_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "complete %s with %zu/%zu updates with %u ms delay. %lu: %lu => %lu "

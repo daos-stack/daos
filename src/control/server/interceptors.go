@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -248,7 +248,7 @@ func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.Una
 // isSentinelErr indicates whether or not the error is a sentinel
 // error used to convey a specific state to the client.
 func isSentinelErr(err error) bool {
-	return system.IsNotReady(err) || system.IsNotReplica(err) || system.IsNotLeader(err)
+	return system.IsNotReady(err) || system.IsRoutingError(err)
 }
 
 // shouldLogMsg determines whether or not the given message should be logged.

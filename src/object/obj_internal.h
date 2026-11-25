@@ -280,7 +280,7 @@ struct shard_auxi_args {
 	uint32_t		 shard;
 	uint32_t		 target;
 	uint32_t		 map_ver;
-	/* only for EC, the target idx [0, k + p) */
+	/* EC target index [0, k + p), saved from the request layout. */
 	uint16_t		 ec_tgt_idx;
 	/* group index within the req_tgts->ort_shard_tgts */
 	uint16_t		 grp_idx;
@@ -333,7 +333,7 @@ struct coll_oper_args {
 				 coa_sparse:1;
 	uint8_t			 coa_target_nr;
 	/*
-	 * The target ID for the top four healthy shards.
+	 * The object shard index for the top four healthy shards.
 	 * Please check comment for DTX_COLL_INLINE_TARGETS.
 	 */
 	uint32_t		 coa_targets[DTX_COLL_INLINE_TARGETS];
@@ -418,12 +418,15 @@ struct shard_k2a_args {
 	daos_anchor_t		*ka_anchor;
 };
 
-#define OBJ_TGT_INLINE_NR	9
+#define OBJ_TGT_INLINE_NR       9
 #define OBJ_INLINE_BTIMAP	4
 
+/* Field order matters: sizeof(obj_auxi_args) + sizeof(daos_task_args) must fit
+ * in TSE_TASK_ARG_LEN with no slack. The pointer is placed before the 20-byte
+ * element inline array to avoid an alignment hole, and the dispatch flag shares
+ * a word with ort_grp_size.
+ */
 struct obj_req_tgts {
-	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
-	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
 	/* Shard target array, with (ort_grp_nr * ort_grp_size) targets.
 	 * If #targets <= OBJ_TGT_INLINE_NR then it points to ort_tgts_inline.
 	 * Within the array, [0, ort_grp_size - 1] is for the first group,
@@ -435,16 +438,18 @@ struct obj_req_tgts {
 	 * punch, all other cases with (ort_grp_nr == 1).
 	 */
 	struct daos_shard_tgt	*ort_shard_tgts;
-	uint32_t		 ort_grp_nr;
-	/* ort_grp_size is the size of the group that is sent as forwarded
-	 * shards
-	 */
-	uint32_t		 ort_grp_size;
+	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
+	struct daos_shard_tgt    ort_tgts_inline[OBJ_TGT_INLINE_NR];
+	uint32_t                 ort_grp_nr;
 	/* ort_start_shard is only for EC object, it is the start shard number
 	 * of the EC stripe. To facilitate calculate the offset of different
 	 * shards in the stripe.
 	 */
 	uint32_t		 ort_start_shard;
+	/* ort_grp_size is the size of the group that is sent as forwarded
+	 * shards
+	 */
+	uint32_t                 ort_grp_size : 31;
 	/* flag of server dispatch */
 	uint32_t		 ort_srv_disp:1;
 };
@@ -454,6 +459,8 @@ struct obj_auxi_tgt_list {
 	uint32_t	*tl_tgts;
 	/** number of ranks & tgts */
 	uint32_t	tl_nr;
+	/** Last replica error, preserved across layout retries. */
+	int              tl_error;
 };
 
 struct coll_query_args {
@@ -473,6 +480,11 @@ struct obj_auxi_args {
 	int				 result;
 	uint32_t			 map_ver_req;
 	uint32_t			 map_ver_reply;
+	/* Rank that supplied map_ver_reply (newest replied map), or CRT_NO_RANK.
+	 * Used to seed the pool map refresh so it starts with a provably alive,
+	 * newer-map engine instead of round robin onto possibly-excluded ranks.
+	 */
+	d_rank_t                         map_ver_reply_rank;
 	/* max delay seconds for retry */
 	uint32_t			 max_delay;
 	/* flags for the obj IO task.
@@ -485,7 +497,7 @@ struct obj_auxi_args {
 	    nvme_io_err : 1, no_retry : 1, ec_wait_recov : 1, ec_in_recov : 1, rebuilding : 1,
 	    sub_anchors : 1, ec_degrade_fetch : 1, long_retry_delay : 1, cond_fetch_split : 1,
 	    cond_modify : 1, reintegrating : 1, tx_renew : 1, tx_convert : 1, req_dup_sgl : 1,
-	    for_migrate : 1;
+	    for_migrate : 1, spec_leader : 1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t                         specified_shard;
 	uint32_t                         flags;
@@ -496,7 +508,14 @@ struct obj_auxi_args {
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
-	uint32_t			 initial_shard;
+
+	union {
+		/* Fetch: replica-cycle start in request layout; UINT32_MAX requires reselection. */
+		uint32_t initial_shard;
+		/* Modification: the ID for DAOS target where DTX leader resides on. */
+		uint32_t leader_tgt;
+	};
+
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	/* per-IOM merge state for EC fetch, one per iod, allocated on demand
@@ -760,20 +779,23 @@ int dc_obj_shard_key2anchor(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			    void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 			    uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
-			   uint32_t req_map_ver, struct dc_object *obj,
-			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
-			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
-			   struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th,
-			   tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+int
+dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+		       uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
+		       daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
+		       const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
+		       uint32_t *map_ver, d_rank_t *map_ver_rank, daos_handle_t th,
+		       tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
 
-int dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
-			    uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
-			    daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
-			    const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
-			    uint32_t *map_ver, struct daos_coll_target *tgts, uint32_t tgt_nr,
-			    uint32_t max_tgt_size, uint32_t disp_width, daos_handle_t th,
-			    tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+int
+     dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+			     uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
+			     daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
+			     const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
+			     uint32_t *map_ver, d_rank_t *map_ver_rank, struct daos_coll_target *tgts,
+			     uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t disp_width,
+			     daos_handle_t th, tse_task_t *task, uint32_t *max_delay,
+			     uint64_t *queue_id);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -794,11 +816,15 @@ int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 struct daos_oclass_attr *obj_get_oca(struct dc_object *obj);
 bool obj_is_ec(struct dc_object *obj);
 int obj_get_replicas(struct dc_object *obj);
+int
+obj_ptr2shards(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr);
 int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
-int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-			unsigned int map_ver, tse_task_t **taskp);
+int
+     obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj, unsigned int map_ver,
+			 d_rank_t hint_rank, tse_task_t **taskp);
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
@@ -936,24 +962,9 @@ struct obj_io_context {
 	uint32_t		 ioc_opc;
 	uint64_t		 ioc_start_time;
 	uint64_t		 ioc_io_size;
-	uint32_t		 ioc_began:1,
-				 ioc_update_ec_ts:1,
-				 ioc_free_sgls:1,
-				 ioc_lost_reply:1,
-				 ioc_fetch_snap:1;
+	uint32_t ioc_began : 1, ioc_update_ec_ts : 1, ioc_free_sgls : 1, ioc_lost_reply : 1,
+	    ioc_fetch_snap : 1, ioc_drop_cond : 1;
 };
-
-static inline void
-obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
-	       uint32_t *grp_nr)
-{
-	*start_shard = 0;
-	*shard_nr = obj->cob_shards_nr;
-	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
-
-	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "DF_OID": %u/%u\n",
-		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
-}
 
 static inline uint64_t
 obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
@@ -1116,6 +1127,8 @@ struct obj_query_merge_args {
 	daos_recx_t		*oqma_tgt_recx; /* output */
 	daos_epoch_t		*oqma_tgt_epoch; /* output */
 	uint32_t		*oqma_tgt_map_ver; /* output */
+	/* optional output (client only): rank that supplied oqma_src_map_ver */
+	d_rank_t                *oqma_tgt_map_ver_rank;
 	uint32_t		*oqma_shard; /* output */
 	uint32_t		*oqma_max_delay; /* output */
 	uint64_t		*oqma_queue_id; /* output */
@@ -1148,8 +1161,8 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
 /* cli_coll.c */
-bool
-obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+int
+obj_need_coll(struct dc_object *obj, uint32_t map_ver, uint32_t *start_shard, uint32_t *shard_nr,
 	      uint32_t *grp_nr);
 
 int
@@ -1159,8 +1172,8 @@ void
 obj_coll_oper_args_fini(struct coll_oper_args *coa);
 
 int
-obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
-		  uint32_t map_ver, uint32_t idx);
+obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj, uint32_t map_ver, uint32_t idx,
+		  int *candidate, struct obj_auxi_args *auxi);
 
 int
 dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,

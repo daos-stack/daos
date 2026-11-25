@@ -9,7 +9,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    senv.require('pmdk', 'spdk', 'ofi')
+    senv.require('pmdk', 'spdk')
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
     senv.AppendUnique(OBJPREFIX='s_')

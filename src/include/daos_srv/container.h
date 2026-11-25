@@ -83,8 +83,8 @@ struct ds_cont_child {
 	    sc_ec_agg_active : 1,
 	    /* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
 	    sc_rw_disabled : 1, sc_scrubbing : 1, sc_rebuilding : 1,
-	    /* flag of sc_ec_agg_eph_boundary valid */
-	    sc_ec_agg_eph_valid : 1;
+	    sc_ec_agg_eph_valid : 1 /* flag of sc_ec_agg_eph_boundary valid */, sc_dtx_indexed : 1,
+	    sc_resync_pending : 1;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
 
@@ -153,6 +153,16 @@ struct ds_cont_child {
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	int                      sc_ec_agg_updates;
+	/* The cache for local stable epoch, stop refreshing if >= the latest rebuild epoch. */
+	daos_epoch_t             sc_local_stable_epoch;
+	/* Last timestamp for delay rebuild operations because of old LSE or rebuild epoch. */
+	uint64_t                 sc_rebuild_delay_ts;
+
+	/*
+	 * If DTX resync logic cannot commit the DTX, then it will be added into the list.
+	 * And then batched commit logic will commit them sometime later.
+	 */
+	d_list_t                 sc_dtx_resync_pending;
 };
 
 struct agg_param {

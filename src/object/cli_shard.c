@@ -171,7 +171,7 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	if (rc == -DER_CSUM && is_ec_obj) {
 		uint32_t tgt_idx;
 
-		tgt_idx = rw_args->shard_args->auxi.shard % obj_get_grp_size(obj);
+		tgt_idx = rw_args->shard_args->auxi.ec_tgt_idx;
 		rc = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
 		if (rc) {
 			D_ERROR(DF_OID" fail info insert"
@@ -454,6 +454,14 @@ csum_report_cb(const struct crt_cb_info *cb_info)
 	crt_req_decref(cb_info->cci_rpc);
 }
 
+static ATOMIC uint64_t csum_report_nr;
+
+uint64_t
+dc_obj_csum_report_nr(void)
+{
+	return atomic_load(&csum_report_nr);
+}
+
 /* send CSUM_REPORT to original target */
 static int
 dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
@@ -486,6 +494,7 @@ dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 	csum_orw->orw_nr = 0;
 	crt_req_addref(csum_rpc);
 	crt_req_addref(rpc);
+	atomic_fetch_add(&csum_report_nr, 1);
 	return crt_req_send(csum_rpc, csum_report_cb, rpc);
 }
 
@@ -603,8 +612,15 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				goto unlock;
 			}
 
+			/* A -DER_REC2BIG from another shard is the long-singv-overwritten-by-
+			 * short-singv case, which is ignored below when the short singv lives
+			 * on a single target. The size conflict is still real in that case, so
+			 * it must be evaluated or a torn read reaches checksum verification
+			 * with a stale singv layout.
+			 */
 			if (fetch_stat->sfs_size_other != 0 && fetch_rc == 0 &&
-			    fetch_stat->sfs_rc_other == 0) {
+			    (fetch_stat->sfs_rc_other == 0 ||
+			     fetch_stat->sfs_rc_other == -DER_REC2BIG)) {
 				conflict = dc_shard_singv_size_conflict(oca,
 						fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 			}
@@ -649,6 +665,18 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 					fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 		}
 
+		/* The size conflict is a property of the whole fetch, not of whichever
+		 * shard reply happens to be in hand - both sizes live in the shared
+		 * fetch_stat. Re-check it here so that any callback observing the
+		 * conflict fails the fetch. Without this a callback whose branch did not
+		 * compute the conflict proceeds to checksum verification against a stale
+		 * singv layout and wrongly burns an EC shard.
+		 */
+		if (!conflict && fetch_rc == 0 && fetch_stat->sfs_size != 0 &&
+		    fetch_stat->sfs_size_other != 0)
+			conflict = dc_shard_singv_size_conflict(oca, fetch_stat->sfs_size_other,
+								fetch_stat->sfs_size);
+
 		if (conflict && !reasb_req->orr_size_fetch && rc == 0)
 			fetch_again = true;
 
@@ -666,6 +694,141 @@ unlock:
 	}
 
 	return rc;
+}
+
+/* Check if the checksum verification of this shard fetch reply has to be deferred.
+ *
+ * The shards of an evenly distributed EC single value fetch share one buffer, and
+ * every shard lays its data out by the record size it stores. If the record was
+ * overwritten by a smaller one that is stored on one data shard and the parity
+ * shards only, the other data shards still hold a cell of the old record, and
+ * the newer record lands on top of those cells. Whether that happened is only
+ * known when the shards holding the latest record replied as well, so the reply
+ * of the other data shards cannot be verified when it is handled. It is verified
+ * by rw_csum_verify_deferred_cb() when all the shards replied.
+ */
+static bool
+rw_cb_csum_verify_defer(tse_task_t *task, const struct rw_cb_args *rw_args)
+{
+	struct shard_rw_args *shard_args = rw_args->shard_args;
+	struct obj_auxi_args *obj_auxi   = shard_args->auxi.obj_auxi;
+	struct obj_reasb_req *reasb_req  = shard_args->reasb_req;
+	struct obj_rw_in     *orw        = crt_req_get(rw_args->rpc);
+	struct obj_rw_out    *orwo       = crt_reply_get(rw_args->rpc);
+	daos_iod_t           *iods       = orw->orw_iod_array.oia_iods;
+	uint64_t             *sizes      = orwo->orw_iod_sizes.ca_arrays;
+	uint64_t              one_tgt_max;
+	uint32_t              shard;
+	int                   i;
+
+	/* only one shard is involved if the shard args is embedded in the object task */
+	if (task == obj_auxi->obj_task || reasb_req == NULL || reasb_req->orr_singv_los == NULL ||
+	    !daos_oclass_is_ec(reasb_req->orr_oca) || rw_args->rwaa_sgls == NULL)
+		return false;
+
+	if (!daos_csummer_initialized(rw_args->co->dc_csummer) ||
+	    rw_args->co->dc_csummer->dcs_skip_data_verify)
+		return false;
+
+	/* the first data shard and the parity shards always hold the latest record */
+	shard = orw->orw_oid.id_shard % daos_oclass_grp_size(reasb_req->orr_oca);
+	if (shard == obj_ec_singv_small_idx(obj_auxi->obj, orw->orw_dkey_hash, NULL) ||
+	    is_ec_parity_shard(obj_auxi->obj, orw->orw_dkey_hash, orw->orw_oid.id_shard))
+		return false;
+
+	/* the largest record stored on one data shard, the only kind that leaves stale cells */
+	one_tgt_max = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(reasb_req->orr_oca));
+
+	for (i = 0; i < orw->orw_nr; i++) {
+		if (iods[i].iod_type != DAOS_IOD_SINGLE ||
+		    !reasb_req->orr_singv_los[i].cs_even_dist)
+			continue;
+
+		/* this shard holds nothing for the record */
+		if (sizes[i] == 0)
+			continue;
+
+		/* The cells of this shard's record start beyond the end of any record stored
+		 * on one data shard, so a newer record cannot land on top of them.
+		 */
+		if (obj_ec_singv_cell_bytes(sizes[i], reasb_req->orr_oca) >= one_tgt_max)
+			continue;
+
+		return true;
+	}
+
+	return false;
+}
+
+struct rw_csum_verify_deferred {
+	/* the completed shard fetch task */
+	tse_task_t       *rcd_task;
+	struct rw_cb_args rcd_rw_args;
+};
+
+/* Completion callback of the object fetch task, to verify the checksum of the shard fetch
+ * reply deferred by rw_cb_csum_verify_defer(). It is registered after obj_comp_cb(), so it
+ * is called before it, when all the shards replied. A failure is set as the result of the
+ * shard task for obj_comp_cb() to handle it. If the replied record sizes conflict the
+ * object fetch will be done again, and the reply is just dropped. So is it if the object
+ * fetch failed without the size of the latest record being replied.
+ */
+static int
+rw_csum_verify_deferred_cb(tse_task_t *obj_task, void *data)
+{
+	struct rw_csum_verify_deferred *deferred  = data;
+	struct rw_cb_args              *rw_args   = &deferred->rcd_rw_args;
+	struct obj_reasb_req           *reasb_req = rw_args->shard_args->reasb_req;
+	struct obj_rw_in               *orw       = crt_req_get(rw_args->rpc);
+	bool                            conflict  = false;
+	bool                            unknown   = false;
+	int                             rc;
+	int                             i;
+
+	if (deferred->rcd_task->dt_result != 0)
+		goto out;
+
+	D_MUTEX_LOCK(&reasb_req->orr_mutex);
+	for (i = 0; i < orw->orw_nr && !conflict; i++) {
+		struct shard_fetch_stat *fetch_stat = &reasb_req->orr_fetch_stat[i];
+
+		if (orw->orw_iod_array.oia_iods[i].iod_type != DAOS_IOD_SINGLE ||
+		    !reasb_req->orr_singv_los[i].cs_even_dist || fetch_stat->sfs_size_other == 0)
+			continue;
+		if (fetch_stat->sfs_size == 0) {
+			unknown = true;
+			continue;
+		}
+		conflict = dc_shard_singv_size_conflict(
+		    reasb_req->orr_oca, fetch_stat->sfs_size_other, fetch_stat->sfs_size);
+	}
+	D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
+	if (conflict) {
+		D_DEBUG(DB_CSUM, DF_UOID " skip csum verify of the stale singv shard\n",
+			DP_UOID(orw->orw_oid));
+		goto out;
+	}
+	/* No shard holding the latest record replied its size, as its fetch failed. Its data
+	 * can still have landed on top of the data of this shard, which cannot be told from
+	 * a corruption. The object fetch failed and returns no data, so drop the reply rather
+	 * than fail a healthy shard and report a checksum error for it.
+	 */
+	if (unknown && obj_task->dt_result != 0) {
+		D_DEBUG(DB_CSUM,
+			DF_UOID " skip csum verify, latest singv size is unknown, " DF_RC "\n",
+			DP_UOID(orw->orw_oid), DP_RC(obj_task->dt_result));
+		goto out;
+	}
+
+	rc = rw_cb_csum_verify(rw_args);
+	if (rc != 0) {
+		if (rc == -DER_CSUM)
+			dc_shard_csum_report(deferred->rcd_task, &rw_args->tgt_ep, rw_args->rpc);
+		deferred->rcd_task->dt_result = rc;
+	}
+out:
+	crt_req_decref(rw_args->rpc);
+	return 0;
 }
 
 daos_size_t
@@ -765,6 +928,7 @@ static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
 	struct rw_cb_args	*rw_args = arg;
+	struct obj_auxi_args    *obj_auxi;
 	struct obj_rw_in	*orw;
 	struct obj_rw_v10_out	*orwo;
 	daos_handle_t		th;
@@ -828,8 +992,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	 * orwo->orw_epoch may be set even when the status is nonzero (e.g.,
 	 * -DER_TX_RESTART and -DER_INPROGRESS).
 	 */
-	api_args = dc_task_get_args(rw_args->shard_args->auxi.obj_auxi->obj_task);
-	th = api_args->th;
+	obj_auxi = rw_args->shard_args->auxi.obj_auxi;
+	api_args = dc_task_get_args(obj_auxi->obj_task);
+	th       = api_args->th;
 	if (daos_handle_is_valid(th)) {
 		int rc_tmp;
 
@@ -845,6 +1010,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	if (rc != 0) {
+		if (rc == -DER_INPROGRESS && opc == DAOS_OBJ_RPC_UPDATE &&
+		    orwo->orw_comm_out.req_flags & DRCF_DTX_LEADER) {
+			obj_auxi->leader_tgt  = orwo->orw_comm_out.req_leader;
+			obj_auxi->spec_leader = 1;
+		}
+
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
 				"need retry: "DF_RC"\n", rw_args->rpc, opc,
@@ -874,7 +1045,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
 		    rc == -DER_EXIST || rc == -DER_RF || rc == -DER_UPDATE_AGAIN ||
-		    rc == -DER_FETCH_AGAIN)
+		    rc == -DER_FETCH_AGAIN || rc == -DER_REBUILD_DELAY)
 			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -899,8 +1070,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				uint32_t		 tgt_idx;
 
 				sa = &rw_args->shard_args->auxi;
-				tgt_idx = sa->shard %
-					  obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
+				tgt_idx = sa->ec_tgt_idx;
 				rc = obj_ec_fail_info_insert(reasb_req, tgt_idx);
 				if (rc)
 					D_ERROR(DF_OID" fail info insert: " DF_RC"\n",
@@ -1039,9 +1209,22 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		if (rc != 0)
 			goto out;
 
-		rc = rw_cb_csum_verify(rw_args);
-		if (rc != 0)
-			goto out;
+		if (rw_cb_csum_verify_defer(task, rw_args)) {
+			struct rw_csum_verify_deferred deferred;
+
+			deferred.rcd_task    = task;
+			deferred.rcd_rw_args = *rw_args;
+			rc = tse_task_register_comp_cb(rw_args->shard_args->auxi.obj_auxi->obj_task,
+						       rw_csum_verify_deferred_cb, &deferred,
+						       sizeof(deferred));
+			if (rc != 0)
+				goto out;
+			crt_req_addref(rw_args->rpc);
+		} else {
+			rc = rw_cb_csum_verify(rw_args);
+			if (rc != 0)
+				goto out;
+		}
 
 		if (rw_args->maps != NULL && orwo->orw_maps.ca_count > 0) {
 			daos_iom_t			*reply_maps;
@@ -1060,11 +1243,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					if (recov_list->re_nr == 0)
 						recov_list = NULL;
 				}
-				if (is_ec_obj &&
-				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
-					struct obj_auxi_args	*obj_auxi;
-
-					obj_auxi = rw_args->shard_args->auxi.obj_auxi;
+				if (is_ec_obj && reply_maps->iom_type == DAOS_IOD_ARRAY) {
 					D_ASSERT(obj_auxi->iom_state != NULL);
 					D_ASSERTF(i < obj_auxi->iod_nr, "iod_idx %d, iod_nr %d.\n",
 						  i, obj_auxi->iod_nr);
@@ -1353,27 +1532,30 @@ struct obj_punch_cb_args {
 static int
 obj_shard_punch_cb(tse_task_t *task, void *data)
 {
-	struct obj_punch_cb_args	*cb_args;
-	crt_rpc_t			*rpc;
-	struct shard_punch_args		*shard_args;
+	struct obj_punch_cb_args *cb_args    = (struct obj_punch_cb_args *)data;
+	crt_rpc_t                *rpc        = cb_args->rpc;
+	struct obj_punch_v10_out *opo        = crt_reply_get(rpc);
+	struct shard_punch_args  *shard_args = cb_args->shard_args;
+	struct obj_auxi_args     *obj_auxi   = shard_args->pa_auxi.obj_auxi;
 
-	cb_args = (struct obj_punch_cb_args *)data;
-	rpc = cb_args->rpc;
 	if (task->dt_result == 0) {
 		task->dt_result = obj_reply_get_status(rpc);
 		*cb_args->map_ver = obj_reply_map_version_get(rpc);
 		if (task->dt_result == -DER_OVERLOAD_RETRY) {
-			uint32_t		  timeout = 0;
-			struct obj_punch_v10_out *opo = crt_reply_get(cb_args->rpc);
+			uint32_t timeout = 0;
 
-			shard_args = cb_args->shard_args;
 			if (shard_args->pa_auxi.enqueue_id == 0)
 				shard_args->pa_auxi.enqueue_id =
 						opo->opo_comm_out.req_out_enqueue_id;
 			crt_req_get_timeout(cb_args->rpc, &timeout);
 			if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
-				shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+				obj_auxi->max_delay = timeout;
 		}
+	}
+
+	if (task->dt_result == -DER_INPROGRESS && opo->opo_comm_out.req_flags & DRCF_DTX_LEADER) {
+		obj_auxi->leader_tgt  = opo->opo_comm_out.req_leader;
+		obj_auxi->spec_leader = 1;
 	}
 
 	obj_shard_update_metrics_end(cb_args->rpc, cb_args->send_time, cb_args, task->dt_result);
@@ -1484,9 +1666,12 @@ struct shard_coll_punch_cb_args {
 static int
 obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 {
-	struct shard_coll_punch_cb_args	*cb_args = data;
-	crt_rpc_t			*rpc = cb_args->cpca_rpc;
-	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+	struct shard_coll_punch_cb_args *cb_args    = data;
+	crt_rpc_t                       *rpc        = cb_args->cpca_rpc;
+	struct obj_coll_punch_in        *ocpi       = crt_req_get(rpc);
+	struct obj_coll_punch_out       *ocpo       = crt_reply_get(rpc);
+	struct shard_punch_args         *shard_args = cb_args->cpca_shard_args;
+	struct obj_auxi_args            *obj_auxi   = shard_args->pa_auxi.obj_auxi;
 
 	if (task->dt_result == 0) {
 		task->dt_result = obj_reply_get_status(rpc);
@@ -1494,15 +1679,18 @@ obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 	}
 
 	if (task->dt_result == -DER_OVERLOAD_RETRY) {
-		struct obj_coll_punch_out	*ocpo = crt_reply_get(rpc);
-		struct shard_punch_args		*shard_args = cb_args->cpca_shard_args;
-		uint32_t			 timeout = 0;
+		uint32_t timeout = 0;
 
 		if (shard_args->pa_auxi.enqueue_id == 0)
 			shard_args->pa_auxi.enqueue_id = ocpo->ocpo_comm_out.req_out_enqueue_id;
 		crt_req_get_timeout(rpc, &timeout);
 		if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
 			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+	}
+
+	if (task->dt_result == -DER_INPROGRESS && ocpo->ocpo_comm_out.req_flags & DRCF_DTX_LEADER) {
+		obj_auxi->leader_tgt  = ocpo->ocpo_comm_out.req_leader;
+		obj_auxi->spec_leader = 1;
 	}
 
 	DL_CDEBUG(task->dt_result < 0 && task->dt_result != -DER_INPROGRESS,
@@ -1696,8 +1884,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 
 		rc = daos_csummer_verify_key(args->csummer, &enum_type_val, ci_to_compare);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
-				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
+			D_ERROR("daos_csummer_verify_key error for %s: " DF_RC "\n",
+				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", DP_RC(rc));
 			return rc;
 		}
 		break;
@@ -1828,8 +2016,8 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			if (timeout > *enum_args->max_delay)
 				*enum_args->max_delay = timeout;
 		} else {
-			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
-				enum_args->rpc, opc, DP_RC(rc));
+			DL_CDEBUG(rc == -DER_REBUILD_DELAY, DLOG_DBG, DLOG_ERR, rc,
+				  "rpc %p RPC %d failed", enum_args->rpc, opc);
 		}
 		D_GOTO(out, rc);
 	}
@@ -2085,6 +2273,7 @@ out_put:
 struct obj_query_key_cb_args {
 	crt_rpc_t		*rpc;
 	unsigned int		*map_ver;
+	d_rank_t                *map_ver_rank;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
@@ -2141,6 +2330,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	oqma.oqma_max_delay = cb_args->max_delay;
 	oqma.oqma_queue_id = cb_args->queue_id;
 	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_tgt_map_ver_rank = cb_args->map_ver_rank;
 	oqma.oqma_flags = okqi->okqi_api_flags;
 	oqma.oqma_opc = DAOS_OBJ_RPC_QUERY_KEY;
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
@@ -2159,11 +2349,11 @@ out:
 
 int
 dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
-		       uint32_t req_map_ver, struct dc_object *obj,
-		       daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
-		       daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task,
-		       uint32_t *max_delay, uint64_t *queue_id)
+		       uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
+		       daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
+		       const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
+		       uint32_t *map_ver, d_rank_t *map_ver_rank, daos_handle_t th,
+		       tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id)
 {
 	struct dc_pool			*pool = obj_shard_ptr2pool(shard);
 	struct obj_query_key_in		*okqi;
@@ -2190,6 +2380,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	crt_req_addref(req);
 	cb_args.rpc		= req;
 	cb_args.map_ver		= map_ver;
+	cb_args.map_ver_rank    = map_ver_rank;
 	cb_args.dkey		= dkey;
 	cb_args.akey		= akey;
 	cb_args.recx		= recx;
@@ -2286,6 +2477,7 @@ obj_shard_coll_query_cb(tse_task_t *task, void *data)
 	oqma.oqma_max_delay = cb_args->max_delay;
 	oqma.oqma_queue_id = cb_args->queue_id;
 	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_tgt_map_ver_rank = cb_args->map_ver_rank;
 	oqma.oqma_flags = ocqi->ocqi_api_flags;
 	oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
@@ -2316,9 +2508,9 @@ dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uin
 			uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
 			daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
 			const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
-			uint32_t *map_ver, struct daos_coll_target *tgts, uint32_t tgt_nr,
-			uint32_t max_tgt_size, uint32_t disp_width, daos_handle_t th,
-			tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id)
+			uint32_t *map_ver, d_rank_t *map_ver_rank, struct daos_coll_target *tgts,
+			uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t disp_width,
+			daos_handle_t th, tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id)
 {
 	struct dc_pool			*pool = obj->cob_pool;
 	struct obj_coll_query_in	*ocqi;
@@ -2342,6 +2534,7 @@ dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uin
 	crt_req_addref(req);
 	cb_args.rpc = req;
 	cb_args.map_ver = map_ver;
+	cb_args.map_ver_rank = map_ver_rank;
 	cb_args.dkey = dkey;
 	cb_args.akey = akey;
 	cb_args.recx = recx;
@@ -2711,7 +2904,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.epoch = &args->ka_auxi.epoch;
 	cb_args.th = &obj_args->th;
 	cb_args.anchor = args->ka_anchor;
-	cb_args.shard = obj_shard->do_shard_idx;
+	cb_args.shard       = obj_shard->do_shard;
 	cb_args.enqueue_id = &args->ka_auxi.enqueue_id;
 	cb_args.max_delay = &args->ka_auxi.obj_auxi->max_delay;
 	cb_args.send_time   = daos_client_metric ? daos_get_ntime() : 0;
