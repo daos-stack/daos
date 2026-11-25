@@ -162,6 +162,51 @@ test_swim(void **state)
 }
 
 static void
+progress_timeout_cb(const struct crt_cb_info *info)
+{
+	int *result = info->cci_arg;
+
+	*result = info->cci_rc;
+}
+
+static void
+test_nonblocking_progress_processes_abort(void **state)
+{
+	crt_endpoint_t       ep = {.ep_grp = NULL, .ep_rank = 0, .ep_tag = 0};
+	struct crt_rpc_priv *rpc_priv;
+	crt_context_t        crt_ctx;
+	crt_rpc_t           *rpc;
+	int                  result = 1;
+	int                  rc;
+
+	test_setup(&crt_ctx);
+	assert_false(crt_gdata.cg_progress_legacy);
+
+	rc = crt_req_create(crt_ctx, &ep, CRT_OPC_CTL_LS, &rpc);
+	assert_int_equal(rc, 0);
+	rpc_priv                  = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	rpc_priv->crp_complete_cb = progress_timeout_cb;
+	rpc_priv->crp_arg         = &result;
+
+	crt_rpc_lock(rpc_priv);
+	rc = crt_context_req_track(rpc_priv);
+	crt_rpc_unlock(rpc_priv);
+	assert_int_equal(rc, CRT_REQ_TRACK_IN_INFLIGHQ);
+
+	rc = crt_progress(crt_ctx, 0);
+	assert_true(rc == 0 || rc == -DER_TIMEDOUT);
+	assert_int_equal(result, 1);
+
+	rc = crt_req_abort(rpc);
+	assert_int_equal(rc, 0);
+	rc = crt_progress(crt_ctx, 0);
+	assert_true(rc == 0 || rc == -DER_TIMEDOUT);
+	assert_int_equal(result, -DER_TIMEDOUT);
+
+	test_teardown(crt_ctx);
+}
+
+static void
 test_swim_fini_completes_pending_ipings(void **state)
 {
 	struct swim_fini_test_data data = {0};
@@ -255,6 +300,7 @@ init_tests(void **state)
 
 	d_setenv("D_PROVIDER", "ofi+tcp", 1);
 	d_setenv("D_INTERFACE", "lo", 1);
+	d_setenv("D_PROGRESS_LEGACY", "0", 1);
 
 	return 0;
 }
@@ -269,6 +315,7 @@ int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
 	    cmocka_unit_test(test_swim),
+	    cmocka_unit_test(test_nonblocking_progress_processes_abort),
 	    cmocka_unit_test(test_swim_fini_completes_pending_ipings),
 	    cmocka_unit_test(test_swim_rank_check_clears_suspect),
 	};

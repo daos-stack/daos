@@ -1853,17 +1853,17 @@ crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 static int
 crt_progress_event(struct crt_context *ctx, int64_t timeout_us)
 {
-	struct timespec *deadline_p, now = {.tv_sec = 0, .tv_nsec = 0}, new_deadline;
+	struct timespec *deadline_p, now, new_deadline;
 	int              rc;
 
-	if (timeout_us > 0) {
-		rc = d_gettime_coarse(&now);
-		if (rc != 0) {
-			D_ERROR("d_gettime_coarse() failed, rc: %d.\n", rc);
-			return rc;
-		}
+	rc = d_gettime_coarse(&now);
+	if (rc != 0) {
+		D_ERROR("d_gettime_coarse() failed, rc: %d.\n", rc);
+		return rc;
+	}
 
-		crt_context_timeout_check(ctx, &now);
+	crt_context_timeout_check(ctx, &now);
+	if (timeout_us > 0) {
 		new_deadline = now;
 		deadline_p = &new_deadline;
 		d_timeinc(deadline_p, (uint64_t)(timeout_us * 1000));
