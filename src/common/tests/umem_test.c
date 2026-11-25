@@ -433,7 +433,7 @@ test_page_cache(void **state)
 	arg->ta_store.stor_ops  = &stor_ops;
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
-	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, 0, 0,
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, NULL, 0,
 			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -498,7 +498,7 @@ test_many_pages(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, NULL, 0,
 			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -542,7 +542,7 @@ test_many_writes(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, NULL, 0,
 			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -567,33 +567,36 @@ test_many_writes(void **state)
 	umem_cache_free(&arg->ta_store);
 }
 
-static inline void *
+static void *
 tfifo_create(unsigned int tier)
 {
 	return (void *)(UINT64_MAX);
 }
 
-static inline void
+static void
 tfifo_destroy(void *tq)
 {
 }
 
-static inline void
+static unsigned int tfifo_last_tier = UMEM_RSRV_TIER_MAX;
+
+static void
 tfifo_enter(void *tq, unsigned int tier)
 {
+	tfifo_last_tier = tier;
 }
 
-static inline void
+static void
 tfifo_exit(void *tq, unsigned int tier)
 {
 }
 
-static inline void
+static void
 tfifo_wait(void *tq, unsigned int tier)
 {
 }
 
-static inline void
+static void
 tfifo_wakeup(void *tq)
 {
 }
@@ -651,7 +654,9 @@ static struct umem_store_ops p2_ops = {
 static bool
 is_evictable_fn(void *arg, uint32_t page_id)
 {
-	return page_id >= PAGE_NUM_MAX_NE;
+	uint32_t max_ne_pages = arg ? *(uint32_t *)arg : PAGE_NUM_MAX_NE;
+
+	return page_id >= max_ne_pages;
 }
 
 static int
@@ -664,6 +669,9 @@ static void
 test_p2_basic(void **state)
 {
 	struct test_arg		*arg = *state;
+	struct umem_cache_dav_constraints dav_constraints = {
+	    .max_ne_pages = PAGE_NUM_MAX_NE,
+	};
 	struct umem_cache	*cache;
 	struct umem_cache_range	 rg = { 0 };
 	struct umem_pin_handle	*pin_hdl;
@@ -674,7 +682,7 @@ test_p2_basic(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
+			      &dav_constraints, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
 			      pagevnt_fn, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -694,12 +702,21 @@ test_p2_basic(void **state)
 	/* Map single non-evictable page */
 	rg.cr_off	= cache->ca_base_off + 1 * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
-	rc = umem_cache_map(&arg->ta_store, &rg, 1);
+	rc              = umem_cache_map(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_TX);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 2);
 	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store,
 				cache->ca_base_off + UMEM_CACHE_PAGE_SZ),
 			 cache->ca_base + UMEM_CACHE_PAGE_SZ);
+
+	/* Map single evictable page, it enters the TFIFO of the tier given by caller */
+	tfifo_last_tier = UMEM_RSRV_TIER_MAX;
+	rg.cr_off       = cache->ca_base_off + (PAGE_NUM_MAX_NE + 3) * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size      = UMEM_CACHE_PAGE_SZ;
+	rc              = umem_cache_map(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_TX);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(tfifo_last_tier, UMEM_RSRV_TIER_TX);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 2);
 
 	/* Load multiple pages */
 	rg.cr_off	= cache->ca_base_off + (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
@@ -731,6 +748,9 @@ static void
 test_p2_evict(void **state)
 {
 	struct test_arg		*arg = *state;
+	struct umem_cache_dav_constraints dav_constraints = {
+	    .max_ne_pages = PAGE_NUM_MAX_NE,
+	};
 	struct umem_cache	*cache;
 	struct umem_cache_range	 rg = { 0 };
 	struct umem_pin_handle	*pin_hdl;
@@ -742,7 +762,7 @@ test_p2_evict(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
+			      &dav_constraints, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
 			      pagevnt_fn, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -835,6 +855,12 @@ race_flush_post(daos_handle_t fh, int err)
 }
 
 static struct umem_store_ops race_ops = {
+    .so_tfifo_create      = tfifo_create,
+    .so_tfifo_destroy     = tfifo_destroy,
+    .so_tfifo_enter       = tfifo_enter,
+    .so_tfifo_exit        = tfifo_exit,
+    .so_tfifo_wait        = tfifo_wait,
+    .so_tfifo_wakeup      = tfifo_wakeup,
     .so_waitqueue_create  = waitqueue_create,
     .so_waitqueue_destroy = waitqueue_destroy,
     .so_waitqueue_wait    = race_waitqueue_wait,
@@ -850,17 +876,20 @@ static void
 test_p2_evict_chkpt_race(void **state)
 {
 	struct test_arg        *arg = *state;
+	struct umem_cache_dav_constraints dav_constraints = {
+	    .max_ne_pages = PAGE_NUM_MAX_NE,
+	};
 	struct umem_cache      *cache;
 	struct umem_cache_range rg = {0};
 	struct umem_pin_handle *pin_hdl;
-	int                     rc;
+	int                     i, rc;
 
 	arg->ta_store.stor_size  = UMEM_CACHE_PAGE_SZ * PAGE_NUM_MD;
 	arg->ta_store.stor_ops   = &race_ops;
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
+			      &dav_constraints, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
 			      pagevnt_fn, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -873,11 +902,18 @@ test_p2_evict_chkpt_race(void **state)
 	arg->ta_chkpt_waited = false;
 	race_arg             = arg;
 
-	/* Fill the cache, the first evictable page is the one to be evicted */
-	rg.cr_off  = cache->ca_base_off;
-	rg.cr_size = PAGE_NUM_MEM * UMEM_CACHE_PAGE_SZ;
-	rc         = umem_cache_load(&arg->ta_store, &rg, 1, false);
-	assert_rc_equal(rc, 0);
+	/*
+	 * Fill the cache one page at a time, the first evictable page is the one to be
+	 * evicted. The whole range can't be loaded by a single request, since umem cache
+	 * load/pin rejects any request exceeding the safe ceiling of evictable MBs that
+	 * can be pinned.
+	 */
+	rg.cr_size = UMEM_CACHE_PAGE_SZ;
+	for (i = 0; i < PAGE_NUM_MEM; i++) {
+		rg.cr_off = cache->ca_base_off + i * UMEM_CACHE_PAGE_SZ;
+		rc        = umem_cache_load(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_TX);
+		assert_rc_equal(rc, 0);
+	}
 
 	/* Only the page to be evicted is dirty */
 	touch_mem(arg, 1, PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ, UMEM_CACHE_CHUNK_SZ);
@@ -908,6 +944,65 @@ test_tx_fail_no_abort(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+test_p2_pin_max_ceil(void **state)
+{
+	struct test_arg *arg = *state;
+	struct {
+		struct umem_cache_dav_constraints constraints;
+		uint32_t                          ceiling;
+	} cases[] = {
+	    {{PAGE_NUM_MEM, 0, 0}, PAGE_NUM_MEM},
+	    {{PAGE_NUM_MAX_NE, 0, 0}, 5},
+	    {{PAGE_NUM_MAX_NE, 2, 1}, 3},
+	    {{6, 3, 1}, 1},
+	    {{8, 2, 0}, 0},
+	};
+	struct umem_cache_range rg      = {0};
+	struct umem_pin_handle *pin_hdl = NULL;
+	uint32_t                reserve, limit;
+	int                     i, tier, rc;
+
+	arg->ta_store.stor_size  = UMEM_CACHE_PAGE_SZ * PAGE_NUM_MD;
+	arg->ta_store.stor_ops   = &p2_ops;
+	arg->ta_store.store_type = DAOS_MD_BMEM;
+
+	for (i = 0; i < ARRAY_SIZE(cases); i++) {
+		rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
+				      &cases[i].constraints, 4096, (void *)(UMEM_CACHE_PAGE_SZ),
+				      is_evictable_fn, pagevnt_fn,
+				      &cases[i].constraints.max_ne_pages);
+		assert_rc_equal(rc, 0);
+
+		rg.cr_off = arg->ta_store.cache->ca_base_off;
+		if (cases[i].constraints.max_ne_pages != PAGE_NUM_MEM)
+			rg.cr_off += cases[i].constraints.max_ne_pages * UMEM_CACHE_PAGE_SZ;
+
+		/* TX maps the range first; later tiers must still count mapped pages. */
+		for (tier = UMEM_RSRV_TIER_TX; tier <= UMEM_RSRV_TIER_OBJ; tier++) {
+			reserve = tier == UMEM_RSRV_TIER_TX
+				      ? 0
+				      : cases[i].constraints.soemb_tier_reservation_pages;
+			limit   = cases[i].ceiling > reserve ? cases[i].ceiling - reserve : 0;
+			if (tier == UMEM_RSRV_TIER_OBJ)
+				assert_int_equal(umem_cache_max_pin_pages(&arg->ta_store), limit);
+
+			rg.cr_size = (limit + 1) * UMEM_CACHE_PAGE_SZ;
+			rc         = umem_cache_pin(&arg->ta_store, &rg, 1, tier, &pin_hdl);
+			assert_rc_equal(rc, -DER_INVAL);
+
+			if (limit == 0)
+				continue;
+			rg.cr_size = limit * UMEM_CACHE_PAGE_SZ;
+			rc         = umem_cache_pin(&arg->ta_store, &rg, 1, tier, &pin_hdl);
+			assert_rc_equal(rc, 0);
+			umem_cache_unpin(&arg->ta_store, pin_hdl);
+		}
+		assert_int_equal(arg->ta_store.cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 0);
+		umem_cache_free(&arg->ta_store);
+	}
+}
+
 int
 main(int argc, char **argv)
 {
@@ -925,6 +1020,7 @@ main(int argc, char **argv)
 	     teardown_pmem},
 	    {"UMEM011: Test checkpoint racing with eviction flush", test_p2_evict_chkpt_race, NULL,
 	     NULL},
+	    {"UMEM012: Test phase2 pin ceiling", test_p2_pin_max_ceil, NULL, NULL},
 	    {NULL, NULL, NULL, NULL}};
 
 	d_register_alt_assert(mock_assert);

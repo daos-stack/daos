@@ -97,10 +97,6 @@ struct mbrt_qbs {
 };
 
 #define SOEMB_ACTIVE_CNT 3
-/* Extra cache page kept free so a demoted SOEMB can be replaced without
- * stealing zone0's non-evictable page.
- */
-#define SOEMB_REPLACE_RSRV 1
 
 struct soemb_slot {
 	struct mbrt            *mb;
@@ -1476,7 +1472,7 @@ heap_mark_zone_unused(struct palloc_heap *heap, uint32_t zone_id)
 	rg.cr_off = GET_ZONE_OFFSET(zone_id);
 	rg.cr_size =
 	    ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE : heap->size - rg.cr_off;
-	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
+	rc = umem_cache_map(heap->layout_info.store, &rg, 1, UMEM_RSRV_TIER_TX);
 	if (rc != 0) {
 		rc = daos_der2errno(rc);
 		ERR("Failed to remap zone %d in umem cache as unused rc=%d\n", zone_id, rc);
@@ -1551,7 +1547,7 @@ heap_populate_bucket(struct palloc_heap *heap, struct bucket *bucket)
 	rg.cr_off = GET_ZONE_OFFSET(zone_id);
 	rg.cr_size =
 	    ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE : heap->size - rg.cr_off;
-	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
+	rc = umem_cache_map(heap->layout_info.store, &rg, 1, UMEM_RSRV_TIER_TX);
 	if (rc != 0) {
 		rc = daos_der2errno(rc);
 		ERR("Failed to map zone %d to umem cache rc=%d\n", zone_id, rc);
@@ -2058,7 +2054,7 @@ heap_zone_load(struct palloc_heap *heap, uint32_t zid)
 	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
 			 ? ZONE_MAX_SIZE
 			 : (store->stor_size - rg.cr_off);
-	rc         = umem_cache_load(store, &rg, 1, 0);
+	rc         = umem_cache_load(store, &rg, 1, UMEM_RSRV_TIER_TX);
 	if (rc) {
 		D_ERROR("Failed to load pages to umem cache");
 		return daos_der2errno(rc);
@@ -2213,12 +2209,6 @@ heap_get_nemb_pct()
 	return nemb_pct;
 }
 
-int
-heap_get_max_nemb(struct palloc_heap *heap)
-{
-	return heap->rt->nzones_ne;
-}
-
 void
 heap_get_mb_limits_v2(struct palloc_heap *heap, uint32_t *nemb_max, uint32_t *emb_max,
 		      uint32_t *soe_rsrv)
@@ -2280,7 +2270,7 @@ heap_init(void *heap_start, uint64_t umem_cache_size, struct umem_store *store)
 }
 
 static inline int
-heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
+heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id, unsigned int tier)
 {
 	uint32_t                zone_id;
 	struct umem_cache_range rg = {0};
@@ -2326,7 +2316,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	rg.cr_size =
 	    ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE : heap->size - rg.cr_off;
 
-	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
+	rc = umem_cache_map(heap->layout_info.store, &rg, 1, tier);
 	if (rc != 0) {
 		ERR("Failed to map zone %u to umem cache\n", zone_id);
 		errno = daos_der2errno(rc);
@@ -2343,7 +2333,8 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 
 	memset(z, 0, rg.cr_size);
 
-	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, 0, &pin_handle);
+	/* Mapped above without a yield: this only adds a reference and never waits */
+	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, tier, &pin_handle);
 	if (rc) {
 		errno = daos_der2errno(rc);
 		goto error;
@@ -2393,9 +2384,12 @@ out:
  *	runtime, either from the evictable MB pool or by creating a new one.
  *	Shared core used by both the active evictable MB selection and the
  *	active SOEMB promotion. May return NULL under memory pressure.
+ *	@tier is the umem cache TFIFO tier to wait in if a new MB has to be
+ *	created: UMEM_RSRV_TIER_OBJ for the active evictable MB selection,
+ *	UMEM_RSRV_TIER_TX for the SOEMB promotion.
  */
 static struct mbrt *
-heap_evictable_mb_pick(struct palloc_heap *heap)
+heap_evictable_mb_pick(struct palloc_heap *heap, unsigned int tier)
 {
 	struct mbrt *mb;
 	uint32_t     mb_id = 0;
@@ -2406,7 +2400,7 @@ retry:
 	if (mb)
 		return mb;
 
-	ret = heap_create_evictable_mb(heap, &mb_id);
+	ret = heap_create_evictable_mb(heap, &mb_id, tier);
 	if (ret >= 0) {
 		if (ret)
 			goto retry;
@@ -2434,7 +2428,7 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	}
 	heap->rt->mb_pressure = 0;
 
-	mb = heap_evictable_mb_pick(heap);
+	mb = heap_evictable_mb_pick(heap, UMEM_RSRV_TIER_OBJ);
 	if (mb == NULL) {
 		D_ERROR("failed to get an active evictable MB");
 		*mb_id = 0;
@@ -2506,7 +2500,7 @@ heap_soemb_active_set(struct palloc_heap *heap)
 		if (smbrt->svec[i].mb != NULL)
 			continue;
 
-		mb = heap_evictable_mb_pick(heap);
+		mb = heap_evictable_mb_pick(heap, UMEM_RSRV_TIER_TX);
 		if (mb == NULL) {
 			D_ERROR("failed to pick an evictable mb as soemb");
 			break;
@@ -2518,7 +2512,7 @@ heap_soemb_active_set(struct palloc_heap *heap)
 		pin        = NULL;
 
 		mb->is_soe_mb = true;
-		rc            = umem_cache_pin(store, &rg, 1, false, &pin);
+		rc            = umem_cache_pin(store, &rg, 1, UMEM_RSRV_TIER_TX, &pin);
 		if (rc) {
 			mb->is_soe_mb = false;
 			mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);
@@ -2587,8 +2581,23 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap)
 	heap->rt->zones_exhausted_ne = nemb_cnt;
 	heap->rt->zones_exhausted_e  = emb_cnt;
 
-	D_ASSERT(heap->rt->nzones_e >= heap->rt->zones_exhausted_e);
-	D_ASSERT(heap->rt->nzones_ne >= heap->rt->zones_exhausted_ne);
+	/*
+	 * Handle zone count mismatches gracefully, whether caused by pools created by
+	 * older releases or by other inconsistencies.
+	 */
+	if (heap->rt->zones_exhausted_e > heap->rt->nzones_e) {
+		D_ERROR("Evictable zones in use (%u) exceed the limit (%u)\n",
+			heap->rt->zones_exhausted_e, heap->rt->nzones_e);
+		return ENOSPC;
+	}
+	if (heap->rt->zones_exhausted_ne > heap->rt->nzones_ne) {
+		D_ERROR("Non-evictable zones in use (%u) exceed the limit (%u) after reserving %u "
+			"zones for spill-over evictable buckets\n",
+			heap->rt->zones_exhausted_ne, heap->rt->nzones_ne,
+			heap->rt->nzones_soe_rsrv ? heap->rt->nzones_soe_rsrv + SOEMB_REPLACE_RSRV
+						  : 0);
+		return ENOSPC;
+	}
 	return 0;
 }
 

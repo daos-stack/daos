@@ -679,9 +679,9 @@ umempobj_get_mb_limits(struct umem_pool *ph_p, uint32_t *nemb_max, uint32_t *emb
 		break;
 	case DAOS_MD_BMEM_V2:
 		dav_get_heap_mb_limits_v2((dav_obj_t *)ph_p->up_priv, &lim);
-		*nemb_max = lim.dhml_nemb_max;
-		*emb_max  = lim.dhml_emb_max;
-		*soe_rsrv = lim.dhml_soe_rsrv;
+		nemb_max ? *nemb_max = lim.dhml_nemb_max : 0;
+		emb_max ? *emb_max = lim.dhml_emb_max : 0;
+		soe_rsrv ? *soe_rsrv = lim.dhml_soe_rsrv : 0;
 		break;
 	default:
 		D_ASSERTF(0, "invalid pool store type %d\n", ph_p->up_store.store_type);
@@ -2387,10 +2387,35 @@ cache_pop_free_page(struct umem_cache *cache)
 					UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT))
 #define UMEM_CACHE_RSRVD_PAGES	4
 
+/** Return the cache's per-request pin budget, in pages, before tier reservations.
+ *
+ * If the maximum NE count equals the cache size, the budget is the full cache
+ * size. Otherwise, the budget excludes the maximum NE count and the pages
+ * reserved for active SOEMBs.
+ *
+ * The number of distinct pages requested (including already mapped pages) plus
+ * the tier reserve must fit within this budget. The budget is not a count of
+ * currently free pages; an admitted request may still wait for space.
+ *
+ * \param[in]	cache		The umem cache
+ * \return	Pin budget in pages.
+ */
+static inline uint32_t
+cache_pin_max_ceil(const struct umem_cache *cache)
+{
+	D_ASSERT(cache->ca_max_ne_pages <= cache->ca_mem_pages);
+	D_ASSERT(cache->ca_soemb_active_pages <= cache->ca_mem_pages - cache->ca_max_ne_pages);
+
+	if (cache->ca_mem_pages == cache->ca_max_ne_pages)
+		return cache->ca_max_ne_pages;
+
+	return cache->ca_mem_pages - cache->ca_max_ne_pages - cache->ca_soemb_active_pages;
+}
+
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
-		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
-		 bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
+		 const struct umem_cache_dav_constraints *dav_constraints, uint32_t base_off,
+		 void *base, bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
 		 int (*evtcb_fn)(int evt_type, void *arg, uint32_t pg_id), void *fn_arg)
 {
 	struct umem_cache	*cache;
@@ -2421,9 +2446,20 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	D_ASSERT(md_pgs > 0 && md_pgs >= mem_pgs);
 	if (mem_pgs == 0) {	/* Phase 1 mode */
 		mem_pgs = md_pgs;
-		max_ne_pgs = md_pgs;
 	} else
 		cmode = 2;
+
+	if (dav_constraints != NULL &&
+	    (dav_constraints->max_ne_pages > mem_pgs ||
+	     dav_constraints->soemb_active_pages > mem_pgs - dav_constraints->max_ne_pages ||
+	     dav_constraints->soemb_tier_reservation_pages >
+		 mem_pgs - dav_constraints->max_ne_pages - dav_constraints->soemb_active_pages)) {
+		D_ERROR("Invalid DAV cache constraints: mem-pages(%u), max-ne-pages(%u), "
+			"SOEMB-active-pages(%u), SOEMB-reserve-pages(%u)\n",
+			mem_pgs, dav_constraints->max_ne_pages, dav_constraints->soemb_active_pages,
+			dav_constraints->soemb_tier_reservation_pages);
+		return -DER_INVAL;
+	}
 
 	bmap_sz = (1 << (page_shift - UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT));
 	D_ALIGNED_ALLOC(cache, CACHELINE_SIZE,
@@ -2433,15 +2469,19 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	if (cache == NULL)
 		return -DER_NOMEM;
 
-	D_INFO("Page cache: md-pgs(%u), mem-pages(%u), max-ne-pgs(%u), mode(%d)\n", md_pgs, mem_pgs,
-	       max_ne_pgs, cmode);
-
 	cache->ca_store		= store;
 	cache->ca_base		= base;
 	cache->ca_base_off	= base_off;
 	cache->ca_md_pages	= md_pgs;
 	cache->ca_mem_pages	= mem_pgs;
-	cache->ca_max_ne_pages	= max_ne_pgs;
+	cache->ca_max_ne_pages       = dav_constraints ? dav_constraints->max_ne_pages : mem_pgs;
+	cache->ca_soemb_active_pages = dav_constraints ? dav_constraints->soemb_active_pages : 0;
+	cache->ca_soemb_tier_reservation_pages =
+	    dav_constraints ? dav_constraints->soemb_tier_reservation_pages : 0;
+	cache->ca_pin_max_ceil = cache_pin_max_ceil(cache);
+
+	D_INFO("Page cache: md-pgs(%u), mem-pages(%u), max-ne-pgs(%u), mode(%d)\n", md_pgs, mem_pgs,
+	       cache->ca_max_ne_pages, cmode);
 	cache->ca_page_sz	= page_sz;
 	cache->ca_page_shift	= page_shift;
 	cache->ca_page_mask	= page_sz - 1;
@@ -3468,15 +3508,11 @@ tier_reserve_nr(struct umem_cache *cache, unsigned int tier)
 
 	switch (tier) {
 	case UMEM_RSRV_TIER_OBJ:
-		/* Use hardcoded single potential dkey bucket for this moment */
-		rsrv_nr += 1;
-		/* fallthrough */
+		/* No dkey pages reserved yet; set the reserve when dkey buckets are implemented. */
 	case UMEM_RSRV_TIER_DKEY:
-		/* No extra reserve for dkey tier so far */
+		rsrv_nr += cache->ca_soemb_tier_reservation_pages;
 		/* fallthrough */
 	case UMEM_RSRV_TIER_TX:
-		/* FIXME: Use allocator interface to get SOE replacement reserve nr */
-		rsrv_nr += 0;
 		break;
 	default:
 		D_ASSERT(0);
@@ -3487,16 +3523,17 @@ tier_reserve_nr(struct umem_cache *cache, unsigned int tier)
 }
 
 /*
- * Grab a free page for E-page mapping triggered by umem_cache_map().
- * This must be called by the new object allocation outside of a transaction (tx),
- * and the caller must not have pinned any pages for the new object.
+ * Grab a free page for E-page mapping triggered by umem_cache_map(). The caller waits in the
+ * TFIFO of @tier, which must match the stage it is in: UMEM_RSRV_TIER_OBJ for a new object
+ * allocation outside of a transaction (tx), where the caller must not have pinned any pages
+ * for the new object; UMEM_RSRV_TIER_TX for a caller which may already hold pinned pages.
  */
 static int
-cache_grab_page(struct umem_cache *cache)
+cache_grab_page(struct umem_cache *cache, unsigned int tier)
 {
 	int rc = 0, retry_cnt = 0;
 
-	cache_tfifo_enter(cache, UMEM_RSRV_TIER_OBJ);
+	cache_tfifo_enter(cache, tier);
 
 	while (cache->ca_pgs_stats[UMEM_PG_STATS_FREE] < 1) {
 		/* Evict unused E page if any */
@@ -3508,7 +3545,7 @@ cache_grab_page(struct umem_cache *cache)
 				rc = 0;
 		} else if (!d_list_empty(&cache->ca_pgs_pinned)) {
 			/* Wait for pinned page being unpinned */
-			cache_tfifo_wait(cache, UMEM_RSRV_TIER_OBJ);
+			cache_tfifo_wait(cache, tier);
 		} else {
 			rc = -DER_INVAL;
 			DL_ERROR(rc, "Grab page failed.");
@@ -3525,7 +3562,7 @@ cache_grab_page(struct umem_cache *cache)
 			break;
 	}
 
-	cache_tfifo_exit(cache, UMEM_RSRV_TIER_OBJ);
+	cache_tfifo_exit(cache, tier);
 	return rc;
 }
 
@@ -3535,7 +3572,7 @@ cache_grab_page(struct umem_cache *cache)
  * If a page is already mapped, check and update the evictability status.
  */
 static int
-cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
+cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, unsigned int tier)
 {
 	struct umem_page_info   *pinfo;
 	uint32_t		 pg_id;
@@ -3570,7 +3607,7 @@ retry:
 
 		if (is_id_evictable(cache, pg_id)) {
 			if (!grab_page) {
-				rc = cache_grab_page(cache);
+				rc = cache_grab_page(cache, tier);
 				if (rc)
 					return rc;
 
@@ -3645,9 +3682,16 @@ cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, unsigned
 	uint32_t		 pg_id;
 	int                      i, pinned, rc = 0;
 	uint8_t                 *pin_bitmap = NULL, inline_bitmap[8];
-	unsigned int             bitmap_sz, tot_avail, rsrv_cnt;
+	unsigned int             bitmap_sz, rsrv_cnt;
 	int                      retry_cnt = 0, restart_cnt = 0;
 	bool                     tfifo_entered = false, inc_stats = true;
+
+	rsrv_cnt = tier_reserve_nr(cache, tier);
+	if (cache->ca_pin_max_ceil < (uint64_t)page_nr + rsrv_cnt) {
+		D_ERROR("Too large pin request. pin_max_ceil:%u, page_nr:%d, rsrv_cnt:%u\n",
+			cache->ca_pin_max_ceil, page_nr, rsrv_cnt);
+		return -DER_INVAL;
+	}
 
 	bitmap_sz = (page_nr + NBBY - 1) / NBBY;
 	if (bitmap_sz <= 8) {
@@ -3692,18 +3736,6 @@ restart:
 	}
 
 	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
-	/* FIXME: Use allocator interface to get tot_avail */
-	tot_avail = cache->ca_mem_pages - cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] -
-		    cache_ne_rsrv_nr(cache);
-	rsrv_cnt  = tier_reserve_nr(cache, tier);
-
-	if (tot_avail < (page_nr - pinned + rsrv_cnt)) {
-		D_ERROR("Too large pin request. tot_avail:%u, page_nr:%u, rsrv_cnt:%u\n", tot_avail,
-			page_nr, rsrv_cnt);
-		rc = -DER_INVAL;
-		goto done;
-	}
-
 	while (cache->ca_pgs_stats[UMEM_PG_STATS_FREE] < (page_nr - pinned + rsrv_cnt)) {
 		/* Evict unused E page if any */
 		if (!d_list_empty(&cache->ca_pgs_lru[1])) {
@@ -3892,7 +3924,8 @@ umem_cache_post_replay(struct umem_store *store)
 }
 
 int
-umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr)
+umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
+	       unsigned int tier)
 {
 	struct umem_cache	*cache = store->cache;
 	uint32_t		 in_pages[UMEM_PAGES_ON_STACK], *out_pages;
@@ -3902,7 +3935,7 @@ umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int ra
 	if (rc)
 		return rc;
 
-	rc = cache_map_pages(cache, out_pages, page_nr);
+	rc = cache_map_pages(cache, out_pages, page_nr, tier);
 	if (rc)
 		DL_ERROR(rc, "Map page failed.");
 
@@ -4002,6 +4035,21 @@ umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle)
 	}
 
 	D_FREE(pin_handle);
+}
+
+uint32_t
+umem_cache_max_pin_pages(struct umem_store *store)
+{
+	struct umem_cache *cache = store->cache;
+	unsigned int       rsrv_nr;
+
+	D_ASSERT(cache != NULL);
+	/* Must match the admission check in cache_pin_pages() for the OBJ tier */
+	rsrv_nr = tier_reserve_nr(cache, UMEM_RSRV_TIER_OBJ);
+	if (cache->ca_pin_max_ceil <= rsrv_nr)
+		return 0;
+
+	return cache->ca_pin_max_ceil - rsrv_nr;
 }
 
 int

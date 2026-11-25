@@ -240,6 +240,16 @@ enum umem_cache_stats {
 	UMEM_CACHE_STATS_MAX,
 };
 
+/** Allocator-provided constraints for managing the umem cache, in pages. */
+struct umem_cache_dav_constraints {
+	/** Maximum non-evictable pages. */
+	uint32_t max_ne_pages;
+	/** Pages reserved for active SOEMBs. */
+	uint32_t soemb_active_pages;
+	/** Pages reserved by cache pinning tiers for SOEMB replacement. */
+	uint32_t soemb_tier_reservation_pages;
+};
+
 /** Global cache status for each umem_store */
 struct umem_cache {
 	struct umem_store *ca_store;
@@ -257,6 +267,12 @@ struct umem_cache {
 	uint32_t         ca_mem_pages;
 	/** Maximum non-evictable memory pages */
 	uint32_t         ca_max_ne_pages;
+	/** Cache pages reserved for active SOEMBs */
+	uint32_t           ca_soemb_active_pages;
+	/** Cache pages reserved for SOEMB replacement */
+	uint32_t           ca_soemb_tier_reservation_pages;
+	/** Per-request pin ceiling in pages, before tier reservations. */
+	uint32_t           ca_pin_max_ceil;
 	/** Page size */
 	uint32_t         ca_page_sz;
 	/** Page size shift */
@@ -315,7 +331,7 @@ struct umem_cache_chkpt_stats {
  * \param[in]	page_sz		Page size
  * \param[in]	md_pgs		Total MD pages
  * \param[in]	mem_pgs		Total memory pages
- * \param[in]	max_ne_pgs	Maximum Non-evictable pages
+ * \param[in]	dav_constraints	Constraints supplied by DAV allocator, or NULL
  * \param[in]	base_off	Offset of the umem cache base
  * \param[in]	base		Start address of the page cache
  * \param[in]	is_evictable_fn	Callback function to check if page is evictable
@@ -326,8 +342,8 @@ struct umem_cache_chkpt_stats {
  */
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
-		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
-		 bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
+		 const struct umem_cache_dav_constraints *dav_constraints, uint32_t base_off,
+		 void *base, bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
 		 int (*evtcb_fn)(int evt_flag, void *arg, uint32_t pg_id), void *arg);
 
 /** Free global cache for umem store.
@@ -427,13 +443,15 @@ enum {
  * \param[in]	store		The umem store
  * \param[in]	ranges		Ranges to be mapped
  * \param[in]	range_nr	Number of ranges
+ * \param[in]	tier		Tier of TFIFO to wait in when mapping an evictable page
  *
  * \return	0		: On success
  *		-DER_BUSY	: Not enough free pages
  *		-ve		: Errors
  */
 int
-umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr);
+umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
+	       unsigned int tier);
 
 /** Load & map MD pages in specified range to memory pages.
  *
@@ -474,6 +492,19 @@ umem_cache_pin(struct umem_store *store, struct umem_cache_range *rangs, int ran
  */
 void
 umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle);
+
+/** Get the maximum number of distinct pages that a single umem_cache_pin() or
+ *  umem_cache_load() request at the UMEM_RSRV_TIER_OBJ tier is guaranteed to be admitted
+ *  for. A larger request may be rejected with -DER_INVAL. This function is primarily
+ *  called to determine the ceiling of the number of evictable memory buckets that can be
+ *  associated with an object.
+ *
+ *  \param[in]	store		The umem store
+ *
+ *  \return Maximum number of pages, could be zero.
+ */
+uint32_t
+umem_cache_max_pin_pages(struct umem_store *store);
 
 /** Reserve few free pages for potential non-evictable zone grow within a transaction.
  *

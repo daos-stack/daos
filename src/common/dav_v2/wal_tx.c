@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2022-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -439,7 +439,7 @@ dav_wal_replay_heap_off2ptr(dav_obj_t *dav_hdl, uint64_t off)
 	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
 			 ? ZONE_MAX_SIZE
 			 : (store->stor_size - rg.cr_off);
-	rc         = umem_cache_load(store, &rg, 1, 0);
+	rc         = umem_cache_load(store, &rg, 1, UMEM_RSRV_TIER_TX);
 	if (rc) {
 		D_ERROR("Failed to load pages to umem cache");
 		errno = daos_der2errno(rc);
