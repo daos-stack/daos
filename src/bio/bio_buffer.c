@@ -1885,9 +1885,8 @@ free:
 static void
 copy_wait_iods(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 {
-	/* The buffer was just released by the last active IOD(s), retry immediately */
-	if (bdb->bdb_active_iods == 0)
-		return;
+	/* The caller made sure of it: an active IOD is going to wake us up */
+	D_ASSERT(bdb->bdb_active_iods > 0);
 
 	/* Other waiters are queued, the destination IOD is going to join the FIFO queue on retry */
 	if (bdb->bdb_queued_iods != 0)
