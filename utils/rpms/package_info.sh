@@ -131,7 +131,7 @@ export uuid_lib
 set_lib_name gperftools dev gperftools gperftools libgoogle-perftools
 export gperftools_dev
 
-set_lib_name hdf5 lib hdf5 hdf5 hdf5
+set_lib_name hdf5 lib hdf5 libhdf5-103 hdf5
 export hdf5_lib
 
 set_lib_name libasan lib libasan libasan8 libasan8
