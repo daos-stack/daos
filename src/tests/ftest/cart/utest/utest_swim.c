@@ -13,12 +13,83 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
+#include <limits.h>
 #include <time.h>
 
 #include <cmocka.h>
 
 #include <cart/api.h>
 #include "../cart/crt_internal.h"
+
+struct swim_fini_test_data {
+	int      reply_count;
+	swim_id_t reply_from;
+	swim_id_t reply_to;
+	int      reply_rc;
+	void    *reply_args;
+};
+
+static int
+swim_fini_test_send_request(struct swim_context *ctx, swim_id_t id, swim_id_t to,
+			    struct swim_member_update *upds, size_t nupds)
+{
+	(void)ctx;
+	(void)id;
+	(void)to;
+	(void)upds;
+	(void)nupds;
+	return 0;
+}
+
+static int
+swim_fini_test_send_reply(struct swim_context *ctx, swim_id_t from, swim_id_t to, int rc,
+			  void *args)
+{
+	struct swim_fini_test_data *data = swim_data(ctx);
+
+	data->reply_count++;
+	data->reply_from = from;
+	data->reply_to   = to;
+	data->reply_rc   = rc;
+	data->reply_args = args;
+	return 0;
+}
+
+static swim_id_t
+swim_fini_test_get_target(struct swim_context *ctx)
+{
+	(void)ctx;
+	return SWIM_ID_INVALID;
+}
+
+static int
+swim_fini_test_get_member_state(struct swim_context *ctx, swim_id_t id,
+				struct swim_member_state *state)
+{
+	(void)ctx;
+	(void)id;
+	(void)state;
+	return -DER_NONEXIST;
+}
+
+static int
+swim_fini_test_set_member_state(struct swim_context *ctx, swim_id_t id,
+				struct swim_member_state *state)
+{
+	(void)ctx;
+	(void)id;
+	(void)state;
+	return 0;
+}
+
+static struct swim_ops swim_fini_test_ops = {
+	.send_request     = swim_fini_test_send_request,
+	.send_reply       = swim_fini_test_send_reply,
+	.get_dping_target = swim_fini_test_get_target,
+	.get_iping_target = swim_fini_test_get_target,
+	.get_member_state = swim_fini_test_get_member_state,
+	.set_member_state = swim_fini_test_set_member_state,
+};
 
 static bool
 rank_is_suspected(struct swim_context *ctx, swim_id_t id)
@@ -88,6 +159,35 @@ test_swim(void **state)
 	assert_int_equal(rc, -DER_ALREADY);
 
 	test_teardown(crt_ctx);
+}
+
+static void
+test_swim_fini_completes_pending_ipings(void **state)
+{
+	struct swim_fini_test_data data = {0};
+	struct swim_context       *ctx;
+	struct swim_item          *item;
+	int                        args;
+	int                        rc;
+
+	ctx = swim_init(1, &swim_fini_test_ops, &data);
+	assert_non_null(ctx);
+
+	rc = swim_ipings_suspend(ctx, 2, 3, &args);
+	assert_int_equal(rc, 0);
+
+	item = TAILQ_FIRST(&ctx->sc_ipings);
+	assert_non_null(item);
+	item->u.si_deadline = d_time_ms(UINT_MAX);
+	d_timeinc(&item->u.si_deadline, NSEC_PER_SEC);
+
+	swim_fini(ctx);
+
+	assert_int_equal(data.reply_count, 1);
+	assert_int_equal(data.reply_from, 3);
+	assert_int_equal(data.reply_to, 2);
+	assert_int_equal(data.reply_rc, -DER_TIMEDOUT);
+	assert_ptr_equal(data.reply_args, &args);
 }
 
 /*
@@ -169,6 +269,7 @@ int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
 	    cmocka_unit_test(test_swim),
+	    cmocka_unit_test(test_swim_fini_completes_pending_ipings),
 	    cmocka_unit_test(test_swim_rank_check_clears_suspect),
 	};
 

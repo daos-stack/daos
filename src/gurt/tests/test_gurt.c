@@ -35,6 +35,7 @@ test_time(void **state)
 {
 	struct timespec	t1;
 	struct timespec	t2;
+	struct timespec	t3 = {.tv_sec = 10, .tv_nsec = NSEC_PER_SEC / 2};
 	uint64_t	timeleft;
 
 	t1.tv_sec = 1;
@@ -43,6 +44,10 @@ test_time(void **state)
 
 	assert_int_equal(t1.tv_sec, 2);
 	assert_int_equal(t1.tv_nsec, 2);
+
+	d_timeinc_ms(&t3, 20000);
+	assert_int_equal(t3.tv_sec, 30);
+	assert_int_equal(t3.tv_nsec, NSEC_PER_SEC / 2);
 
 	t2.tv_sec = 0;
 	t2.tv_nsec = 0;

@@ -766,18 +766,29 @@ out:
 void
 swim_fini(struct swim_context *ctx)
 {
-	struct swim_item *next, *item;
-	struct timespec   now = d_time_ms(UINT_MAX), net_glitch_delay = d_time_ms(0);
-	int               rc;
+	TAILQ_HEAD(, swim_item) targets;
+	struct swim_item       *next, *item;
+	int                     rc;
 
 	if (ctx == NULL)
 		return;
 
-	swim_ipings_update(ctx, &now, &net_glitch_delay);
-	item = TAILQ_FIRST(&ctx->sc_ipings);
+	TAILQ_INIT(&targets);
+	swim_ctx_lock(ctx);
+	while ((item = TAILQ_FIRST(&ctx->sc_ipings)) != NULL) {
+		TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
+		TAILQ_INSERT_TAIL(&targets, item, si_link);
+	}
+	swim_ctx_unlock(ctx);
+
+	item = TAILQ_FIRST(&targets);
 	while (item != NULL) {
 		next = TAILQ_NEXT(item, si_link);
-		TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
+		TAILQ_REMOVE(&targets, item, si_link);
+		rc = ctx->sc_ops->send_reply(ctx, item->si_id, item->si_from, -DER_TIMEDOUT,
+					     item->si_args);
+		if (rc)
+			SWIM_ERROR("send_reply(): "DF_RC"\n", DP_RC(rc));
 		D_FREE(item);
 		item = next;
 	}
