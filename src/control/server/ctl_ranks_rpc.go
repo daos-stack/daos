@@ -141,7 +141,7 @@ func (svc *ControlService) memberStateResults(instances []Engine, tgtState syste
 			continue
 		}
 
-		state := ei.memberState()
+		state := ei.LocalState()
 		if state != tgtState {
 			results = append(results, system.NewMemberResult(rank, errors.New(failMsg),
 				system.MemberStateErrored))

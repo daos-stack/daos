@@ -28,7 +28,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // TestIOEngineInstance_exit establishes that event is published on exit.
@@ -137,41 +136,38 @@ func TestServer_EngineInstance_awaitStart(t *testing.T) {
 		notifyAfter bool // release attempted after the abort
 		expHold     bool // the hold callback (preflight) runs
 		expErr      error
-		expState    system.MemberState
+		expWaiting  bool // still held afterwards
 	}{
-		"not held": {
-			expState: system.MemberStateStopped,
-		},
-		"released by format --init before the gate": {
-			held:     true,
-			notify:   true,
-			expState: system.MemberStateStopped,
+		"not held": {},
+		"released by format --replace before the gate": {
+			held:   true,
+			notify: true,
 		},
 		"held then aborted stays held": {
-			held:     true,
-			abort:    true,
-			expErr:   errStartAborted,
-			expState: system.MemberStateAwaitStart,
+			held:       true,
+			abort:      true,
+			expErr:     errStartAborted,
+			expWaiting: true,
 		},
 		"abort replaces a parked release": {
-			held:     true,
-			notify:   true,
-			abort:    true,
-			expErr:   errStartAborted,
-			expState: system.MemberStateAwaitStart,
+			held:       true,
+			notify:     true,
+			abort:      true,
+			expErr:     errStartAborted,
+			expWaiting: true,
 		},
 		"release does not replace a parked abort": {
 			held:        true,
 			abort:       true,
 			notifyAfter: true,
 			expErr:      errStartAborted,
-			expState:    system.MemberStateAwaitStart,
+			expWaiting:  true,
 		},
 		"held until timeout": {
-			held:     true,
-			expHold:  true,
-			expErr:   context.DeadlineExceeded,
-			expState: system.MemberStateAwaitStart,
+			held:       true,
+			expHold:    true,
+			expErr:     context.DeadlineExceeded,
+			expWaiting: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -183,9 +179,6 @@ func TestServer_EngineInstance_awaitStart(t *testing.T) {
 			held := false
 			ei.holdStart(func() { held = true })
 			ei.waitStart.Store(tc.held)
-			if tc.held {
-				test.AssertEqual(t, system.MemberStateAwaitStart, ei.LocalState(), "")
-			}
 			if tc.notify {
 				ei.NotifyStartReady()
 			}
@@ -200,7 +193,7 @@ func TestServer_EngineInstance_awaitStart(t *testing.T) {
 			defer cancel()
 
 			test.CmpErr(t, tc.expErr, ei.awaitStart(ctx))
-			test.AssertEqual(t, tc.expState, ei.LocalState(), "")
+			test.AssertEqual(t, tc.expWaiting, ei.isAwaitingStart(), "still held")
 			test.AssertEqual(t, tc.expHold, held, "hold callback")
 		})
 	}

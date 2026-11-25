@@ -33,7 +33,6 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		MemberStateUnresponsive,
 		MemberStateAdminExcluded,
 		MemberStateCheckerStarted,
-		MemberStateAwaitStart,
 	}
 
 	strs := []string{
@@ -49,7 +48,6 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		"Unresponsive",
 		"AdminExcluded",
 		"CheckerStarted",
-		"AwaitStart",
 	}
 
 	for i, state := range states {

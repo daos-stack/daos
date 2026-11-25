@@ -1032,11 +1032,11 @@ be reintegrated. Please see the pool operation section for more information.
 
 ### Engine Startup
 
-A `daos_server` only starts an I/O engine when the system expects it to be
-running. After the first `dmg storage format`, engines wait for
+After the first `dmg storage format`, engines wait for
 `dmg system initialize` (or `dmg system extend` for hosts added later). When
 `daos_server` restarts, it restarts the engines whose ranks are members of the
-system.
+system, including ranks that were stopped with `dmg system stop`. A rank
+excluded with `dmg system exclude` is not restarted.
 
 - Initialize a System:
 
@@ -1059,10 +1059,8 @@ $ dmg system extend -l ${new_storage_nodes} [--timeout=<duration>]
 
 The same operation for hosts added to a system that already has pools.
 
-`dmg storage format --init` formats and starts the engines in one step, as
-earlier releases did; on hosts that are already formatted it starts the engines
-still waiting. `dmg storage format --replace` also starts the engine it
-formats, so the rank it replaces rejoins without a further command.
+`dmg storage format --replace` starts the engine it formats, so the rank it
+replaces rejoins without a further command.
 
 ### Engine Auto-Restart
 

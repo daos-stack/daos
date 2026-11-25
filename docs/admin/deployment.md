@@ -1644,11 +1644,8 @@ format, and may be rerun to pick up hosts that did not join, until the first
 pool is created. After that, format new storage nodes and run
 `dmg -l <host>[,...] system extend` instead.
 
-Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
-
-To format and start the engines in one step, as earlier releases did, run
-`dmg storage format --init`; the engines join without `dmg system initialize`.
+`daos_server` logs each successful engine start-up on its storage node:
+`DAOS I/O Engine (v3.0.0) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.domain.`
 
 ## Agent Setup
 

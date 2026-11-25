@@ -320,7 +320,6 @@ type (
 		Reformat bool   `json:"reformat"`
 		Replace  bool   `json:"replace"`
 		Rank     uint32 `json:"rank"` // Specific rank to replace (only valid with replace=true)
-		Start    bool   `json:"start"`
 	}
 
 	// StorageFormatResp contains the response from a storage format request.

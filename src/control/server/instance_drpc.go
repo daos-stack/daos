@@ -146,7 +146,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 		return nil // no rank to return result for
 	}
 
-	localState := ei.memberState()
+	localState := ei.LocalState()
 	if localState != system.MemberStateReady {
 		// member not ready for dRPC comms, annotate result with last error if stopped
 		var err error

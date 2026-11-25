@@ -51,10 +51,8 @@ const (
 	MemberStateAdminExcluded MemberState = 0x0200
 	// MemberStateCheckerStarted indicates that the rank is running in checker mode.
 	MemberStateCheckerStarted MemberState = 0x0400
-	// MemberStateAwaitStart indicates the member is waiting to be started.
-	MemberStateAwaitStart MemberState = 0x0800
 	// MemberStateMax is the last entry indicating end of list.
-	MemberStateMax MemberState = 0x1000
+	MemberStateMax MemberState = 0x0800
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.
@@ -92,8 +90,6 @@ func (ms MemberState) String() string {
 		return "Unresponsive"
 	case MemberStateCheckerStarted:
 		return "CheckerStarted"
-	case MemberStateAwaitStart:
-		return "AwaitStart"
 	default:
 		return "Unknown"
 	}
@@ -123,8 +119,6 @@ func MemberStateFromString(in string) MemberState {
 		return MemberStateUnresponsive
 	case "checkerstarted":
 		return MemberStateCheckerStarted
-	case "awaitstart":
-		return MemberStateAwaitStart
 	default:
 		return MemberStateUnknown
 	}
@@ -144,9 +138,6 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: {
-			MemberStateExcluded: true,
-		},
-		MemberStateAwaitStart: {
 			MemberStateExcluded: true,
 		},
 		MemberStateStarting: {

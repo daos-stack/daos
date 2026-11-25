@@ -1295,9 +1295,11 @@ func startedEngines(resp *control.StartEnginesResp) (map[string][]uuid.UUID, sys
 	return expected, results
 }
 
-func (svc *mgmtSvc) joinedEngines(expected map[string][]uuid.UUID) (map[string][]*system.Member, bool, error) {
+// joinedEngines returns the expected engines that have joined, by host, and
+// their number.
+func (svc *mgmtSvc) joinedEngines(expected map[string][]uuid.UUID) (map[string][]*system.Member, int, error) {
 	joined := make(map[string][]*system.Member)
-	pending := false
+	count := 0
 	for host, uuids := range expected {
 		for _, u := range uuids {
 			m, err := svc.sysdb.FindMemberByUUID(u)
@@ -1305,20 +1307,28 @@ func (svc *mgmtSvc) joinedEngines(expected map[string][]uuid.UUID) (map[string][
 				continue
 			}
 			if err != nil {
-				return nil, false, err
+				return nil, 0, err
 			}
 			if m.State == system.MemberStateJoined {
 				joined[host] = append(joined[host], m)
+				count++
 			}
 		}
-		pending = pending || len(joined[host]) < len(uuids)
 	}
-	return joined, pending, nil
+	return joined, count, nil
 }
 
 // awaitJoins waits for the expected engines to join, for at most joinSecs
 // if non-zero.
 func (svc *mgmtSvc) awaitJoins(ctx context.Context, expected map[string][]uuid.UUID, joinSecs uint32) (map[string][]*system.Member, error) {
+	want := 0
+	for _, uuids := range expected {
+		want += len(uuids)
+	}
+	if want == 0 {
+		return nil, nil
+	}
+
 	var deadline <-chan time.Time
 	if joinSecs > 0 {
 		timer := time.NewTimer(time.Duration(joinSecs) * time.Second)
@@ -1326,13 +1336,19 @@ func (svc *mgmtSvc) awaitJoins(ctx context.Context, expected map[string][]uuid.U
 		deadline = timer.C
 	}
 
+	logged := -1
 	for {
-		joined, pending, err := svc.joinedEngines(expected)
+		joined, got, err := svc.joinedEngines(expected)
 		if err != nil {
 			return nil, err
 		}
-		if !pending {
+		if got == want {
+			svc.log.Infof("all %d engines joined", want)
 			return joined, nil
+		}
+		if got != logged {
+			svc.log.Debugf("%d of %d engines joined", got, want)
+			logged = got
 		}
 		select {
 		case <-ctx.Done():

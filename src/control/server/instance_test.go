@@ -333,10 +333,6 @@ func (mi *MockInstance) IsReady() bool {
 	return mi.cfg.Ready.Load()
 }
 
-func (mi *MockInstance) memberState() system.MemberState {
-	return mi.LocalState()
-}
-
 func (mi *MockInstance) LocalState() system.MemberState {
 	return mi.cfg.LocalState
 }

@@ -119,12 +119,11 @@ class DaosServerManager(SubprocessManager):
         # Server states
         self._states = {
             "all": [
-                "awaitformat", "awaitstart", "starting", "ready", "joined", "stopping",
+                "awaitformat", "starting", "ready", "joined", "stopping",
                 "stopped", "excluded", "errored", "unresponsive", "unknown"],
             "running": ["ready", "joined"],
             "stopped": [
-                "awaitstart", "stopping", "stopped", "excluded", "errored", "unresponsive",
-                "unknown"],
+                "stopping", "stopped", "excluded", "errored", "unresponsive", "unknown"],
             "errored": ["errored"],
         }
 
@@ -666,14 +665,12 @@ class DaosServerManager(SubprocessManager):
             self.manager.assign_hosts(orig_hosts)
             self.manager.job.update_pattern(orig_pattern, orig_count)
 
-    def start(self, extend=False, start_engines=False):
+    def start(self, extend=False):
         """Start the server through the job manager.
 
         Args:
             extend (bool, optional): whether these hosts join a system that is already
                 initialized. Defaults to False.
-            start_engines (bool, optional): format with --init so the engines join without
-                dmg system initialize. Defaults to False.
         """
         # Prepare the servers
         self.prepare()
@@ -687,17 +684,16 @@ class DaosServerManager(SubprocessManager):
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        self.storage_format(init=start_engines)
+        self.storage_format()
 
         # Start the engines and wait for them to join
-        if not start_engines:
-            timeout = f"{self.manager.job.pattern_timeout.value}s"
-            if extend:
-                self.log.info("<SERVER> Extending the system to hosts: <%s>", self.dmg.hostlist)
-                self.dmg.system_extend(hosts=self._hosts, timeout=timeout)
-            else:
-                self.log.info("<SERVER> Initializing hosts: <%s>", self.dmg.hostlist)
-                self.dmg.system_initialize(hosts=self._hosts, timeout=timeout)
+        timeout = f"{self.manager.job.pattern_timeout.value}s"
+        if extend:
+            self.log.info("<SERVER> Extending the system to hosts: <%s>", self.dmg.hostlist)
+            self.dmg.system_extend(hosts=self._hosts, timeout=timeout)
+        else:
+            self.log.info("<SERVER> Initializing hosts: <%s>", self.dmg.hostlist)
+            self.dmg.system_initialize(hosts=self._hosts, timeout=timeout)
 
         # Wait for all the engines to start
         self.detect_engine_start()

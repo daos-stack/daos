@@ -75,7 +75,7 @@ func (ei *EngineInstance) awaitStart(ctx context.Context) error {
 		return nil
 	}
 
-	// A format with --init or --replace releases the engine before it gets here.
+	// A format with --replace releases the engine before it gets here.
 	select {
 	case start := <-ei.startReady:
 		return released(start)

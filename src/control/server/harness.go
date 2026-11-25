@@ -69,7 +69,6 @@ type Engine interface {
 	IsStarted() bool
 	IsReady() bool
 	LocalState() system.MemberState
-	memberState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context)
 	SetupRank(context.Context, ranklist.Rank, uint32) error

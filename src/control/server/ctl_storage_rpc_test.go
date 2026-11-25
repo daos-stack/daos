@@ -1958,7 +1958,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		expErr           error
 		reformat         bool // indicates setting of reformat parameter
 		replace          bool // indicates setting of replace parameter
-		start            bool // indicates setting of start parameter
 		expStartReady    bool // instances are released from the start hold
 	}{
 		"nil request": {
@@ -1982,23 +1981,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			sClass:  storage.ClassRam,
 			sSize:   6,
 			bmbcs:   []*bdev.MockBackendConfig{{}},
-			expResp: &ctlpb.StorageFormatResp{
-				Crets: []*ctlpb.NvmeControllerResult{},
-				Mrets: []*ctlpb.ScmMountResult{
-					{
-						Mntpoint: "/mnt/daos",
-						State:    new(ctlpb.ResponseState),
-					},
-				},
-			},
-		},
-		"ram no nvme; start set": {
-			start:         true,
-			expStartReady: true,
-			sMounts:       []string{"/mnt/daos"},
-			sClass:        storage.ClassRam,
-			sSize:         6,
-			bmbcs:         []*bdev.MockBackendConfig{{}},
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{},
 				Mrets: []*ctlpb.ScmMountResult{
@@ -2216,44 +2198,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		// if emulated scm (ram) is already formatted and mounted (with
 		// superblock) then awaitStorageReady() will not wait and format
-		"ram already mounted; start releases the held engine": {
-			start:         true,
-			expStartReady: true,
-			scmMounted:    true,
-			sMounts:       []string{"/mnt/daos"},
-			sClass:        storage.ClassRam,
-			sSize:         6,
-			bClass:        storage.ClassNvme,
-			bDevs:         [][]string{{mockNvmeController0.PciAddr}},
-			bmbcs: []*bdev.MockBackendConfig{
-				{
-					ScanRes: &storage.BdevScanResponse{
-						Controllers: storage.NvmeControllers{mockNvmeController0},
-					},
-				},
-			},
-			expResp: &ctlpb.StorageFormatResp{
-				Crets: []*ctlpb.NvmeControllerResult{
-					{
-						PciAddr: storage.NilBdevAddress,
-						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
-								0),
-						},
-					},
-				},
-				Mrets: []*ctlpb.ScmMountResult{
-					{
-						Mntpoint: "/mnt/daos",
-						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   "SCM is already formatted",
-						},
-					},
-				},
-			},
-		},
 		// attempt should fail with no reformat option set
 		"ram already mounted no reformat": {
 			scmMounted: true,
@@ -2797,7 +2741,6 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				req = &ctlpb.StorageFormatReq{
 					Reformat: tc.reformat,
 					Replace:  tc.replace,
-					Start:    tc.start,
 				}
 			}
 			if tc.noSrvCfg {
