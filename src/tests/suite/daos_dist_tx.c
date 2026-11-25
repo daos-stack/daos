@@ -3363,6 +3363,9 @@ dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool 
 		lookup_single(dkey, akey, idx, rbuf, size, DAOS_TX_NONE, &req);
 		assert_memory_equal(wbuf, rbuf, size);
 
+		print_message("Wait for exclusion rebuild to complete ...\n");
+		test_rebuild_wait(&arg, 1);
+
 		print_message("Reintegrate rank %d ...\n", kill_rank);
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  kill_rank, -1);
