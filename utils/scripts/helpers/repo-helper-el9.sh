@@ -13,7 +13,7 @@ set -uex
 # for custom packages if present.
 
 : "${REPO_FILE_URL:=}"
-: "${BASE_DISTRO:=rockylinux/rockylinux:$MAJOR_VER}"
+: "${BASE_DISTRO:=rockylinux/rockylinux:9}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
@@ -127,6 +127,9 @@ module_hotfixes=true\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
 done
 
 disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
+if [ -n "$REPO_FILE_URL" ]; then
+    dnf config-manager --set-disabled daos-stack-deps-el-9-stable-local-artifactory
+fi
 
 if [ -n "$REPO_FILE_URL" ]; then
 # Calculate trusted-host and trusted_base_url for artifactory/repository
