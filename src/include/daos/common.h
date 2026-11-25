@@ -863,6 +863,8 @@ enum {
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
 #define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)
 #define DAOS_NVME_WAL_TX_LOST		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x54)
+/* bio_copy_prep() yields with both buffers held, fail value: for how long, in microseconds */
+#define DAOS_NVME_COPY_YIELD              (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x55)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)

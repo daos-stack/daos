@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -493,6 +493,7 @@ struct bio_rsrvd_dma {
 	unsigned int		  brd_chk_cnt;
 };
 
+/* clang-format off */
 /* I/O descriptor */
 struct bio_desc {
 	struct bio_io_lug        bd_io_lug;
@@ -509,12 +510,17 @@ struct bio_desc {
 	unsigned int		 bd_type;
 	/* Total bytes landed to data blob */
 	unsigned int		 bd_nvme_bytes;
-	/* Flags */
+	/*
+	 * Flags
+	 *
+	 * bd_copy_src: source IOD of a copy, prepared after the destination IOD with the
+	 * destination buffer held, so it never waits for DMA buffer, see bio_copy_prep().
+	 */
 	unsigned int		 bd_buffer_prep:1,
 				 bd_dma_issued:1,
 				 bd_retry:1,
 				 bd_rdma:1,
-				 bd_copy_dst:1,
+				 bd_copy_src:1,
 				 bd_in_fifo:1,
 				 bd_async_post:1,
 				 bd_non_blocking:1;
@@ -529,6 +535,7 @@ struct bio_desc {
 	unsigned int		 bd_sgl_cnt;
 	struct bio_sglist	 bd_sgls[0];
 };
+/* clang-format on */
 
 static inline struct spdk_thread *
 owner_thread(struct bio_blobstore *bbs)
