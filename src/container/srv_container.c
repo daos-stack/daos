@@ -1695,6 +1695,7 @@ cont_delete_label(struct rdb_tx *tx, struct cont *cont, const char *label, uuid_
 	return 0;
 }
 
+/* Trigger testing... */
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 {
