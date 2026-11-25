@@ -3,6 +3,7 @@
 #  Copyright 2024 Intel Corporation.
 #  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 #  Copyright 2025-2026 Google LLC
+#  Copyright 2026 Gluesys Inc.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -36,6 +37,8 @@ regex_google='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{
 shortname_google="Google LLC"
 regex_enakta='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Enakta.*$))'
 shortname_enakta="Enakta Labs Ltd"
+regex_gluesys='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Gluesys.*$))'
+shortname_gluesys="Gluesys Inc."
 year=$(date +%Y)
 errors=0
 targets=(
@@ -112,6 +115,10 @@ case "$user_domain" in
     "enakta")
         regex_user="$regex_enakta"
         shortname_user="$shortname_enakta"
+        ;;
+    "gluesys")
+        regex_user="$regex_gluesys"
+        shortname_user="$shortname_gluesys"
         ;;
     *)
         regex_user="$regex_hpe"

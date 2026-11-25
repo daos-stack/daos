@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
  * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Gluesys Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -731,6 +732,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	uid_t                uid      = geteuid();
 	gid_t                gid      = getegid();
 	unsigned int         co_flags = DAOS_COO_EX;
+	int                  mflags   = O_RDWR;
 	char                 now_name[24];
 	struct tm           *now_tm;
 	daos_size_t          len;
@@ -761,7 +763,20 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		return daos_der2errno(rc);
 	}
 
-	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+	/** a container created in balanced mode can only be mounted with DFS_BALANCED */
+	rc = dfs_mount(poh, coh, O_RDONLY | DFS_BALANCED, &dfs);
+	if (rc) {
+		D_ERROR("dfs_mount() failed (%d)\n", rc);
+		D_GOTO(out_cont, rc);
+	}
+	mflags |= dfs->attr.da_mode & MODE_MASK;
+	rc = dfs_umount(dfs);
+	if (rc) {
+		D_ERROR("dfs_umount() failed (%d)\n", rc);
+		D_GOTO(out_cont, rc);
+	}
+
+	rc = dfs_mount(poh, coh, mflags, &dfs);
 	if (rc) {
 		D_ERROR("dfs_mount() failed (%d)\n", rc);
 		D_GOTO(out_cont, rc);
@@ -1677,7 +1692,8 @@ dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *s
 		return daos_der2errno(rc);
 	}
 
-	rc = dfs_mount(poh, coh, O_RDONLY, &dfs);
+	/** a relaxed-mode container may be mounted with DFS_BALANCED, but not the reverse */
+	rc = dfs_mount(poh, coh, O_RDONLY | DFS_BALANCED, &dfs);
 	if (rc) {
 		D_ERROR("dfs_mount() failed (%d)\n", rc);
 		D_GOTO(out_cont, rc);
