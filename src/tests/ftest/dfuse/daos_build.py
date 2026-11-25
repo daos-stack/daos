@@ -116,13 +116,14 @@ def run_build_test(self, cache_mode, il_lib=None):
         distro = f"leap{distro_info.version}"
     elif "ubuntu" in distro_info.name.lower():
         distro = "ubuntu"
+    repo_distro = re.sub(r"([A-Za-z])(?=\d)", r"\1-", distro, count=1).replace('leap', 'sl')
+    disable_distro = f"daos-stack-deps-{repo_distro}-stable-local-artifactory"
 
     cmds = [f'{sys.executable} -m venv {mount_dir}/venv',
             f'git clone https://github.com/daos-stack/daos.git {build_dir}',
             f'git -C {build_dir} checkout {__get_daos_build_checkout(self)}',
             f'git -C {build_dir} submodule update --init --recursive',
-            f'cp {build_dir}/utils/scripts/repo-helper-{distro}.sh /tmp/repo-helper.sh',
-            'sudo -E /tmp/repo-helper.sh -y',
+            f'sudo dnf config-manager --set-disabled {disable_distro}',
             f'cp {build_dir}/utils/scripts/install-{distro}.sh /tmp/install.sh',
             'sudo -E NO_OPENMPI_DEVEL=1 /tmp/install.sh -y',
             'python3 -m pip install pip --upgrade',
