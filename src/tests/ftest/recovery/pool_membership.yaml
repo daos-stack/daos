@@ -23,6 +23,7 @@ pool:
 
 container:
   type: POSIX
+  properties: rd_fac:0
 
 ior:
   client_processes:
