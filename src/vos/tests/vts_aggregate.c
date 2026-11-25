@@ -3120,6 +3120,355 @@ aggregate_35(void **state)
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 }
 
+#define BIO_COPY_ULT_NR   4 /* one for the retry of a copy, three concurrent ones */
+#define BIO_COPY_EXT_NR   (BIO_COPY_ULT_NR * 2)
+#define BIO_COPY_SIZE     (8UL << 20) /* a whole DMA chunk */
+#define BIO_COPY_HOLD_MAX 1024
+#define BIO_COPY_WAIT_SEC 10
+#define BIO_COPY_LOAD_US  500000 /* simulated load of the source, longer than a real one here */
+#define BIO_COPY_LAG_US   100000 /* a copy starts this long after the previous one */
+
+struct bio_copy_ult_arg {
+	struct bio_io_context *ca_ioctxt;
+	struct umem_instance  *ca_umem;
+	bio_addr_t             ca_src;
+	bio_addr_t             ca_dst;
+	bool                   ca_done;
+	int                    ca_rc;
+};
+
+struct bio_copy_tst {
+	struct bio_io_context  *ct_ioctxt;
+	struct umem_instance   *ct_umem;
+	ABT_pool                ct_abt_pool;
+	/* IODs holding a DMA chunk each */
+	struct bio_desc       **ct_holders;
+	int                     ct_hold_nr;
+	/* The copies */
+	struct bio_copy_ult_arg ct_ca[BIO_COPY_ULT_NR];
+	ABT_thread              ct_ults[BIO_COPY_ULT_NR];
+	int                     ct_ult_nr;
+	bio_addr_t              ct_addrs[BIO_COPY_EXT_NR];
+	/* Errors, checked once everything is cleaned up */
+	int                     ct_failed;
+};
+
+static void
+bio_copy_ult(void *data)
+{
+	struct bio_copy_ult_arg *ca = data;
+	struct bio_copy_desc    *desc;
+	struct bio_sglist        bsgl_src;
+	struct bio_sglist        bsgl_dst;
+	int                      rc;
+
+	rc = bio_sgl_init(&bsgl_src, 1);
+	D_ASSERT(rc == 0);
+	rc = bio_sgl_init(&bsgl_dst, 1);
+	D_ASSERT(rc == 0);
+	bio_iov_set(&bsgl_src.bs_iovs[0], ca->ca_src, BIO_COPY_SIZE);
+	bio_iov_set(&bsgl_dst.bs_iovs[0], ca->ca_dst, BIO_COPY_SIZE);
+	bsgl_src.bs_nr_out = 1;
+	bsgl_dst.bs_nr_out = 1;
+
+	rc = bio_copy_prep(ca->ca_ioctxt, ca->ca_umem, &bsgl_src, &bsgl_dst, &desc);
+	/* Got both buffers, that's all the test needs: don't write the destination */
+	if (rc == 0)
+		bio_copy_post(desc, -DER_CANCELED);
+
+	bio_sgl_fini(&bsgl_src);
+	bio_sgl_fini(&bsgl_dst);
+	ca->ca_rc   = rc;
+	ca->ca_done = true;
+}
+
+/* Hold a DMA chunk without waiting, returns -DER_AGAIN when there is none */
+static int
+bio_copy_hold(struct bio_copy_tst *tst)
+{
+	struct bio_desc   *biod;
+	struct bio_sglist *bsgl;
+	int                rc;
+
+	if (tst->ct_hold_nr >= BIO_COPY_HOLD_MAX)
+		return -DER_OVERFLOW;
+
+	biod = bio_iod_alloc(tst->ct_ioctxt, tst->ct_umem, 1, BIO_IOD_TYPE_UPDATE);
+	if (biod == NULL)
+		return -DER_NOMEM;
+
+	bsgl = bio_iod_sgl(biod, 0);
+	rc   = bio_sgl_init(bsgl, 1);
+	if (rc == 0) {
+		bio_iov_set(&bsgl->bs_iovs[0], tst->ct_addrs[0], BIO_COPY_SIZE);
+		bsgl->bs_nr_out = 1;
+		rc              = bio_iod_try_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
+	}
+	if (rc != 0) {
+		bio_iod_free(biod);
+		return rc;
+	}
+	tst->ct_holders[tst->ct_hold_nr++] = biod;
+	return 0;
+}
+
+/* Release @nr held DMA chunks, which wakes up the IOD waiting for DMA buffer */
+static void
+bio_copy_release(struct bio_copy_tst *tst, int nr)
+{
+	int rc;
+
+	while (nr-- > 0 && tst->ct_hold_nr > 0) {
+		tst->ct_hold_nr--;
+		rc = bio_iod_post(tst->ct_holders[tst->ct_hold_nr], -DER_CANCELED);
+		if (rc != -DER_CANCELED) {
+			print_message("release DMA chunk: " DF_RC "\n", DP_RC(rc));
+			tst->ct_failed++;
+		}
+		bio_iod_free(tst->ct_holders[tst->ct_hold_nr]);
+	}
+}
+
+static int
+bio_copy_start(struct bio_copy_tst *tst)
+{
+	int idx = tst->ct_ult_nr;
+	int rc;
+
+	D_ASSERT(idx < BIO_COPY_ULT_NR);
+	tst->ct_ca[idx].ca_ioctxt = tst->ct_ioctxt;
+	tst->ct_ca[idx].ca_umem   = tst->ct_umem;
+	tst->ct_ca[idx].ca_src    = tst->ct_addrs[idx * 2];
+	tst->ct_ca[idx].ca_dst    = tst->ct_addrs[idx * 2 + 1];
+	rc = ABT_thread_create(tst->ct_abt_pool, bio_copy_ult, &tst->ct_ca[idx],
+			       ABT_THREAD_ATTR_NULL, &tst->ct_ults[idx]);
+	if (rc != ABT_SUCCESS) {
+		print_message("create copy ULT %d: %d\n", idx, rc);
+		tst->ct_failed++;
+		return rc;
+	}
+	tst->ct_ult_nr++;
+	return 0;
+}
+
+/* Run the copies [@first, @first + @nr) for at most @msec, returns how many completed */
+static int
+copy_tst_run(struct bio_copy_tst *tst, int first, int nr, uint64_t msec)
+{
+	uint64_t start = daos_getmtime_coarse();
+	int      done_nr, i;
+
+	do {
+		ABT_thread_yield();
+		for (i = first, done_nr = 0; i < first + nr; i++)
+			done_nr += tst->ct_ca[i].ca_done ? 1 : 0;
+		if (done_nr == nr)
+			break;
+		usleep(1000);
+	} while (daos_getmtime_coarse() < start + msec);
+
+	return done_nr;
+}
+
+/*
+ * A copy needs a DMA chunk for the destination and one for the source. With a single chunk
+ * available it gets the buffer of the destination only: it must release it and wait, then get
+ * both buffers once a second chunk is available.
+ */
+static void
+bio_copy_tst_retry(struct bio_copy_tst *tst)
+{
+	int done_nr, rc;
+
+	bio_copy_release(tst, 1);
+	if (bio_copy_start(tst) != 0)
+		return;
+
+	done_nr = copy_tst_run(tst, 0, 1, 200);
+	print_message("copy with one DMA chunk: %s\n", done_nr ? "completed" : "waiting");
+	if (done_nr != 0) {
+		tst->ct_failed++;
+		return;
+	}
+
+	/* The copy waits without any buffer: the chunk is available to another IOD */
+	rc = bio_copy_hold(tst);
+	print_message("hold the DMA chunk while the copy waits: " DF_RC "\n", DP_RC(rc));
+	if (rc != 0)
+		tst->ct_failed++;
+	else
+		bio_copy_release(tst, 1);
+
+	bio_copy_release(tst, 1);
+	done_nr = copy_tst_run(tst, 0, 1, BIO_COPY_WAIT_SEC * 1000);
+	print_message("copy with two DMA chunks: %s\n", done_nr ? "completed" : "waiting");
+	if (done_nr != 1)
+		tst->ct_failed++;
+}
+
+/*
+ * Two chunks are available, enough for one copy at a time, and three copies are started one
+ * after the other. They only depend on each other, so they must all complete while the test
+ * holds the other chunks:
+ * - if two copies keep the buffer of the source while waiting for the buffer of the destination,
+ *   none of them ever completes (deadlock);
+ * - if a copy releases its buffer to wait and the buffer is taken as first buffer by the next
+ *   copy, while another copy is still loading its source, they can go on like this forever
+ *   (livelock).
+ */
+static void
+bio_copy_tst_concurrent(struct bio_copy_tst *tst)
+{
+	int first = tst->ct_ult_nr;
+	int nr    = BIO_COPY_ULT_NR - first;
+	int done_nr, i;
+
+	/* When a copy is done loading its source, the next one is still loading */
+	daos_fail_value_set(BIO_COPY_LOAD_US);
+	daos_fail_loc_set(DAOS_NVME_COPY_YIELD | DAOS_FAIL_ALWAYS);
+	for (i = 0; i < nr; i++) {
+		if (bio_copy_start(tst) != 0)
+			return;
+		ABT_thread_yield();
+		usleep(BIO_COPY_LAG_US);
+	}
+
+	done_nr = copy_tst_run(tst, first, nr, BIO_COPY_WAIT_SEC * 1000);
+	print_message("%d of %d copies completed while the other DMA chunks are held\n", done_nr,
+		      nr);
+	if (done_nr != nr)
+		tst->ct_failed++;
+}
+
+/*
+ * Concurrent bio_copy_prep() (VOS aggregation of different containers on the same xstream) must
+ * make progress when the DMA buffer is short and can't grow: all the DMA chunks but the ones
+ * the copies are supposed to use are held by the test.
+ */
+static void
+aggregate_39(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct vos_pool       *pool;
+	struct bio_copy_tst   *tst;
+	vos_pool_info_t        pool_info;
+	struct vos_pool_space *vps = &pool_info.pif_space;
+	struct bio_sglist     *bsgl;
+	ABT_xstream            xstream;
+	daos_handle_t          iohs[BIO_COPY_EXT_NR];
+	daos_unit_oid_t        oid;
+	char                   dkey[UPDATE_DKEY_SIZE] = {0};
+	char                   akeys[BIO_COPY_EXT_NR][UPDATE_AKEY_SIZE];
+	daos_key_t             dkey_iov;
+	daos_iod_t             iod;
+	daos_recx_t            recx;
+	int                    ioh_nr = 0;
+	int                    rc, i, failed;
+
+	/* The copies don't interleave without DAOS_NVME_COPY_YIELD */
+	FAULT_INJECTION_REQUIRED();
+
+	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+	assert_rc_equal(rc, 0);
+	if (NVME_TOTAL(vps) == 0) {
+		print_message("NVMe isn't enabled, skip test\n");
+		skip();
+	}
+
+	D_ALLOC_PTR(tst);
+	assert_non_null(tst);
+	D_ALLOC_ARRAY(tst->ct_holders, BIO_COPY_HOLD_MAX);
+	assert_non_null(tst->ct_holders);
+	pool           = vos_hdl2pool(arg->ctx.tc_po_hdl);
+	tst->ct_ioctxt = vos_data_ioctxt(pool);
+	tst->ct_umem   = vos_pool2umm(pool);
+
+	/* Nothing below asserts before the cleanup: the ULTs use what is set up here */
+	rc = ABT_xstream_self(&xstream);
+	if (rc == ABT_SUCCESS)
+		rc = ABT_xstream_get_main_pools(xstream, 1, &tst->ct_abt_pool);
+	if (rc != ABT_SUCCESS) {
+		print_message("get the ABT pool: %d\n", rc);
+		tst->ct_failed++;
+		goto out;
+	}
+
+	/* Reserve the NVMe extents used as source and destination of the copies */
+	oid = dts_unit_oid_gen(0, 0);
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	recx.rx_idx = 0;
+	recx.rx_nr  = BIO_COPY_SIZE;
+	for (i = 0; i < BIO_COPY_EXT_NR; i++) {
+		memset(&iod, 0, sizeof(iod));
+		memset(akeys[i], 0, UPDATE_AKEY_SIZE);
+		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
+		d_iov_set(&iod.iod_name, akeys[i], strlen(akeys[i]));
+		iod.iod_type  = DAOS_IOD_ARRAY;
+		iod.iod_size  = 1;
+		iod.iod_nr    = 1;
+		iod.iod_recxs = &recx;
+
+		rc = vos_update_begin(arg->ctx.tc_co_hdl, oid, i + 1, 0, &dkey_iov, 1, &iod, NULL,
+				      0, &iohs[i], NULL);
+		if (rc != 0) {
+			print_message("reserve extent %d: " DF_RC "\n", i, DP_RC(rc));
+			tst->ct_failed++;
+			goto out;
+		}
+		ioh_nr++;
+		bsgl = vos_iod_sgl_at(iohs[i], 0);
+		if (bsgl == NULL || bsgl->bs_nr_out != 1 ||
+		    bio_iov2media(&bsgl->bs_iovs[0]) != DAOS_MEDIA_NVME) {
+			print_message("extent %d isn't a single NVMe extent\n", i);
+			tst->ct_failed++;
+			goto out;
+		}
+		tst->ct_addrs[i] = bsgl->bs_iovs[0].bi_addr;
+	}
+
+	/* Hold all the DMA chunks */
+	do {
+		rc = bio_copy_hold(tst);
+	} while (rc == 0);
+	print_message("%d DMA chunks held: " DF_RC "\n", tst->ct_hold_nr, DP_RC(rc));
+	if (rc != -DER_AGAIN || tst->ct_hold_nr < 3) {
+		tst->ct_failed++;
+		goto out;
+	}
+
+	bio_copy_tst_retry(tst);
+	if (tst->ct_failed == 0)
+		bio_copy_tst_concurrent(tst);
+out:
+	/* Release the held chunks, which also unblocks the copies which didn't complete */
+	bio_copy_release(tst, tst->ct_hold_nr);
+
+	for (i = 0; i < tst->ct_ult_nr; i++) {
+		rc = ABT_thread_free(&tst->ct_ults[i]);
+		if (rc != ABT_SUCCESS || tst->ct_ca[i].ca_rc != 0) {
+			print_message("copy %d: join rc %d, " DF_RC "\n", i, rc,
+				      DP_RC(tst->ct_ca[i].ca_rc));
+			tst->ct_failed++;
+		}
+	}
+	daos_fail_loc_set(0);
+	daos_fail_value_set(0);
+
+	for (i = 0; i < ioh_nr; i++) {
+		rc = vos_update_end(iohs[i], 0, &dkey_iov, -DER_CANCELED, NULL, NULL);
+		if (rc != -DER_CANCELED) {
+			print_message("release extent %d: " DF_RC "\n", i, DP_RC(rc));
+			tst->ct_failed++;
+		}
+	}
+
+	failed = tst->ct_failed;
+	D_FREE(tst->ct_holders);
+	D_FREE(tst);
+	assert_int_equal(failed, 0);
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -3199,6 +3548,7 @@ static const struct CMUnitTest aggregate_tests[] = {
     {"VOS436: Aggregate SV, multiple objects, flat dkeys", aggregate_36, NULL, agg_tst_teardown},
     {"VOS437: Aggregate EV, multiple objects, flat dkeys", aggregate_37, NULL, agg_tst_teardown},
     {"VOS438: Enumeration anchor across aggregation split", aggregate_38, NULL, agg_tst_teardown},
+    {"VOS439: Concurrent copies with DMA buffer shortage", aggregate_39, NULL, agg_tst_teardown},
 };
 
 int
