@@ -1834,7 +1834,7 @@ crt_progress_legacy(struct crt_context *ctx, int64_t timeout)
 		}
 		deadline = ctx->cc_prog_cb(ctx, deadline_p, ctx->cc_prog_cb_arg);
 		 if (deadline_p != NULL) {
-			timeout = d_time2ms(d_timediff(&now, &deadline));
+			timeout = d_time2us(d_timediff(&now, &deadline));
 			if (timeout < 0)
 				timeout = 0;
 		}
@@ -1951,7 +1951,7 @@ crt_progress_cond_legacy(struct crt_context *ctx, int64_t timeout, crt_progress_
 			deadline = ctx->cc_prog_cb(ctx, deadline_p, ctx->cc_prog_cb_arg);
 			if (deadline_p != NULL) {
 				if (d_timeless(&ts_now, &deadline))
-					timeout = d_time2ms(d_timediff(&ts_now, &deadline));
+					timeout = d_time2us(d_timediff(&ts_now, &deadline));
 				else
 					timeout = 0;
 			}
