@@ -26,7 +26,7 @@ pool:
 
 container:
   # the smallest cell size keeps a full stripe at 8KiB for OC_EC_2P1G1
-  properties: ec_cell_sz:4KiB
+  properties: ec_cell_sz:4KiB,rd_fac:1
 
 dataset:
   obj_class: OC_EC_2P1G1

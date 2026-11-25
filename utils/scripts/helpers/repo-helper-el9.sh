@@ -13,7 +13,7 @@ set -uex
 # for custom packages if present.
 
 : "${REPO_FILE_URL:=}"
-: "${BASE_DISTRO:=rockylinux/rockylinux:$MAJOR_VER}"
+: "${BASE_DISTRO:=rockylinux/rockylinux:9}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 : "${DAOS_LAB_CA_FILE_URL:=}"

@@ -325,10 +325,10 @@ int obj_tgt_query(struct obj_tgt_query_args *otqa, uuid_t po_uuid, uuid_t co_hdl
 		  uint32_t count, uint32_t *shards, struct dtx_id *xid);
 
 struct daos_cpd_args {
-	struct obj_io_context	*dca_ioc;
-	crt_rpc_t		*dca_rpc;
-	ABT_future		 dca_future;
-	uint32_t		 dca_idx;
+	struct obj_io_context *dca_ioc;
+	crt_rpc_t             *dca_rpc;
+	uint32_t               dca_idx;
+	int                    dca_leader;
 };
 
 static inline uint32_t
