@@ -481,7 +481,7 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		// not running, so it's safe to swallow these errors. Any
 		// other error should be returned.
 		if !(system.IsUnavailable(err) || system.IsUninitialized(err) ||
-			err == errMSConnectionFailure) {
+			IsMSConnectionFailure(err)) {
 			return err
 		}
 
