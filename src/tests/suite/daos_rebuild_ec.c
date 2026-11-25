@@ -24,8 +24,7 @@
 #include <daos/task.h>
 
 static void
-rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
-		    int kill_parity_nr, int write_type)
+rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr, int kill_parity_nr)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oid;
@@ -47,18 +46,23 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	if (write_type == PARTIAL_UPDATE)
-		write_ec_partial(&req, arg->index, 0);
-	else if (write_type == FULL_UPDATE)
-		write_ec_full(&req, arg->index, 0);
-	else if (write_type == FULL_PARTIAL_UPDATE)
-		write_ec_full_partial(&req, arg->index, 0);
-	else if (write_type == PARTIAL_FULL_UPDATE)
-		write_ec_partial_full(&req, arg->index, 0);
+	/*
+	 * Every update type on its own dkeys, all rebuilt by the same failures.
+	 * The EC shards rotate with the dkey, so the failed shards hold data
+	 * cells of some dkeys and parity cells of the others.
+	 */
+	write_ec_partial(&req, PARTIAL_UPDATE, 0);
+	write_ec_full(&req, FULL_UPDATE, 0);
+	write_ec_full_partial(&req, FULL_PARTIAL_UPDATE, 0);
+	write_ec_partial_full(&req, PARTIAL_FULL_UPDATE, 0);
 
 	get_killing_rank_by_oid(arg, oid, kill_data_nr, kill_parity_nr,
 				kill_ranks, &kill_ranks_num);
 
+	/*
+	 * Kill the engines for the first failure, to cover the rebuild and the
+	 * reintegration with inflight IO after a real engine crash/restart.
+	 */
 	rebuild_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, true);
 
 	arg->rebuild_cb = reintegrate_inflight_io;
@@ -70,30 +74,27 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	ioreq_fini(&req);
 
 	/*
-	 * let's kill extra data node to verify parity is correct.
+	 * let's exclude extra data node to verify parity is correct. No crash
+	 * is needed here, exclude/reintegrate is much faster than kill/restart.
 	 */
 	if (oclass == OC_EC_2P1G1) {
 		get_killing_rank_by_oid(arg, oid, 1, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, true);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);
 	} else { /* oclass OC_EC_4P2G1 */
 		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, true);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, false);
 	}
 
 	if (oclass == OC_EC_2P1G1)
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, true);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);
 	else /* oclass OC_EC_4P2G1 */
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, true);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, false);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	if (write_type == PARTIAL_UPDATE)
-		verify_ec_partial(&req, arg->index, 0);
-	else if (write_type == FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
-	else if (write_type == FULL_PARTIAL_UPDATE)
-		verify_ec_full_partial(&req, arg->index, 0);
-	else if (write_type == PARTIAL_FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
+	verify_ec_partial(&req, PARTIAL_UPDATE, 0);
+	verify_ec_full(&req, FULL_UPDATE, 0);
+	verify_ec_full_partial(&req, FULL_PARTIAL_UPDATE, 0);
+	verify_ec_full(&req, PARTIAL_FULL_UPDATE, 0);
 
 	ioreq_fini(&req);
 
@@ -326,95 +327,35 @@ rebuild_ec_6nodes_setup(void **state)
 }
 
 static void
-rebuild_partial_fail_data(void **state)
+rebuild_fail_data(void **state)
 {
 	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0);
 	print_message("END %s\n", __FUNCTION__);
 }
 
 static void
-rebuild_partial_fail_parity(void **state)
+rebuild_fail_parity(void **state)
 {
 	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1);
+	print_message("END %s\n", __FUNCTION__);
 }
 
 static void
-rebuild_full_fail_data(void **state)
+rebuild2p_fail_data(void **state)
 {
 	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 0);
+	print_message("END %s\n", __FUNCTION__);
 }
 
 static void
-rebuild_full_fail_parity(void **state)
+rebuild2p_fail_2parity(void **state)
 {
 	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_UPDATE);
-}
-
-static void
-rebuild_full_partial_fail_data(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, FULL_PARTIAL_UPDATE);
-}
-
-static void
-rebuild_full_partial_fail_parity(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, FULL_PARTIAL_UPDATE);
-}
-
-static void
-rebuild_partial_full_fail_data(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 1, 0, PARTIAL_FULL_UPDATE);
-}
-
-static void
-rebuild_partial_full_fail_parity(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_2P1G1, 0, 1, PARTIAL_FULL_UPDATE);
-}
-
-static void
-rebuild2p_partial_fail_data(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 0, FULL_UPDATE);
-}
-
-static void
-rebuild2p_partial_fail_2data(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_4P2G1, 2, 0, FULL_UPDATE);
-}
-
-static void
-rebuild2p_partial_fail_data_parity(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_4P2G1, 1, 1, FULL_UPDATE);
-}
-
-static void
-rebuild2p_partial_fail_parity(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 1, FULL_UPDATE);
-}
-
-static void
-rebuild2p_partial_fail_2parity(void **state)
-{
-	print_message("BEGIN %s\n", __FUNCTION__);
-	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 2, FULL_UPDATE);
+	rebuild_ec_internal(state, OC_EC_4P2G1, 0, 2);
+	print_message("END %s\n", __FUNCTION__);
 }
 
 /*
@@ -1472,7 +1413,7 @@ rebuild_ec_combined_ops(void **state)
 }
 
 /*
- * REBUILD31: EC reintegration data loss through parity replica epoch
+ * REBUILD22: EC reintegration data loss through parity replica epoch
  * inflation (DAOS-19632).
  *
  * The chain, with E_w the epoch of the original writes:
@@ -1889,7 +1830,7 @@ rcl_reint_ranks(struct rcl_ctx *ctx, d_rank_t *ranks, int nr, const char *stage)
 }
 
 /*
- * REBUILD32: EC aggregation must not generate parity below a newer update of
+ * REBUILD23: EC aggregation must not generate parity below a newer update of
  * the stripe once a data shard was rebuilt.
  *
  * Rebuild only migrates visible extents, so a data shard rebuilt after an
@@ -2427,13 +2368,31 @@ rebuild_ec_parity_below_newer(void **state)
 	print_message("END %s\n", __FUNCTION__);
 }
 
+/* number of (obj, dkey, stripe, parity shard) still holding replicas */
+static int
+rcl_parity_replica_nr(struct rcl_ctx *ctx)
+{
+	char dkey[32];
+	int  o, d, s, nr = 0;
+
+	for (o = 0; o < RCL_OBJ_NR; o++)
+		for (d = 0; d < RCL_DKEY_NR; d++) {
+			rcl_dkey(d, dkey, sizeof(dkey));
+			for (s = 0; s < RCL_STRIPE_NR; s++)
+				nr += rpr_parity_replica_nr(ctx->arg, ctx->oids[o], dkey,
+							    (uint64_t)s * RCL_STRIPE_SIZE,
+							    RCL_STRIPE_SIZE);
+		}
+	return nr;
+}
+
 static void
 rebuild_ec_reint_parity_epoch_inflation(void **state)
 {
 	test_arg_t     *arg = *state;
 	struct rcl_ctx *ctx;
 	d_rank_t        excl[3];
-	int             pred = 0, bad = 0, o, i;
+	int             pred = 0, bad = 0, o, i, sec;
 	char            stage[64];
 
 	print_message("BEGIN %s\n", __FUNCTION__);
@@ -2473,12 +2432,17 @@ rebuild_ec_reint_parity_epoch_inflation(void **state)
 		 * parity epoch instead of the boundary.
 		 */
 		print_message("freeze the EC boundary on all ranks, enable aggregation and wait "
-			      "%d s for the replicas to be aggregated\n",
+			      "up to %d s for the replicas to be aggregated\n",
 			      RCL_AGG_WAIT_SEC);
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_CONT_EC_BOUNDARY_FREEZE | DAOS_FAIL_ALWAYS, 0, NULL);
 		daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
-		sleep(RCL_AGG_WAIT_SEC);
+		for (sec = 0; sec < RCL_AGG_WAIT_SEC; sec += RPR_POLL_SEC) {
+			if (rcl_parity_replica_nr(ctx) == 0)
+				break;
+			sleep(RPR_POLL_SEC);
+		}
+		print_message("replicas aggregated after %d s\n", sec);
 		assert_int_equal(rcl_verify(ctx, "after EC aggregation"), 0);
 		excl[2] = rcl_pick_chain_p0_host(ctx, excl);
 	}
@@ -2503,71 +2467,53 @@ rebuild_ec_reint_parity_epoch_inflation(void **state)
 }
 
 static const struct CMUnitTest rebuild_tests[] = {
-    {"REBUILD0: rebuild partial update with data tgt fail", rebuild_partial_fail_data,
+    {"REBUILD0: rebuild all update types with data tgt fail", rebuild_fail_data,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD1: rebuild partial update with parity tgt fail", rebuild_partial_fail_parity,
+    {"REBUILD1: rebuild all update types with parity tgt fail", rebuild_fail_parity,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD2: rebuild full stripe update with data tgt fail", rebuild_full_fail_data,
+    {"REBUILD2: rebuild2p all update types with data tgt fail", rebuild2p_fail_data,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD3: rebuild2p all update types with 2 parity tgts fail", rebuild2p_fail_2parity,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD4: rebuild with mixed partial/full stripe", rebuild_mixed_stripes,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD5: rebuild dfs io with data(s0 / s1 / s3) tgt fail", rebuild_dfs_fail_data,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD6: rebuild dfs io with 2 data tgts fail", rebuild_dfs_fail_2data,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD7: rebuild dfs io with 1 data 1 parity tgts fail", rebuild_dfs_fail_data_parity,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD8: rebuild dfs io with sequential tgts fail", rebuild_dfs_fail_seq,
+     rebuild_ec_8nodes_setup, test_teardown},
+    {"REBUILD9: rebuild multiple group EC object", rebuild_multiple_group_ec_object,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD3: rebuild full stripe update with parity tgt fail", rebuild_full_fail_parity,
+    {"REBUILD10: rebuild EC dkey enumeration", rebuild_ec_dkey_enumeration,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD4: rebuild full then partial update with data tgt fail",
-     rebuild_full_partial_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD5: rebuild full then partial update with parity tgt fail",
-     rebuild_full_partial_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD6: rebuild partial then full update with data tgt fail",
-     rebuild_partial_full_fail_data, rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD7: rebuild partial then full update with parity tgt fail",
-     rebuild_partial_full_fail_parity, rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD8: rebuild2p partial update with data tgt fail ", rebuild2p_partial_fail_data,
+    {"REBUILD11: rebuild EC multi-stripes @ different epochs", rebuild_ec_multi_stripes,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD9: rebuild2p partial update with 2 data tgt fail ", rebuild2p_partial_fail_2data,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD10: rebuild2p partial update with data/parity tgts fail ",
-     rebuild2p_partial_fail_data_parity, rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD11: rebuild2p partial update with parity tgt fail", rebuild2p_partial_fail_parity,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD12: rebuild2p partial update with 2 parity tgt fail", rebuild2p_partial_fail_2parity,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD13: rebuild with mixed partial/full stripe", rebuild_mixed_stripes,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD14: rebuild dfs io with data(s0 / s1 / s3) tgt fail", rebuild_dfs_fail_data,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD15: rebuild dfs io with 2 data tgts fail", rebuild_dfs_fail_2data,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD16: rebuild dfs io with 1 data 1 parity tgts fail", rebuild_dfs_fail_data_parity,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD17: rebuild dfs io with sequential tgts fail", rebuild_dfs_fail_seq,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD18: rebuild multiple group EC object", rebuild_multiple_group_ec_object,
+    {"REBUILD12: rebuild EC parity with multiple group", rebuild_ec_parity_multi_group,
      rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD19: rebuild EC dkey enumeration", rebuild_ec_dkey_enumeration,
-     rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD20: rebuild EC multi-stripes @ different epochs", rebuild_ec_multi_stripes,
+    {"REBUILD13: rebuild EC snapshot with data shard", rebuild_ec_snapshot_data_shard,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD21: rebuild EC parity with multiple group", rebuild_ec_parity_multi_group,
-     rebuild_ec_8nodes_rf1_setup, test_teardown},
-    {"REBUILD22: rebuild EC snapshot with data shard", rebuild_ec_snapshot_data_shard,
+    {"REBUILD14: rebuild EC snapshot with parity shard", rebuild_ec_snapshot_parity_shard,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD23: rebuild EC snapshot with parity shard", rebuild_ec_snapshot_parity_shard,
-     rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD24: rebuild parity over write", rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
+    {"REBUILD15: rebuild parity over write", rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
      test_teardown},
-    {"REBUILD25: EC rebuild then aggregation", rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
+    {"REBUILD16: EC rebuild then aggregation", rebuild_ec_then_aggregation, rebuild_ec_8nodes_setup,
      test_teardown},
-    {"REBUILD26: multiple shards in the same target after rebuild", rebuild_ec_multiple_shards,
+    {"REBUILD17: multiple shards in the same target after rebuild", rebuild_ec_multiple_shards,
      rebuild_ec_6nodes_setup, test_teardown},
-    {"REBUILD27: multiple shards fail tgts", rebuild_ec_multiple_failure_tgts,
+    {"REBUILD18: multiple shards fail tgts", rebuild_ec_multiple_failure_tgts,
      rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD28: fail parity shard and data shards after overwrite",
+    {"REBUILD19: fail parity shard and data shards after overwrite",
      rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD29: fail parity shard and data shards after overwrite with aggregation",
+    {"REBUILD20: fail parity shard and data shards after overwrite with aggregation",
      rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD30: combine multiple rebuild operation for EC", rebuild_ec_combined_ops,
+    {"REBUILD21: combine multiple rebuild operation for EC", rebuild_ec_combined_ops,
      rebuild_ec_6nodes_setup, test_teardown},
-    {"REBUILD31: EC reint data loss through parity replica epoch inflation",
+    {"REBUILD22: EC reint data loss through parity replica epoch inflation",
      rebuild_ec_reint_parity_epoch_inflation, rebuild_ec_8nodes_setup, test_teardown},
-    {"REBUILD32: EC parity below a newer update after rebuild", rebuild_ec_parity_below_newer,
+    {"REBUILD23: EC parity below a newer update after rebuild", rebuild_ec_parity_below_newer,
      rebuild_ec_8nodes_setup, test_teardown},
 };
 
