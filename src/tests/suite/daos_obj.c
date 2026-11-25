@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -4811,6 +4812,42 @@ io_tx_convert(void **state)
 	ioreq_fini(&req);
 }
 
+/* A stale pool map seen by a converted conditional insert must be retried internally. */
+static void
+io_tx_convert_cond_restart(void **state)
+{
+	test_arg_t   *arg = *state;
+	daos_obj_id_t oid;
+	struct ioreq  req;
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	par_barrier(PAR_COMM_WORLD);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	insert_single("dkey_exist", "akey", 0, "data", strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	daos_fail_loc_set(DAOS_FAIL_TX_CONVERT_STALE_PM | DAOS_FAIL_ALWAYS);
+
+	/* Like dfs_open(O_CREAT) of an existing file: the restart must not mask -DER_EXIST. */
+	print_message("conditional insert of existing dkey with stale pool map\n");
+	arg->expect_result = -DER_EXIST;
+	insert_single_with_flags("dkey_exist", "akey", 0, "data", strlen("data") + 1, DAOS_TX_NONE,
+				 &req, DAOS_COND_DKEY_INSERT);
+
+	print_message("conditional insert of new dkey with stale pool map\n");
+	arg->expect_result = 0;
+	insert_single_with_flags("dkey_new", "akey", 0, "data", strlen("data") + 1, DAOS_TX_NONE,
+				 &req, DAOS_COND_DKEY_INSERT);
+	daos_fail_loc_set(0);
+
+	/* Proves the restarted TX committed the insert. */
+	arg->expect_result = -DER_EXIST;
+	insert_single_with_flags("dkey_new", "akey", 0, "data", strlen("data") + 1, DAOS_TX_NONE,
+				 &req, DAOS_COND_DKEY_INSERT);
+	arg->expect_result = 0;
+	ioreq_fini(&req);
+}
+
 static void
 obj_open_perf(void **state)
 {
@@ -5369,119 +5406,81 @@ io_57(void **state)
 }
 
 static const struct CMUnitTest io_tests[] = {
-	{ "IO1: simple update/fetch/verify",
-	  io_simple, async_disable, test_case_teardown},
-	{ "IO2: simple update/fetch/verify (async)",
-	  io_simple, async_enable, test_case_teardown},
-	{ "IO3: i/o with variable rec size",
-	  io_var_rec_size, async_disable, test_case_teardown},
-	{ "IO4: i/o with variable rec size(async)",
-	  io_var_rec_size, async_enable, test_case_teardown},
-	{ "IO5: i/o with variable dkey size",
-	  io_var_dkey_size, async_enable, test_case_teardown},
-	{ "IO6: i/o with variable akey size",
-	  io_var_akey_size, async_disable, test_case_teardown},
-	{ "IO7: i/o with variable index",
-	  io_var_idx_offset, async_enable, test_case_teardown},
-	{ "IO8: variable size record overwrite",
-	  io_overwrite, async_enable, test_case_teardown},
-	{ "IO9: simple enumerate",
-	  enumerate_simple, async_disable, test_case_teardown},
-	{ "IO10: simple punch",
-	  punch_simple, async_disable, test_case_teardown},
-	{ "IO11: multiple record update/fetch/verify",
-	  io_manyrec, async_disable, test_case_teardown},
-	{ "IO12: complex update/fetch/verify",
-	  io_complex, async_disable, test_case_teardown},
-	{ "IO13: basic byte array with record size fetching",
-	  basic_byte_array, async_disable, test_case_teardown},
-	{ "IO14: timeout simple update",
-	  io_simple_update_timeout, async_disable, test_case_teardown},
-	{ "IO15: timeout simple fetch",
-	  io_simple_fetch_timeout, async_disable, test_case_teardown},
-	{ "IO16: timeout on 1 shard simple update",
-	  io_simple_update_timeout_single, async_disable, test_case_teardown},
-	{ "IO17: transaction discard",
-	  tx_discard, async_disable, test_case_teardown},
-	{ "IO18: transaction commit",
-	  tx_commit, async_disable, test_case_teardown},
-	{ "IO19: no space", io_nospace, async_disable, test_case_teardown},
-	{ "IO20: fetch size with NULL sgl",
-	  fetch_size, async_disable, test_case_teardown},
-	{ "IO21: io crt error",
-	  io_simple_update_crt_error, async_disable, test_case_teardown},
-	{ "IO22: io crt error (async)",
-	  io_simple_update_crt_error, async_enable, test_case_teardown},
-	{ "IO23: io crt req create timeout (sync)",
-	  io_simple_update_crt_req_error, async_disable, test_case_teardown},
-	{ "IO24: io crt req create timeout (async)",
-	  io_simple_update_crt_req_error, async_enable, test_case_teardown},
-	{ "IO25: Read from unwritten records",
-	  read_empty_records, async_disable, test_case_teardown},
-	{ "IO26: Read from large unwritten records",
-	  read_large_empty_records, async_disable, test_case_teardown},
-	{ "IO27: written records repeatedly",
-	  write_record_multiple_times, async_disable, test_case_teardown},
-	{ "IO28: echo fetch/update",
-	  echo_fetch_update, async_disable, test_case_teardown},
-	{ "IO29: basic object key query testing",
-	  io_obj_key_query, async_disable, test_case_teardown},
-	{ "IO30: shard target idx change cause retry",
-	  tgt_idx_change_retry, async_enable, test_case_teardown},
-	{ "IO31: fetch when all replicas unavailable",
-	  fetch_replica_unavail, async_enable, test_case_teardown},
-	{ "IO32: update with overlapped recxs",
-	  update_overlapped_recxs, async_enable, test_case_teardown},
-	{ "IO33: trigger blob unmap",
-	  blob_unmap_trigger, async_disable, test_case_teardown},
-	{ "IO34: punch then lookup",
-	  punch_then_lookup, async_disable, test_case_teardown},
-	{ "IO35: split update fetch",
-	  split_sgl_update_fetch, async_disable, test_case_teardown},
-	{ "IO36: trigger server pool map refresh",
-	  io_pool_map_refresh_trigger, async_disable, test_case_teardown},
-	{ "IO37: Fetch existing and nonexistent akeys in single fetch call",
-	  fetch_mixed_keys, async_disable, test_case_teardown},
-	{ "IO38: force capability IV fetch",
-	  io_capa_iv_fetch, async_disable, test_case_teardown},
-	{ "IO39: Update with invalid sg and record",
-	  io_invalid, async_disable, test_case_teardown},
-	{ "IO40: Record count after punch/enumeration",
-	  punch_enum_then_verify_record_count, async_disable,
-	  test_case_teardown},
-	{ "IO41: IO Rewritten data fetch and validate pool size",
-	  io_rewritten_array_with_mixed_size, async_disable,
-	  test_case_teardown},
-	{ "IO42: IO fetch from an alternative node after first try failed",
-	  io_fetch_retry_another_replica, async_disable,
-	  test_case_teardown},
-	{ "IO43: Object class selection",
-	  oclass_auto_setting, async_disable, test_case_teardown},
-	{ "IO44: INT dkey/akey checks",
-	  invalid_int_key_setting, async_disable, test_case_teardown},
-	{ "IO45: enum recxs with aggregation",
-	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
-	{ "IO46: tx convert",
-	  io_tx_convert, async_disable, test_case_teardown},
-	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
-	{ "IO48: oit_list_filter", oit_list_filter, async_disable, test_case_teardown},
-	{ "IO49: oit_list_filter async", oit_list_filter, async_enable, test_case_teardown},
-	{ "IO50: collective punch object - OC_SX",
-	  io_50, NULL, test_case_teardown},
-	{ "IO51: collective punch object - OC_EC_2P1G2",
-	  io_51, NULL, test_case_teardown},
-	{ "IO52: collective punch object - OC_EC_4P1GX",
-	  io_52, NULL, test_case_teardown},
-	{ "IO53: collective object query - OC_SX",
-	  io_53, async_disable, test_case_teardown},
-	{ "IO54: collective object query - OC_EC_2P1G2",
-	  io_54, async_disable, test_case_teardown},
-	{ "IO55: collective object query - OC_EC_4P1GX",
-	  io_55, async_disable, test_case_teardown},
-	{ "IO56: collective object query with sparse ranks",
-	  io_56, async_disable, test_case_teardown},
-	{ "IO57: collective object query with rank_0 excluded",
-	  io_57, rebuild_sub_rf1_setup, test_teardown},
+    {"IO1: simple update/fetch/verify", io_simple, async_disable, test_case_teardown},
+    {"IO2: simple update/fetch/verify (async)", io_simple, async_enable, test_case_teardown},
+    {"IO3: i/o with variable rec size", io_var_rec_size, async_disable, test_case_teardown},
+    {"IO4: i/o with variable rec size(async)", io_var_rec_size, async_enable, test_case_teardown},
+    {"IO5: i/o with variable dkey size", io_var_dkey_size, async_enable, test_case_teardown},
+    {"IO6: i/o with variable akey size", io_var_akey_size, async_disable, test_case_teardown},
+    {"IO7: i/o with variable index", io_var_idx_offset, async_enable, test_case_teardown},
+    {"IO8: variable size record overwrite", io_overwrite, async_enable, test_case_teardown},
+    {"IO9: simple enumerate", enumerate_simple, async_disable, test_case_teardown},
+    {"IO10: simple punch", punch_simple, async_disable, test_case_teardown},
+    {"IO11: multiple record update/fetch/verify", io_manyrec, async_disable, test_case_teardown},
+    {"IO12: complex update/fetch/verify", io_complex, async_disable, test_case_teardown},
+    {"IO13: basic byte array with record size fetching", basic_byte_array, async_disable,
+     test_case_teardown},
+    {"IO14: timeout simple update", io_simple_update_timeout, async_disable, test_case_teardown},
+    {"IO15: timeout simple fetch", io_simple_fetch_timeout, async_disable, test_case_teardown},
+    {"IO16: timeout on 1 shard simple update", io_simple_update_timeout_single, async_disable,
+     test_case_teardown},
+    {"IO17: transaction discard", tx_discard, async_disable, test_case_teardown},
+    {"IO18: transaction commit", tx_commit, async_disable, test_case_teardown},
+    {"IO19: no space", io_nospace, async_disable, test_case_teardown},
+    {"IO20: fetch size with NULL sgl", fetch_size, async_disable, test_case_teardown},
+    {"IO21: io crt error", io_simple_update_crt_error, async_disable, test_case_teardown},
+    {"IO22: io crt error (async)", io_simple_update_crt_error, async_enable, test_case_teardown},
+    {"IO23: io crt req create timeout (sync)", io_simple_update_crt_req_error, async_disable,
+     test_case_teardown},
+    {"IO24: io crt req create timeout (async)", io_simple_update_crt_req_error, async_enable,
+     test_case_teardown},
+    {"IO25: Read from unwritten records", read_empty_records, async_disable, test_case_teardown},
+    {"IO26: Read from large unwritten records", read_large_empty_records, async_disable,
+     test_case_teardown},
+    {"IO27: written records repeatedly", write_record_multiple_times, async_disable,
+     test_case_teardown},
+    {"IO28: echo fetch/update", echo_fetch_update, async_disable, test_case_teardown},
+    {"IO29: basic object key query testing", io_obj_key_query, async_disable, test_case_teardown},
+    {"IO30: shard target idx change cause retry", tgt_idx_change_retry, async_enable,
+     test_case_teardown},
+    {"IO31: fetch when all replicas unavailable", fetch_replica_unavail, async_enable,
+     test_case_teardown},
+    {"IO32: update with overlapped recxs", update_overlapped_recxs, async_enable,
+     test_case_teardown},
+    {"IO33: trigger blob unmap", blob_unmap_trigger, async_disable, test_case_teardown},
+    {"IO34: punch then lookup", punch_then_lookup, async_disable, test_case_teardown},
+    {"IO35: split update fetch", split_sgl_update_fetch, async_disable, test_case_teardown},
+    {"IO36: trigger server pool map refresh", io_pool_map_refresh_trigger, async_disable,
+     test_case_teardown},
+    {"IO37: Fetch existing and nonexistent akeys in single fetch call", fetch_mixed_keys,
+     async_disable, test_case_teardown},
+    {"IO38: force capability IV fetch", io_capa_iv_fetch, async_disable, test_case_teardown},
+    {"IO39: Update with invalid sg and record", io_invalid, async_disable, test_case_teardown},
+    {"IO40: Record count after punch/enumeration", punch_enum_then_verify_record_count,
+     async_disable, test_case_teardown},
+    {"IO41: IO Rewritten data fetch and validate pool size", io_rewritten_array_with_mixed_size,
+     async_disable, test_case_teardown},
+    {"IO42: IO fetch from an alternative node after first try failed",
+     io_fetch_retry_another_replica, async_disable, test_case_teardown},
+    {"IO43: Object class selection", oclass_auto_setting, async_disable, test_case_teardown},
+    {"IO44: INT dkey/akey checks", invalid_int_key_setting, async_disable, test_case_teardown},
+    {"IO45: enum recxs with aggregation", enum_recxs_with_aggregation, async_disable,
+     test_case_teardown},
+    {"IO46: tx convert", io_tx_convert, async_disable, test_case_teardown},
+    {"IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
+    {"IO48: oit_list_filter", oit_list_filter, async_disable, test_case_teardown},
+    {"IO49: oit_list_filter async", oit_list_filter, async_enable, test_case_teardown},
+    {"IO50: collective punch object - OC_SX", io_50, NULL, test_case_teardown},
+    {"IO51: collective punch object - OC_EC_2P1G2", io_51, NULL, test_case_teardown},
+    {"IO52: collective punch object - OC_EC_4P1GX", io_52, NULL, test_case_teardown},
+    {"IO53: collective object query - OC_SX", io_53, async_disable, test_case_teardown},
+    {"IO54: collective object query - OC_EC_2P1G2", io_54, async_disable, test_case_teardown},
+    {"IO55: collective object query - OC_EC_4P1GX", io_55, async_disable, test_case_teardown},
+    {"IO56: collective object query with sparse ranks", io_56, async_disable, test_case_teardown},
+    {"IO57: collective object query with rank_0 excluded", io_57, rebuild_sub_rf1_setup,
+     test_teardown},
+    {"IO58: tx convert restart on conditional insert", io_tx_convert_cond_restart, async_disable,
+     test_case_teardown},
 };
 
 int
