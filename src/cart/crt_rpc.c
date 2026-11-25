@@ -1417,7 +1417,6 @@ out:
 int
 crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 {
-	struct timespec      ts_now;
 	struct crt_rpc_priv *rpc_priv = NULL;
 	bool                 locked   = false;
 	int                  rc       = 0;
@@ -1473,7 +1472,6 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 	crt_rpc_lock(rpc_priv);
 	locked = true;
-	d_gettime_coarse(&ts_now);
 
 	rc = crt_context_req_track(rpc_priv);
 	if (rc == CRT_REQ_TRACK_IN_INFLIGHQ) {
