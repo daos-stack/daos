@@ -1073,8 +1073,9 @@ crt_swim_progress_cb(crt_context_t crt_ctx, const struct timespec *deadline, voi
 
 		if (deadline != NULL) {
 			struct timespec now;
-			d_gettime_coarse(&now);
-			if (d_timeless(&now, &ctx->sc_next_event))
+
+			rc = d_gettime_coarse(&now);
+			if (rc == 0 && d_timeless(&now, &ctx->sc_next_event))
 				new_deadline = D_TIME_MIN(*deadline, ctx->sc_next_event);
 		}
 	} else if (rc) {

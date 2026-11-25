@@ -398,6 +398,7 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from, swim_id_t id, uint
 {
 	struct swim_member_state	 id_state;
 	struct swim_item		*item;
+	struct timespec                  deadline;
 	int				 rc;
 
 	/* if there is no suspicion timeout, just kill the member */
@@ -431,22 +432,28 @@ search:
 			 * reset the existing one
 			 */
 			if (nr > id_state.sms_incarnation) {
+				rc = d_gettime_coarse(&deadline);
+				if (rc != 0)
+					D_GOTO(out, rc);
+				d_timeinc_ms(&deadline, swim_suspect_timeout_ms);
 				item->si_from = from;
-				d_gettime_coarse(&item->u.si_deadline);
-				d_timeinc_ms(&item->u.si_deadline, swim_suspect_timeout_ms);
+				item->u.si_deadline = deadline;
 			}
 			goto update;
 		}
 	}
 
 	/* add to end of suspect list */
+	rc = d_gettime_coarse(&deadline);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	d_timeinc_ms(&deadline, swim_suspect_timeout_ms);
 	D_ALLOC_PTR(item);
 	if (item == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	item->si_id   = id;
 	item->si_from = from;
-	d_gettime_coarse(&item->u.si_deadline);
-	d_timeinc_ms(&item->u.si_deadline, swim_suspect_timeout_ms);
+	item->u.si_deadline = deadline;
 	TAILQ_INSERT_TAIL(&ctx->sc_suspects, item, si_link);
 
 update:
@@ -630,6 +637,8 @@ int
 swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id, swim_id_t to_id, void *args)
 {
 	struct swim_item	*item;
+	struct timespec          deadline;
+	int                      time_rc;
 	int			 rc = 0;
 
 	swim_ctx_lock(ctx);
@@ -642,17 +651,23 @@ swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id, swim_id_t to_id
 		}
 	}
 
+	time_rc = d_gettime_coarse(&deadline);
+	if (time_rc != 0) {
+		rc = time_rc;
+		goto out_unlock;
+	}
+	d_timeinc_ms(&deadline, swim_ping_timeout_ms);
 	D_ALLOC_PTR(item);
 	if (item != NULL) {
 		item->si_id   = to_id;
 		item->si_from = from_id;
 		item->si_args = args;
-		d_gettime_coarse(&item->u.si_deadline);
-		d_timeinc_ms(&item->u.si_deadline, swim_ping_timeout_ms);
+		item->u.si_deadline = deadline;
 		TAILQ_INSERT_TAIL(&ctx->sc_ipings, item, si_link);
 	} else {
 		rc = -DER_NOMEM;
 	}
+out_unlock:
 	swim_ctx_unlock(ctx);
 
 	return rc;
@@ -727,6 +742,12 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	if (ctx == NULL)
 		D_GOTO(out, ctx = NULL);
 
+	rc = d_gettime_coarse(&ctx->sc_next_tick_time);
+	if (rc != 0) {
+		D_FREE(ctx);
+		D_GOTO(out, ctx = NULL);
+	}
+
 	rc = SWIM_MUTEX_CREATE(ctx->sc_mutex, NULL);
 	if (rc != 0) {
 		D_FREE(ctx);
@@ -756,7 +777,6 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 
 	ctx->sc_default_ping_timeout = swim_ping_timeout_ms;
 
-	d_gettime_coarse(&ctx->sc_next_tick_time);
 	/* delay the first ping until all things will be initialized */
 	d_timeinc_ms(&ctx->sc_next_tick_time, 3 * swim_prot_period_len_ms);
 out:
@@ -878,6 +898,7 @@ swim_progress(struct swim_context *ctx, const struct timespec *deadline)
 	struct timespec          net_glitch_delay = {.tv_sec = 0, .tv_nsec = 0};
 	swim_id_t                target_id, sendto_id;
 	bool                     send_updates = false;
+	bool                     within_deadline;
 	int                      rc;
 
 	/* validate input parameters */
@@ -889,7 +910,9 @@ swim_progress(struct swim_context *ctx, const struct timespec *deadline)
 	if (ctx->sc_self == SWIM_ID_INVALID) /* not initialized yet */
 		D_GOTO(out_err, rc = 0); /* Ignore this update */
 
-	d_gettime_coarse(&now);
+	rc = d_gettime_coarse(&now);
+	if (rc != 0)
+		D_GOTO(out_err, rc);
 	ctx->sc_next_event = now;
 	d_timeinc_ms(&ctx->sc_next_event, swim_prot_period_len_ms);
 
@@ -1062,8 +1085,12 @@ done_item:
 				/* no response from indirect pings */
 				if (target_state.sms_status != SWIM_MEMBER_INACTIVE) {
 					/* suspect this member */
-					swim_member_suspect(ctx, ctx->sc_self, ctx->sc_target,
-							    target_state.sms_incarnation);
+					rc = swim_member_suspect(ctx, ctx->sc_self, ctx->sc_target,
+								 target_state.sms_incarnation);
+					if (rc != 0 && rc != -DER_ALREADY) {
+						swim_ctx_unlock(ctx);
+						D_GOTO(out, rc);
+					}
 				}
 				ctx->sc_next_event = now;
 				ctx_state = SCS_SELECT;
@@ -1102,9 +1129,14 @@ done_item:
 			if (d_timeless(&wait_deadline, &ctx->sc_next_event))
 				break; /* break loop if need to wait more than 100 ms. */
 		}
-	} while ((ctx->sc_target != SWIM_ID_INVALID && deadline != NULL &&
-		  d_gettime_coarse(&now) == 0 && d_timeless(&now, deadline)) ||
-		 ctx_state == SCS_TIMEDOUT);
+		within_deadline = false;
+		if (ctx->sc_target != SWIM_ID_INVALID && deadline != NULL) {
+			rc = d_gettime_coarse(&now);
+			if (rc != 0)
+				D_GOTO(out_err, rc);
+			within_deadline = d_timeless(&now, deadline);
+		}
+	} while (within_deadline || ctx_state == SCS_TIMEDOUT);
 
 	rc = (deadline != NULL && !d_timeless(&now, deadline)) ? -DER_TIMEDOUT : -DER_CANCELED;
 out:
@@ -1221,12 +1253,20 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 			if (from_untrustable)
 				break;
 
-			if (upds[i].smu_state.sms_status == SWIM_MEMBER_SUSPECT)
-				swim_member_suspect(ctx, from_id, upd_id,
-						    upds[i].smu_state.sms_incarnation);
-			else
+			if (upds[i].smu_state.sms_status == SWIM_MEMBER_SUSPECT) {
+				int suspect_rc;
+
+				suspect_rc = swim_member_suspect(ctx, from_id, upd_id,
+								 upds[i].smu_state.sms_incarnation);
+				if (suspect_rc != 0 && suspect_rc != -DER_ALREADY) {
+					swim_state_set(ctx, ctx_state);
+					swim_ctx_unlock(ctx);
+					D_GOTO(out, rc = suspect_rc);
+				}
+			} else {
 				swim_member_dead(ctx, from_id, upd_id,
 						 upds[i].smu_state.sms_incarnation);
+			}
 			break;
 		}
 	}
