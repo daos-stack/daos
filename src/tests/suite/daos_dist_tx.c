@@ -3337,14 +3337,12 @@ dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool 
 		assert_false(done);
 
 		print_message("Exclude rank %d to trigger rebuild ...\n", kill_rank);
-		daos_kill_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc,
-				 kill_rank);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, kill_rank,
+				      -1);
+		assert_success(rc);
 
 		print_message("Wait async update to complete ...\n");
 		insert_wait(&req);
-
-		daos_start_server(arg, arg->pool.pool_uuid, arg->group, arg->pool.alive_svc,
-				  kill_rank);
 
 		/*
 		 * Reset fail_loc to make DTX resync can go ahead.
@@ -3354,19 +3352,19 @@ dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool 
 		 */
 		print_message("Reset test environment.\n");
 		for (rank = 0; rank < arg->srv_nnodes; rank++) {
-			if (rank != kill_rank) {
-				if (spec_leader)
-					daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_VALUE,
-							      0, 0, NULL);
-				daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC, 0, 0,
+			if (spec_leader)
+				daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_VALUE, 0, 0,
 						      NULL);
-			}
+			daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 		}
 		daos_fail_loc_set(0);
 
 		print_message("Verifying data ...\n");
 		lookup_single(dkey, akey, idx, rbuf, size, DAOS_TX_NONE, &req);
 		assert_memory_equal(wbuf, rbuf, size);
+
+		print_message("Wait for exclusion rebuild to complete ...\n");
+		test_rebuild_wait(&arg, 1);
 
 		print_message("Reintegrate rank %d ...\n", kill_rank);
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
