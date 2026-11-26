@@ -523,6 +523,30 @@ dc_shard_singv_size_conflict(struct daos_oclass_attr *oca, daos_size_t old_size,
 	return false;
 }
 
+/* Check if the replied single value size implies another layout than the EC request's. */
+static bool
+dc_shard_singv_lo_mismatch(struct obj_reasb_req *reasb_req, uint32_t iod_idx, daos_size_t size)
+{
+	struct dcs_layout *singv_lo = &reasb_req->orr_singv_los[iod_idx];
+
+	if (!singv_lo->cs_even_dist || size == 0)
+		return false;
+
+	if (obj_ec_singv_one_tgt(size, NULL, reasb_req->orr_oca))
+		return true;
+
+	return singv_lo->cs_bytes != 0 &&
+	       singv_lo->cs_bytes != obj_ec_singv_cell_bytes(size, reasb_req->orr_oca);
+}
+
+/* Update the record sizes with the ones replied by the shard.
+ *
+ * For EC single value this is the only place that decides to fetch again
+ * (-DER_FETCH_AGAIN), from the replied sizes, with or without checksum:
+ * - the stale cells of an overwritten record overlap with the newer record in the fetch
+ *   buffer, see dc_shard_singv_size_conflict();
+ * - the record to be recovered was overwritten by one with another layout.
+ */
 static int
 dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 {
@@ -612,18 +636,6 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				goto unlock;
 			}
 
-			/* A -DER_REC2BIG from another shard is the long-singv-overwritten-by-
-			 * short-singv case, which is ignored below when the short singv lives
-			 * on a single target. The size conflict is still real in that case, so
-			 * it must be evaluated or a torn read reaches checksum verification
-			 * with a stale singv layout.
-			 */
-			if (fetch_stat->sfs_size_other != 0 && fetch_rc == 0 &&
-			    (fetch_stat->sfs_rc_other == 0 ||
-			     fetch_stat->sfs_rc_other == -DER_REC2BIG)) {
-				conflict = dc_shard_singv_size_conflict(oca,
-						fetch_stat->sfs_size_other, fetch_stat->sfs_size);
-			}
 			if (rc == 0)
 				rc = fetch_rc;
 			/* one case needs to ignore the DER_REC2BIG failure - long singv
@@ -659,23 +671,18 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				D_ERROR("this non-parity shard got -DER_REC2BIG, sfs_size "DF_U64
 					" on all shards\n", fetch_stat->sfs_size);
 			}
-
-			if (fetch_rc == 0 && fetch_stat->sfs_size != 0)
-				conflict = dc_shard_singv_size_conflict(oca,
-					fetch_stat->sfs_size_other, fetch_stat->sfs_size);
 		}
 
-		/* The size conflict is a property of the whole fetch, not of whichever
-		 * shard reply happens to be in hand - both sizes live in the shared
-		 * fetch_stat. Re-check it here so that any callback observing the
-		 * conflict fails the fetch. Without this a callback whose branch did not
-		 * compute the conflict proceeds to checksum verification against a stale
-		 * singv layout and wrongly burns an EC shard.
+		/* Check the size conflict for every reply once both sizes are known, even if
+		 * another shard replied -DER_REC2BIG (ignored above).
 		 */
-		if (!conflict && fetch_rc == 0 && fetch_stat->sfs_size != 0 &&
-		    fetch_stat->sfs_size_other != 0)
+		if (fetch_rc == 0 && fetch_stat->sfs_size != 0 && fetch_stat->sfs_size_other != 0)
 			conflict = dc_shard_singv_size_conflict(oca, fetch_stat->sfs_size_other,
 								fetch_stat->sfs_size);
+		/* cannot recover with the cells of another layout, see recov_task_cb() */
+		if (reasb_req->orr_recov && fetch_rc == 0 &&
+		    dc_shard_singv_lo_mismatch(reasb_req, i, sizes[i]))
+			conflict = true;
 
 		if (conflict && !reasb_req->orr_size_fetch && rc == 0)
 			fetch_again = true;
@@ -698,63 +705,38 @@ unlock:
 
 /* Check if the checksum verification of this shard fetch reply has to be deferred.
  *
- * The shards of an evenly distributed EC single value fetch share one buffer, and
- * every shard lays its data out by the record size it stores. If the record was
- * overwritten by a smaller one that is stored on one data shard and the parity
- * shards only, the other data shards still hold a cell of the old record, and
- * the newer record lands on top of those cells. Whether that happened is only
- * known when the shards holding the latest record replied as well, so the reply
- * of the other data shards cannot be verified when it is handled. It is verified
- * by rw_csum_verify_deferred_cb() when all the shards replied.
+ * The shards of an EC single value fetch sent to all the data shards share one buffer, and
+ * every shard lays its data out by the record size it stores. If the record was overwritten
+ * by a smaller one stored on one data shard and the parity shards only, the other data
+ * shards still hold a cell of the old record, that can overlap with the newer record in
+ * the buffer. So the replies are verified by rw_csum_verify_deferred_cb() when all the
+ * shards replied.
  */
 static bool
 rw_cb_csum_verify_defer(tse_task_t *task, const struct rw_cb_args *rw_args)
 {
 	struct shard_rw_args *shard_args = rw_args->shard_args;
-	struct obj_auxi_args *obj_auxi   = shard_args->auxi.obj_auxi;
 	struct obj_reasb_req *reasb_req  = shard_args->reasb_req;
 	struct obj_rw_in     *orw        = crt_req_get(rw_args->rpc);
 	struct obj_rw_out    *orwo       = crt_reply_get(rw_args->rpc);
 	daos_iod_t           *iods       = orw->orw_iod_array.oia_iods;
 	uint64_t             *sizes      = orwo->orw_iod_sizes.ca_arrays;
-	uint64_t              one_tgt_max;
-	uint32_t              shard;
 	int                   i;
 
 	/* only one shard is involved if the shard args is embedded in the object task */
-	if (task == obj_auxi->obj_task || reasb_req == NULL || reasb_req->orr_singv_los == NULL ||
-	    !daos_oclass_is_ec(reasb_req->orr_oca) || rw_args->rwaa_sgls == NULL)
+	if (task == shard_args->auxi.obj_auxi->obj_task || reasb_req == NULL ||
+	    reasb_req->orr_singv_los == NULL || !daos_oclass_is_ec(reasb_req->orr_oca) ||
+	    rw_args->rwaa_sgls == NULL)
 		return false;
 
 	if (!daos_csummer_initialized(rw_args->co->dc_csummer) ||
 	    rw_args->co->dc_csummer->dcs_skip_data_verify)
 		return false;
 
-	/* the first data shard and the parity shards always hold the latest record */
-	shard = orw->orw_oid.id_shard % daos_oclass_grp_size(reasb_req->orr_oca);
-	if (shard == obj_ec_singv_small_idx(obj_auxi->obj, orw->orw_dkey_hash, NULL) ||
-	    is_ec_parity_shard(obj_auxi->obj, orw->orw_dkey_hash, orw->orw_oid.id_shard))
-		return false;
-
-	/* the largest record stored on one data shard, the only kind that leaves stale cells */
-	one_tgt_max = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(reasb_req->orr_oca));
-
 	for (i = 0; i < orw->orw_nr; i++) {
-		if (iods[i].iod_type != DAOS_IOD_SINGLE ||
-		    !reasb_req->orr_singv_los[i].cs_even_dist)
-			continue;
-
-		/* this shard holds nothing for the record */
-		if (sizes[i] == 0)
-			continue;
-
-		/* The cells of this shard's record start beyond the end of any record stored
-		 * on one data shard, so a newer record cannot land on top of them.
-		 */
-		if (obj_ec_singv_cell_bytes(sizes[i], reasb_req->orr_oca) >= one_tgt_max)
-			continue;
-
-		return true;
+		if (iods[i].iod_type == DAOS_IOD_SINGLE &&
+		    reasb_req->orr_singv_los[i].cs_even_dist && sizes[i] != 0)
+			return true;
 	}
 
 	return false;
@@ -769,54 +751,25 @@ struct rw_csum_verify_deferred {
 /* Completion callback of the object fetch task, to verify the checksum of the shard fetch
  * reply deferred by rw_cb_csum_verify_defer(). It is registered after obj_comp_cb(), so it
  * is called before it, when all the shards replied. A failure is set as the result of the
- * shard task for obj_comp_cb() to handle it. If the replied record sizes conflict the
- * object fetch will be done again, and the reply is just dropped. So is it if the object
- * fetch failed without the size of the latest record being replied.
+ * shard task for obj_comp_cb() to handle it.
+ *
+ * Nothing is verified if the handling of any shard RPC reply of the fetch attempt failed
+ * (orr_shard_failed, set by dc_rw_cb()): either the replied sizes conflict
+ * (-DER_FETCH_AGAIN), or the data of the failed shard can have landed on top of the data
+ * of this shard, which cannot be told from a corruption. The object fetch returns no data
+ * then.
  */
 static int
 rw_csum_verify_deferred_cb(tse_task_t *obj_task, void *data)
 {
-	struct rw_csum_verify_deferred *deferred  = data;
-	struct rw_cb_args              *rw_args   = &deferred->rcd_rw_args;
-	struct obj_reasb_req           *reasb_req = rw_args->shard_args->reasb_req;
-	struct obj_rw_in               *orw       = crt_req_get(rw_args->rpc);
-	bool                            conflict  = false;
-	bool                            unknown   = false;
+	struct rw_csum_verify_deferred *deferred = data;
+	struct rw_cb_args              *rw_args  = &deferred->rcd_rw_args;
+	struct obj_rw_in               *orw      = crt_req_get(rw_args->rpc);
 	int                             rc;
-	int                             i;
 
-	if (deferred->rcd_task->dt_result != 0)
-		goto out;
-
-	D_MUTEX_LOCK(&reasb_req->orr_mutex);
-	for (i = 0; i < orw->orw_nr && !conflict; i++) {
-		struct shard_fetch_stat *fetch_stat = &reasb_req->orr_fetch_stat[i];
-
-		if (orw->orw_iod_array.oia_iods[i].iod_type != DAOS_IOD_SINGLE ||
-		    !reasb_req->orr_singv_los[i].cs_even_dist || fetch_stat->sfs_size_other == 0)
-			continue;
-		if (fetch_stat->sfs_size == 0) {
-			unknown = true;
-			continue;
-		}
-		conflict = dc_shard_singv_size_conflict(
-		    reasb_req->orr_oca, fetch_stat->sfs_size_other, fetch_stat->sfs_size);
-	}
-	D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
-	if (conflict) {
-		D_DEBUG(DB_CSUM, DF_UOID " skip csum verify of the stale singv shard\n",
+	if (rw_args->shard_args->reasb_req->orr_shard_failed) {
+		D_DEBUG(DB_CSUM, DF_UOID " skip csum verify, a shard reply failed\n",
 			DP_UOID(orw->orw_oid));
-		goto out;
-	}
-	/* No shard holding the latest record replied its size, as its fetch failed. Its data
-	 * can still have landed on top of the data of this shard, which cannot be told from
-	 * a corruption. The object fetch failed and returns no data, so drop the reply rather
-	 * than fail a healthy shard and report a checksum error for it.
-	 */
-	if (unknown && obj_task->dt_result != 0) {
-		D_DEBUG(DB_CSUM,
-			DF_UOID " skip csum verify, latest singv size is unknown, " DF_RC "\n",
-			DP_UOID(orw->orw_oid), DP_RC(obj_task->dt_result));
 		goto out;
 	}
 
@@ -943,6 +896,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	opc = opc_get(rw_args->rpc->cr_opc);
 	D_DEBUG(DB_IO, "rpc %p opc:%d completed, task %p dt_result %d.\n",
 		rw_args->rpc, opc, task, ret);
+	reasb_req = rw_args->shard_args->reasb_req;
+	is_ec_obj = reasb_req != NULL && daos_oclass_is_ec(reasb_req->orr_oca);
 	if (opc == DAOS_OBJ_RPC_FETCH &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) {
 		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch\n");
@@ -963,9 +918,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		D_ERROR("Drop RPC for shard I/O update\n");
 		D_GOTO(out, rc = -DER_HG);
 	}
-
-	reasb_req = rw_args->shard_args->reasb_req;
-	is_ec_obj = reasb_req != NULL && daos_oclass_is_ec(reasb_req->orr_oca);
 
 	orw = crt_req_get(rw_args->rpc);
 	orwo = crt_reply_get(rw_args->rpc);
@@ -1214,9 +1166,12 @@ dc_rw_cb(tse_task_t *task, void *arg)
 
 			deferred.rcd_task    = task;
 			deferred.rcd_rw_args = *rw_args;
-			rc = tse_task_register_comp_cb(rw_args->shard_args->auxi.obj_auxi->obj_task,
-						       rw_csum_verify_deferred_cb, &deferred,
-						       sizeof(deferred));
+			if (DAOS_FAIL_CHECK(DAOS_CSUM_VERIFY_DEFER_FAIL))
+				rc = -DER_NOMEM;
+			else
+				rc = tse_task_register_comp_cb(
+				    rw_args->shard_args->auxi.obj_auxi->obj_task,
+				    rw_csum_verify_deferred_cb, &deferred, sizeof(deferred));
 			if (rc != 0)
 				goto out;
 			crt_req_addref(rw_args->rpc);
@@ -1271,6 +1226,13 @@ out:
 
 	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
+
+	/* The data of the failed shard can have landed in the fetch buffer shared with the
+	 * other shards, see rw_csum_verify_deferred_cb(). A shard without the key
+	 * (conditional fetch) transferred nothing.
+	 */
+	if (ret != 0 && ret != -DER_NONEXIST && opc == DAOS_OBJ_RPC_FETCH && is_ec_obj)
+		reasb_req->orr_shard_failed = true;
 
 	return ret;
 }
