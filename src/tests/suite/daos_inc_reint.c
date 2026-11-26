@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,7 +95,7 @@ ir_rank_restart(test_arg_t *arg, d_rank_t rank, uint64_t fail_loc)
 		for (i = 0; i < 10; i++) {
 			rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc, 0,
 						   NULL);
-			if (rc == 0 || rc != -DER_TIMEDOUT)
+			if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_CANCELED))
 				break;
 
 			sleep(2);
@@ -108,25 +108,28 @@ ir_rank_restart(test_arg_t *arg, d_rank_t rank, uint64_t fail_loc)
 }
 
 static int
-ir_rank_reint(test_arg_t *arg, d_rank_t rank, bool restart)
+ir_rank_reint(test_arg_t *arg, d_rank_t rank, uint64_t fail_loc, bool wait)
 {
 	int rc;
 
-	if (restart) {
-		rc = ir_rank_restart(arg, rank, 0);
-		if (rc != 0)
-			return rc;
-	}
+	rc = ir_rank_restart(arg, rank, fail_loc);
+	if (rc != 0)
+		return rc;
 
-	print_message("IR: reintegrating rank %d\n", rank);
+	print_message("IR: %s reintegrating rank %d\n", wait ? "sync" : "async", rank);
 
 	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
-	if (rc != 0)
+	if (rc != 0) {
 		print_message("IR: fail to reintegrate rank %d: " DF_RC "\n", rank, DP_RC(rc));
-	else
-		print_message("IR: reintegrated rank %d\n", rank);
+		return rc;
+	}
 
-	return rc;
+	if (wait) {
+		test_rebuild_wait(&arg, 1);
+		print_message("IR: reintegrated rank %d\n", rank);
+	}
+
+	return 0;
 }
 
 static void
@@ -160,7 +163,7 @@ inc_reint1(void **state)
 	print_message("Incrementally reintegrate rank 1 for pool " DF_UUID "\n",
 		      DP_UUID(pool->pool_uuid));
 
-	rc = ir_rank_reint(arg, 1, true);
+	rc = ir_rank_reint(arg, 1, 0, true);
 	assert_rc_equal(rc, 0);
 
 	test_verify_cont(arg, pool, conts, 7);
@@ -190,7 +193,7 @@ inc_reint2(void **state)
 	print_message("Incrementally reintegrate rank 1 for pool " DF_UUID "\n",
 		      DP_UUID(pool->pool_uuid));
 
-	rc = ir_rank_reint(arg, 1, true);
+	rc = ir_rank_reint(arg, 1, 0, true);
 	assert_rc_equal(rc, 0);
 
 	test_verify_cont(arg, pool, conts, 5);
@@ -222,7 +225,7 @@ inc_reint3(void **state)
 	print_message("Incrementally reintegrate rank 1 for pool " DF_UUID "\n",
 		      DP_UUID(pool->pool_uuid));
 
-	rc = ir_rank_reint(arg, 1, true);
+	rc = ir_rank_reint(arg, 1, 0, true);
 	assert_rc_equal(rc, 0);
 
 	test_verify_cont(arg, pool, conts, 256);
@@ -234,42 +237,29 @@ ir_race(test_arg_t *arg, bool create)
 {
 	struct test_pool *pool     = &arg->pool;
 	struct test_cont  conts[4] = {0};
-	pid_t             pid;
 	int               rc;
 	int               i;
 
-	for (i = 0; i < 3; i++)
+	for (i = 0; i < 2; i++)
 		ir_cont_create(arg, &conts[i]);
 
 	ir_rank_exclude(arg, 1);
 
-	rc = ir_rank_restart(arg, 1, DAOS_POOL_REINT_SLOW | DAOS_FAIL_ALWAYS);
+	/* Incremental reint will be blocked for about 6 seconds because of DAOS_POOL_REINT_SLOW. */
+	rc = ir_rank_reint(arg, 1, DAOS_POOL_REINT_SLOW | DAOS_FAIL_ALWAYS, false);
 	assert_rc_equal(rc, 0);
 
-	pid = fork();
-	assert_true(pid >= 0);
-
-	if (pid == 0) {
-		/* Wait for ir_rank_reint can be run firstly on parent. */
-		sleep(3);
-
-		if (create)
-			ir_cont_create(arg, &conts[3]);
-		else
-			ir_cont_destroy(arg, &conts[1]);
-
-		/* Do NOT exit immediately, otherwise, the pipeline for parent may be broken. */
-		sleep(15);
-		exit(0);
-	} else {
-		/* Incremental reintegration will internally repeat to handle the race. */
-		rc = ir_rank_reint(arg, 1, false);
-		assert_rc_equal(rc, 0);
-		waitpid(pid, &rc, 0);
-	}
+	/* Create or destroy container to race with inlight incremental reint. */
+	if (create)
+		ir_cont_create(arg, &conts[3]);
+	else
+		ir_cont_destroy(arg, &conts[1]);
 
 	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
+
+	test_rebuild_wait(&arg, 1);
+	print_message("IR: reintegrated rank 1\n");
 
 	test_verify_cont(arg, pool, conts, 4);
 }
