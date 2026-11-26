@@ -22,7 +22,7 @@ extern FILE *const                Mock_file_stream;
 extern char                       Mock_log_file[];
 extern uuid_t                     Mock_pool_uuid;
 /* Checks rendered output during the next mocked vfprintf call. */
-extern int                        mock_vfprintf_check_output;
+extern bool                       mock_vfprintf_check_output;
 
 /* Queue expectations for a checker payload allocation; NULL simulates failure. */
 void

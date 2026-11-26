@@ -10,6 +10,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -2510,6 +2512,13 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	missingSB := newTestMgmtSvc(t, log)
 	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 
+	noEngine := newTestMgmtSvc(t, log)
+	setupTestEngine(t, noEngine.harness.instances[0].(*EngineInstance), 0, true)
+	noEngine.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+		SystemName: build.DefaultSystemName,
+		Replicas:   []*net.TCPAddr{common.LocalhostCtrlAddr(), test.MockHostAddr(1), test.MockHostAddr(2)},
+	})
+
 	allRanksDown := newTestMgmtSvc(t, log)
 	downRanksPool := test.MockUUID(9)
 	addTestPools(t, allRanksDown.sysdb, downRanksPool)
@@ -2549,6 +2558,15 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Id: mockUUID,
 			},
 			expErr: errors.New("send failure"),
+		},
+		"engine stopped": {
+			mgmtSvc: noEngine,
+			req: &mgmtpb.PoolQueryReq{
+				Id: mockUUID,
+			},
+			expErr: &system.ErrReplicaNoEngine{
+				Replicas: []string{test.MockHostAddr(1).String(), test.MockHostAddr(2).String()},
+			},
 		},
 		"garbage resp": {
 			req: &mgmtpb.PoolQueryReq{

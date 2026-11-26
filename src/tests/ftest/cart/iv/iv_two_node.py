@@ -196,8 +196,7 @@ class CartIvTwoNodeTest(CartTest):
 
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
-        # pylint: disable=broad-except
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-except
             self.log.info("Exception in launching server : %s", error)
             self.fail("Test failed.\n")
 
@@ -252,8 +251,7 @@ class CartIvTwoNodeTest(CartTest):
             self.log.info("Client cmd : %s", clicmdt)
             try:
                 subprocess.call(shlex.split(clicmdt))
-            # pylint: disable=broad-except
-            except Exception as error:
+            except Exception as error:  # pylint: disable=broad-except
                 failed = True
                 self.log.info("Exception in launching client : %s", error)
 
@@ -264,8 +262,7 @@ class CartIvTwoNodeTest(CartTest):
         self.log.info("Client cmd : %s", clicmd)
         try:
             subprocess.call(shlex.split(clicmd))
-        # pylint: disable=broad-except
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-except
             failed = True
             self.log.info("Exception in launching client : %s", error)
 

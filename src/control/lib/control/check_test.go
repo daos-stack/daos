@@ -238,7 +238,7 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 									Inconsistency: &mgmtpb.CheckQueryInconsist{},
 									Time: &mgmtpb.CheckQueryTime{
 										StartTime: uint64(testTime.Unix()),
-										MiscTime:  uint64(testTime.Unix() + 15),
+										MiscTime:  uint64(testTime.Unix() + 12),
 									},
 								},
 							},
@@ -259,7 +259,7 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 				Leader:    5,
 				Pools: map[string]*SystemCheckPoolInfo{
 					"12345678-1234-1234-1234-123456789abc": {
-						RawRankInfo: rawRankMap{
+						RawRankInfo: RawRankMap{
 							3: {
 								Uuid:          "12345678-1234-1234-1234-123456789abc",
 								Status:        chkpb.CheckPoolStatus_CPS_CHECKED,
@@ -276,7 +276,7 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 										Inconsistency: &mgmtpb.CheckQueryInconsist{},
 										Time: &mgmtpb.CheckQueryTime{
 											StartTime: uint64(testTime.Unix()),
-											MiscTime:  uint64(testTime.Unix() + 15),
+											MiscTime:  uint64(testTime.Unix() + 12),
 										},
 									},
 								},
@@ -287,6 +287,22 @@ func TestControl_SystemCheckQuery(t *testing.T) {
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: time.Unix(testTime.Unix(), 0),
 						StopTime:  time.Unix(testTime.Unix()+15, 0),
+						Ranks: []*SystemCheckRankInfo{
+							{
+								Rank:   3,
+								Status: "CPS_CHECKED",
+								Phase:  "CSP_DONE",
+								Targets: []*SystemCheckTargetInfo{
+									{
+										Rank:      3,
+										Status:    "CIS_COMPLETED",
+										StartTime: time.Unix(testTime.Unix(), 0),
+										StopTime:  time.Unix(testTime.Unix()+12, 0),
+										Stats:     &SystemCheckStatistics{},
+									},
+								},
+							},
+						},
 					},
 				},
 				Reports: []*SystemCheckReport{

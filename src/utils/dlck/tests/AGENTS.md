@@ -9,9 +9,17 @@
 ## Unit Tests
 
 - Use the CMocka framework.
+- Always add command-line CMocka filtering in each test binary's `main(int argc, char **argv)`.
+  Guard filtering with `#if CMOCKA_FILTER_SUPPORTED`. When `argc > 1`, wrap `argv[1]` in `*`
+  wildcards and call `cmocka_set_test_filter()` before running tests. With no argument, run the
+  full suite.
 - Don't reproduce the production algorithm in assertions.
 - Choose the smallest suitable suite and dependency boundary.
 - Separate module and header-macro tests.
+- Give every test function at least one concise comment line describing the behavior it verifies.
+- For suites with repeated CMocka registration fields, define small registration macros for common
+  fixture variants (for example, with setup/teardown and without a fixture). Keep IDs sequential and
+  derive the test name from the ID and function name so table entries stay concise and consistent.
 - For meaningful paths, prepare inputs and expectations, call the production entry point, then
   assert result and state. Cover success and relevant failures, not every theoretical branch.
 - Assert the correct error mapping and cleanup.
@@ -50,6 +58,9 @@
 - For strings: `expect_string()` with `check_expected()`.
 - For pointers: `expect_value()` with `check_expected_ptr()`. This CMocka version does not provide
   `expect_ptr()`.
+- Define helpers that register CMocka `expect_*()` expectations as macros, not functions. CMocka
+  records the expectation's source location, so a function helper makes unconsumed-expectation
+  diagnostics point to the helper instead of the test call site.
 
 ## Strict Mocks
 

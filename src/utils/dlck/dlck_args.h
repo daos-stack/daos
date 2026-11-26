@@ -119,7 +119,6 @@ struct dlck_control {
 	struct checker          checker;
 	/** out */
 	char                   *log_dir;
-	unsigned                warnings_num;
 };
 
 /** helper definitions */

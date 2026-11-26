@@ -39,7 +39,7 @@ export libfabric_version="1.22.0"
 export libfabric_release="5${distro_name}"
 export libfabric_full="${libfabric_version}-${libfabric_release}"
 export mercury_version="2.4.1"
-export mercury_release="7${distro_name}"
+export mercury_release="8${distro_name}"
 export mercury_full="${mercury_version}-${mercury_release}"
 export argobots_version="1.2"
 export argobots_release="4${distro_name}"
@@ -131,7 +131,7 @@ export uuid_lib
 set_lib_name gperftools dev gperftools gperftools libgoogle-perftools
 export gperftools_dev
 
-set_lib_name hdf5 lib hdf5 hdf5 hdf5
+set_lib_name hdf5 lib hdf5 libhdf5-103 hdf5
 export hdf5_lib
 
 set_lib_name libasan lib libasan libasan8 libasan8

@@ -3097,6 +3097,314 @@ dtx_42(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
+/*
+ * Wait until the given rank becomes the expected state in the system, give up after @timeout.
+ */
+static int
+dtx_wait_rank_state(test_arg_t *arg, d_rank_t rank, const char *expected, int timeout)
+{
+	char state[32];
+	int  rc = 0;
+	int  i;
+
+	for (i = 0; i < timeout; i++) {
+		rc = dmg_system_query_rank_state(dmg_config_file, rank, state, sizeof(state));
+		if (rc == 0 && strcmp(state, expected) == 0) {
+			print_message("Rank %u is %s after %d seconds\n", rank, expected, i);
+			return 0;
+		}
+
+		sleep(1);
+	}
+
+	print_message("Rank %u is not %s after %d seconds: rc %d, state %s\n", rank, expected,
+		      timeout, rc, rc == 0 ? state : "unknown");
+	return -DER_TIMEDOUT;
+}
+
+/* Restart the given rank quickly, make sure that the pool map version is not changed. */
+static void
+dtx_restart_rank(test_arg_t *arg, d_rank_t rank)
+{
+	daos_pool_info_t pinfo = {0};
+	uint32_t         map_ver;
+	int              rc;
+
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	map_ver = pinfo.pi_map_ver;
+
+	print_message("Killing the rank %u (pool map version %u) ...\n", rank, map_ver);
+
+	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	assert_rc_equal(rc, 0);
+
+	rc = dtx_wait_rank_state(arg, rank, "stopped", 60);
+	assert_rc_equal(rc, 0);
+
+	print_message("Restarting the rank %u before it is excluded from the pool...\n", rank);
+
+	rc = dmg_system_start_rank(dmg_config_file, rank);
+	assert_rc_equal(rc, 0);
+
+	rc = dtx_wait_rank_state(arg, rank, "joined", 120);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Pool map version %u after the rank %u restarted\n", pinfo.pi_map_ver, rank);
+	assert_int_equal(pinfo.pi_map_ver, map_ver);
+}
+
+static void
+dtx_43_verify(struct ioreq *req, char **dkeys, const char *akey, int nr, int rep_nr, uint64_t base)
+{
+	uint64_t val;
+	int      i;
+	int      j;
+
+	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD | DAOS_FAIL_ALWAYS);
+
+	for (i = 0; i < rep_nr; i++) {
+		daos_fail_value_set(i);
+
+		for (j = 0; j < nr; j++) {
+			val = 0;
+			lookup_single(dkeys[j], akey, 0, &val, sizeof(val), DAOS_TX_NONE, req);
+			if (val != base + j)
+				print_message("dkey_%2d shard %d: exp " DF_U64 ", got " DF_U64 "\n",
+					      j, i, base + j, val);
+			assert_int_equal(val, base + j);
+		}
+	}
+
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+}
+
+static void
+dtx_43(void **state)
+{
+	test_arg_t   *arg  = *state;
+	const char   *akey = dts_dtx_akey;
+	char         *dkeys[DTX_NC_CNT];
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	uint64_t      val;
+	d_rank_t      rank;
+	int           rc;
+	int           i;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX43: engine restarted quickly without pool map change\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	arg->async = 0;
+	oid        = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+	/*
+	 * According to DTX leader election algorithm, it is possible that the
+	 * DTX leaders for different dkeys will reside on different target.
+	 */
+	for (i = 0; i < DTX_NC_CNT; i++) {
+		D_ALLOC(dkeys[i], 16);
+		assert_non_null(dkeys[i]);
+		snprintf(dkeys[i], 15, "dtx_43_dkey_%2d", i);
+	}
+
+	par_barrier(PAR_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+
+	print_message("Generating base values...\n");
+	for (i = 0, val = 1; i < DTX_NC_CNT; i++, val++)
+		insert_single(dkeys[i], akey, 0, &val, sizeof(val), DAOS_TX_NONE, &req);
+
+	par_barrier(PAR_COMM_WORLD);
+	daos_fail_loc_set(0);
+	if (arg->myrank == 0)
+		/*
+		 * Disable batched commit, then the DTXs are only prepared on the all replicas,
+		 * the "committable" status only exists in the leader's DRAM (CoS cache). That
+		 * simulates the case that the leader engine is killed before the batched commit
+		 * for the DTXs that have been replied to the client.
+		 */
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_NO_BATCHED_CMT | DAOS_FAIL_ALWAYS, 0, NULL);
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("More updates that are prepared but not committed by leader\n");
+	for (i = 0, val = 31; i < DTX_NC_CNT; i++, val++)
+		insert_single(dkeys[i], akey, 0, &val, sizeof(val), DAOS_TX_NONE, &req);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		/*
+		 * Simulate the case that the engine is restarted before being excluded from the
+		 * pool: disable the "self-healing" exclusion for the pool, otherwise the engine
+		 * killing may trigger pool map change and rebuild.
+		 */
+		rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "rebuild");
+		assert_rc_equal(rc, 0);
+
+		rank = get_rank_by_oid_shard(arg, oid, 0);
+		dtx_restart_rank(arg, rank);
+	}
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("Verifying data after engine quick restart...\n");
+	dtx_43_verify(&req, dkeys, akey, DTX_NC_CNT, 3, 31);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+	par_barrier(PAR_COMM_WORLD);
+	daos_fail_loc_set(0);
+
+	for (i = 0; i < DTX_NC_CNT; i++)
+		D_FREE(dkeys[i]);
+
+	ioreq_fini(&req);
+}
+
+static void
+dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool spec_leader)
+{
+	test_arg_t   *arg  = *state;
+	const char   *dkey = dts_dtx_dkey;
+	const char   *akey = dts_dtx_akey;
+	size_t        size = 1 << 20; /* 1M data */
+	void         *wbuf;
+	void         *rbuf;
+	daos_obj_id_t oid;
+	struct ioreq  req;
+	uint64_t      idx   = 0;
+	int           rx_nr = 1;
+	d_rank_t      kill_rank;
+	d_rank_t      rank;
+	int           rc;
+	bool          done = false;
+
+	FAULT_INJECTION_REQUIRED();
+
+	/*
+	 * Different MPI ranks will generate different object layout.
+	 * It is not easy to control multiple MPI ranks for specified
+	 * leader and some non-leader. So only test on the MPI rank_0.
+	 */
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		D_ALLOC(wbuf, size);
+		assert_non_null(wbuf);
+
+		D_ALLOC(rbuf, size);
+		assert_non_null(rbuf);
+
+		async_enable(state);
+
+		oid = daos_test_oid_gen(arg->coh, oc, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, type, arg);
+
+		daos_fail_loc_set(DAOS_DTX_COMMIT_SYNC | DAOS_FAIL_ALWAYS);
+		memset(wbuf, 'a', size);
+		print_message("Sync update for base layout\n");
+		insert_single(dkey, akey, idx, wbuf, size, DAOS_TX_NONE, &req);
+
+		/* Get the rank to be killed, that is DTX leader for next update. */
+		kill_rank = get_rank_by_oid_shard(arg, oid, 0);
+
+		if (spec_leader)
+			/* Client will resend twice: the 1st one will get spec_leader info. */
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 1, 0, NULL);
+		else
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_LEADER_SWITCH | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_fail_loc_set(DAOS_DTX_LEADER_SWITCH | DAOS_FAIL_ALWAYS);
+
+		memset(wbuf, 'b', size);
+		print_message("Async overwrite with inject fail_loc %u.\n", DAOS_DTX_LEADER_SWITCH);
+		insert_nowait(dkey, 1, &akey, &size, &rx_nr, &idx, &wbuf, DAOS_TX_NONE, &req, 0);
+
+		sleep(3);
+		daos_event_test(&req.ev, 1000, &done);
+		/* The async update should not complete since DTX leader is blocked by fail_loc. */
+		assert_false(done);
+
+		print_message("Exclude rank %d to trigger rebuild ...\n", kill_rank);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group, kill_rank,
+				      -1);
+		assert_success(rc);
+
+		print_message("Wait async update to complete ...\n");
+		insert_wait(&req);
+
+		/*
+		 * Reset fail_loc to make DTX resync can go ahead.
+		 *
+		 * Note that rank_0 is the one to send collective MGMT_PARAMS_SET RPC, but it
+		 * maybe the kill_rank. So let's reset fail_loc for each rank one by one.
+		 */
+		print_message("Reset test environment.\n");
+		for (rank = 0; rank < arg->srv_nnodes; rank++) {
+			if (spec_leader)
+				daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_VALUE, 0, 0,
+						      NULL);
+			daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		}
+		daos_fail_loc_set(0);
+
+		print_message("Verifying data ...\n");
+		lookup_single(dkey, akey, idx, rbuf, size, DAOS_TX_NONE, &req);
+		assert_memory_equal(wbuf, rbuf, size);
+
+		print_message("Wait for exclusion rebuild to complete ...\n");
+		test_rebuild_wait(&arg, 1);
+
+		print_message("Reintegrate rank %d ...\n", kill_rank);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  kill_rank, -1);
+		assert_success(rc);
+		test_rebuild_wait(&arg, 1);
+
+		ioreq_fini(&req);
+		D_FREE(wbuf);
+		D_FREE(rbuf);
+	}
+	par_barrier(PAR_COMM_WORLD);
+}
+
+static void
+dtx_44(void **state)
+{
+	test_arg_t *arg = *state;
+
+	print_message("DTX44: leader switch - resend update with same leader\n");
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	dtx_leader_switch(state, OC_RP_3G1, DAOS_IOD_SINGLE, false);
+}
+
+static void
+dtx_45(void **state)
+{
+	test_arg_t *arg = *state;
+
+	print_message("DTX45: leader switch - resend update with spec leader\n");
+
+	if (!test_runable(arg, 7))
+		skip();
+
+	dtx_leader_switch(state, OC_EC_4P2G1, DAOS_IOD_ARRAY, true);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -3204,6 +3512,13 @@ static const struct CMUnitTest dtx_tests[] = {
     {"DTX41: uncertain check - miss abort with delay", dtx_41, NULL, test_case_teardown},
 
     {"DTX42: query max epoch in transaction", dtx_42, NULL, test_case_teardown},
+    {"DTX43: engine restarted quickly without pool map change", dtx_43, dtx_sub_setup,
+     dtx_sub_teardown},
+
+    {"DTX44: leader switch - resend update with same leader", dtx_44, dtx_sub_setup,
+     dtx_sub_teardown},
+    {"DTX45: leader switch - resend update with spec leader", dtx_45, dtx_sub_setup,
+     dtx_sub_teardown},
 };
 
 static int

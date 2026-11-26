@@ -223,6 +223,14 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 
 	resp, err := control.SystemCheckQuery(ctx, cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
+		if !cmd.Verbose {
+			// target data is very noisy
+			for _, p := range resp.Pools {
+				for _, r := range p.Ranks {
+					r.Targets = nil
+				}
+			}
+		}
 		return cmd.OutputJSON(resp, err)
 	}
 	if err != nil {

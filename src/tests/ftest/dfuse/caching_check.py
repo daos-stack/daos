@@ -59,6 +59,12 @@ class DfuseCachingCheck(IorTestBase):
 
         self.log_step('Re-mount dfuse with caching enabled')
         self.dfuse.unmount(tries=1)
+        # dfuse evicts idle files once their dentry expires, dropping the page cache between
+        # ior runs; setting any dfuse attr replaces all defaults, so set them all.
+        self.container.set_attr(attrs={'dfuse-data-cache': '10m',
+                                       'dfuse-attr-time': '1m',
+                                       'dfuse-dentry-time': '1m',
+                                       'dfuse-ndentry-time': '1m'})
         self.dfuse.update_params(disable_caching=False)
         self.dfuse.run()
 

@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Wrapper script for calling pylint"""
+"""
+    (C) Copyright 2022-2024 Intel Corporation.
+    (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+
+    SPDX-License-Identifier: BSD-2-Clause-Patent
+
+    Wrapper script for calling pylint
+"""
 
 import argparse
 import json
