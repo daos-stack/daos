@@ -587,6 +587,9 @@ void dc_obj_fini(void);
 /** Number of the checksum errors this client reported to the servers */
 uint64_t
 	      dc_obj_csum_report_nr(void);
+/** Number of the EC fetches this client did again (-DER_FETCH_AGAIN) */
+uint64_t
+	      dc_obj_ec_fetch_again_nr(void);
 
 int dc_obj_register_class(tse_task_t *task);
 int dc_obj_query_class(tse_task_t *task);

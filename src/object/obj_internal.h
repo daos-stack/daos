@@ -224,6 +224,11 @@ struct obj_reasb_req {
 	    orr_fail_alloc                         : 1,
 	    /* The fetch data/sgl is rebuilt by EC parity rebuild */
 	    orr_recov_data                         : 1;
+	/* The handling of a shard RPC reply of this fetch attempt failed, the deferred csum
+	 * verification is skipped. Not one of the bits above, as it is set by the shard
+	 * callbacks that read them.
+	 */
+	bool orr_shard_failed;
 };
 
 static inline void

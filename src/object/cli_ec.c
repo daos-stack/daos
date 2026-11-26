@@ -1529,9 +1529,10 @@ obj_ec_singv_req_reasb(struct dc_object *obj, uint64_t dkey_hash, daos_iod_t *io
 
 	ec_recx_array->oer_k = oca->u.ec.e_k;
 	ec_recx_array->oer_p = oca->u.ec.e_p;
-	if (obj_ec_singv_one_tgt(iod->iod_size, sgl, oca)) {
+	if (obj_ec_singv_one_tgt(iod->iod_size, sgl, oca) || (!update && sgl == NULL)) {
 		/* small singv stores on one target and replicates to all
-		 * parity targets.
+		 * parity targets. That target always holds the latest record,
+		 * so it is enough to query the size (fetch without sgl).
 		 */
 		if (reasb_req->orr_recov) {
 			rc = obj_ec_fail_info_parity_get(obj, reasb_req, dkey_hash, &idx,
