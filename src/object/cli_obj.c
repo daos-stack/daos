@@ -2080,6 +2080,8 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	}
 
 	if (obj_auxi->io_retry) {
+		uint32_t now = daos_gettime_coarse();
+
 		if (pool_task != NULL) {
 			rc = dc_task_depend(task, 1, &pool_task);
 			if (rc != 0) {
@@ -2094,20 +2096,16 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		else if (result != -DER_INPROGRESS)
 			obj_auxi->long_retry_delay = 0;
 
-		if (!pmap_stale) {
-			uint32_t now = daos_gettime_coarse();
-
-			delay = dc_obj_retry_delay(task, opc, result, &obj_auxi->retry_cnt,
-						   obj_auxi->max_delay,
-						   obj_auxi->long_retry_delay == 1 ? true : false);
-			if (result == -DER_INPROGRESS &&
-			    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->retry_cnt >= 10) ||
-			     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
-				obj_auxi->retry_warn_ts = now;
-				obj_auxi->flags |= ORF_MAYBE_STARVE;
-				D_WARN("The task %p has been retried for %u times, maybe starve\n",
-				       task, obj_auxi->retry_cnt);
-			}
+		delay =
+		    dc_obj_retry_delay(task, opc, result, &obj_auxi->retry_cnt, obj_auxi->max_delay,
+				       obj_auxi->long_retry_delay == 1 ? true : false);
+		if (result == -DER_INPROGRESS &&
+		    ((obj_auxi->retry_warn_ts == 0 && obj_auxi->retry_cnt >= 10) ||
+		     (obj_auxi->retry_warn_ts > 0 && obj_auxi->retry_warn_ts + 10 < now))) {
+			obj_auxi->retry_warn_ts = now;
+			obj_auxi->flags |= ORF_MAYBE_STARVE;
+			D_WARN("The task %p has been retried for %u times, maybe starve\n", task,
+			       obj_auxi->retry_cnt);
 		}
 
 		rc = tse_task_reinit_with_delay(task, delay);
