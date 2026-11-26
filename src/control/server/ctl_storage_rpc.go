@@ -694,6 +694,10 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 //
 // It returns errEngineNotReady if the engine is not ready, because it may not have reported its
 // page size yet. Any other error is a failure.
+//
+// A ready engine always reports a non-zero page size, which it derives from compile-time constants
+// and cannot fail to get. A zero page size can therefore only come from an engine older than the
+// field, and is an error: aligning the usable size to it would divide by zero.
 func (cs *ControlService) getMemPageSize(engineCfg *engine.Config) (uint64, error) {
 	for _, ei := range cs.harness.Instances() {
 		if ei.Index() != engineCfg.Index {
@@ -791,8 +795,9 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) error {
 			}
 			pageSize, err := cs.getMemPageSize(engineCfg)
 			if errors.Is(err, errEngineNotReady) {
-				cs.log.Noticef("Adjusting usable size of engine %d to 0 Bytes of SCM device %q: %s",
-					engineCfg.Index, mountPath, err.Error())
+				cs.log.Noticef("Engine %d is not ready, its memory page size is "+
+					"unknown: usable size of SCM device %q set to 0 Bytes",
+					engineCfg.Index, mountPath)
 				mnt.UsableBytes = 0
 				continue
 			}

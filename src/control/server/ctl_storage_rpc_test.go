@@ -4890,7 +4890,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 			output: expectedOutput{
 				availableBytes: []uint64{uint64(64) * humanize.GiByte},
 				usableBytes:    []uint64{0},
-				message:        "engine not ready yet",
+				message:        "Engine 0 is not ready",
 			},
 		},
 		// Engine 0 is not ready: the page size it kept from its last run is not used.
@@ -4945,7 +4945,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 					0,
 					806 * 5 * mdOnSsdPageSize,
 				},
-				message: "engine not ready yet",
+				message: "Engine 0 is not ready",
 			},
 		},
 		"MD-on-SSD engine which did not report its page size": {
