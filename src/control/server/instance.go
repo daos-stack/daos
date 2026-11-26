@@ -82,7 +82,7 @@ type EngineInstance struct {
 	_superblock      *Superblock
 	_lastErr         error // populated when harness receives signal
 	_lastHealthStats map[string]*ctlpb.BioHealthResp
-	_scmPageSize     uint64
+	_memPageSize     uint64
 	// Guard against closing storageReady more than once for the current start attempt. Reset
 	// to false each time a new channel is created.
 	_storageReadyClosed bool
@@ -442,20 +442,20 @@ func (ei *EngineInstance) GetTargetCount() int {
 	return ei.runner.GetConfig().TargetCount
 }
 
-func (ei *EngineInstance) setScmPageSize(pageSize uint64) {
+func (ei *EngineInstance) setMemPageSize(pageSize uint64) {
 	ei.Lock()
 	defer ei.Unlock()
 
-	ei._scmPageSize = pageSize
+	ei._memPageSize = pageSize
 }
 
-// GetScmPageSize returns the page size, in bytes, of the memory files of the VOS targets, as
+// GetMemPageSize returns the page size, in bytes, of the memory files of the VOS targets, as
 // reported by the engine when it became ready, or zero if it did not.
-func (ei *EngineInstance) GetScmPageSize() uint64 {
+func (ei *EngineInstance) GetMemPageSize() uint64 {
 	ei.RLock()
 	defer ei.RUnlock()
 
-	return ei._scmPageSize
+	return ei._memPageSize
 }
 
 func (ei *EngineInstance) callSetUp(ctx context.Context) error {

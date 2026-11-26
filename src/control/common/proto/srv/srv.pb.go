@@ -41,7 +41,7 @@ type NotifyReadyReq struct {
 	SecondaryUris    []string               `protobuf:"bytes,7,rep,name=secondaryUris,proto3" json:"secondaryUris,omitempty"`                    // secondary CaRT URIs
 	SecondaryNctxs   []uint32               `protobuf:"varint,8,rep,packed,name=secondaryNctxs,proto3" json:"secondaryNctxs,omitempty"`          // number of CaRT contexts for each secondary provider
 	CheckMode        bool                   `protobuf:"varint,9,opt,name=check_mode,json=checkMode,proto3" json:"check_mode,omitempty"`          // True if engine started in checker mode
-	ScmPageSize      uint64                 `protobuf:"varint,10,opt,name=scm_page_size,json=scmPageSize,proto3" json:"scm_page_size,omitempty"` // Page size the VOS memory (SCM) files are aligned to
+	MemPageSize      uint64                 `protobuf:"varint,10,opt,name=mem_page_size,json=memPageSize,proto3" json:"mem_page_size,omitempty"` // Page size, in bytes, the VOS memory files are aligned to
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -139,9 +139,9 @@ func (x *NotifyReadyReq) GetCheckMode() bool {
 	return false
 }
 
-func (x *NotifyReadyReq) GetScmPageSize() uint64 {
+func (x *NotifyReadyReq) GetMemPageSize() uint64 {
 	if x != nil {
-		return x.ScmPageSize
+		return x.MemPageSize
 	}
 	return 0
 }
@@ -510,8 +510,8 @@ const file_srv_srv_proto_rawDesc = "" +
 	"\x0esecondaryNctxs\x18\b \x03(\rR\x0esecondaryNctxs\x12\x1d\n" +
 	"\n" +
 	"check_mode\x18\t \x01(\bR\tcheckMode\x12\"\n" +
-	"\rscm_page_size\x18\n" +
-	" \x01(\x04R\vscmPageSize\"#\n" +
+	"\rmem_page_size\x18\n" +
+	" \x01(\x04R\vmemPageSize\"#\n" +
 	"\rGetPoolSvcReq\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\"B\n" +
 	"\x0eGetPoolSvcResp\x12\x16\n" +

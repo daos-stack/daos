@@ -439,12 +439,12 @@ static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "scm_page_size",
+    "mem_page_size",
     10,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Srv__NotifyReadyReq, scm_page_size),
+    offsetof(Srv__NotifyReadyReq, mem_page_size),
     NULL,
     NULL,
     0,             /* flags */
@@ -456,9 +456,9 @@ static const unsigned srv__notify_ready_req__field_indices_by_name[] = {
   2,   /* field[2] = drpcListenerSock */
   5,   /* field[5] = incarnation */
   3,   /* field[3] = instanceIdx */
+  9,   /* field[9] = mem_page_size */
   1,   /* field[1] = nctxs */
   4,   /* field[4] = ntgts */
-  9,   /* field[9] = scm_page_size */
   7,   /* field[7] = secondaryNctxs */
   6,   /* field[6] = secondaryUris */
   0,   /* field[0] = uri */

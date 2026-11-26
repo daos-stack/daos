@@ -72,9 +72,9 @@ struct  _Srv__NotifyReadyReq
    */
   protobuf_c_boolean check_mode;
   /*
-   * Page size the VOS memory (SCM) files are aligned to
+   * Page size, in bytes, the VOS memory files are aligned to
    */
-  uint64_t scm_page_size;
+  uint64_t mem_page_size;
 };
 #define SRV__NOTIFY_READY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&srv__notify_ready_req__descriptor) \

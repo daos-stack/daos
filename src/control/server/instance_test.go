@@ -272,7 +272,7 @@ type (
 		GetRankResp         ranklist.Rank
 		GetRankErr          error
 		TargetCount         int
-		ScmPageSize         uint64
+		MemPageSize         uint64
 		Index               uint32
 		Started             atm.Bool
 		Ready               atm.Bool
@@ -321,8 +321,8 @@ func (mi *MockInstance) GetTargetCount() int {
 	return mi.cfg.TargetCount
 }
 
-func (mi *MockInstance) GetScmPageSize() uint64 {
-	return mi.cfg.ScmPageSize
+func (mi *MockInstance) GetMemPageSize() uint64 {
+	return mi.cfg.MemPageSize
 }
 
 func (mi *MockInstance) Index() uint32 {

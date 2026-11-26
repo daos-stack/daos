@@ -65,8 +65,8 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 }
 
 /* The page size of the memory files of the VOS pools depends on the umem backend */
-#define MOCK_SCM_PAGE_SIZE_BMEM_V2 (1UL << 24)
-#define MOCK_SCM_PAGE_SIZE_PMEM    (1UL << 12)
+#define MOCK_MEM_PAGE_SIZE_BMEM_V2 (1UL << 24)
+#define MOCK_MEM_PAGE_SIZE_PMEM    (1UL << 12)
 
 static int mock_md_backend = DAOS_MD_BMEM_V2;
 int
@@ -78,7 +78,7 @@ umempobj_get_backend_type(void)
 size_t
 umempobj_pgsz(int backend)
 {
-	return backend == DAOS_MD_PMEM ? MOCK_SCM_PAGE_SIZE_PMEM : MOCK_SCM_PAGE_SIZE_BMEM_V2;
+	return backend == DAOS_MD_PMEM ? MOCK_MEM_PAGE_SIZE_PMEM : MOCK_MEM_PAGE_SIZE_BMEM_V2;
 }
 
 struct dss_module_info	*mock_dmi;
@@ -230,7 +230,7 @@ unpack_sendmsg_drpc_call(void)
 }
 
 static void
-verify_notify_ready_message(size_t exp_scm_page_size)
+verify_notify_ready_message(size_t exp_mem_page_size)
 {
 	Drpc__Call          *call;
 	Srv__NotifyReadyReq *req;
@@ -248,7 +248,7 @@ verify_notify_ready_message(size_t exp_scm_page_size)
 	assert_string_equal(req->drpclistenersock, drpc_listener_socket_path);
 	assert_int_equal(req->instanceidx, dss_instance_idx);
 	assert_int_equal(req->ntgts, dss_tgt_nr);
-	assert_int_equal(req->scm_page_size, exp_scm_page_size);
+	assert_int_equal(req->mem_page_size, exp_mem_page_size);
 
 	/* Cleanup */
 	srv__notify_ready_req__free_unpacked(req, NULL);
@@ -267,7 +267,7 @@ test_drpc_verify_notify_ready(void **state)
 
 	/* Message was sent */
 	assert_non_null(sendmsg_msg_ptr);
-	verify_notify_ready_message(MOCK_SCM_PAGE_SIZE_BMEM_V2);
+	verify_notify_ready_message(MOCK_MEM_PAGE_SIZE_BMEM_V2);
 }
 
 static void
@@ -279,7 +279,7 @@ test_drpc_verify_notify_ready_pmem(void **state)
 	assert_rc_equal(drpc_notify_ready(false), 0);
 
 	assert_non_null(sendmsg_msg_ptr);
-	verify_notify_ready_message(MOCK_SCM_PAGE_SIZE_PMEM);
+	verify_notify_ready_message(MOCK_MEM_PAGE_SIZE_PMEM);
 }
 
 static void

@@ -1263,7 +1263,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 		smsc            *system.MockSysConfig
 		targetCount     int
 		ctrlMdPath      string
-		scmPageSize     uint64 // Reported by the engine when it is ready: 0 if it did not
+		memPageSize     uint64 // Reported by the engine when it is ready: 0 if it did not
 		disableHPs      bool
 		noSrvCfg        bool
 		nilReq          bool
@@ -1697,7 +1697,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 			targetCount: 5,
 			ctrlMdPath:  "/var/daos/control_meta",
-			scmPageSize: 0,
+			memPageSize: 0,
 			smsc: &system.MockSysConfig{
 				GetfsUsageResps: []system.GetfsUsageRetval{
 					{Total: 64 * humanize.GiByte, Avail: 64 * humanize.GiByte},
@@ -1741,7 +1741,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 			targetCount: 5,
 			ctrlMdPath:  "/var/daos/control_meta",
-			scmPageSize: 0,
+			memPageSize: 0,
 			smsc: &system.MockSysConfig{
 				GetfsUsageResps: []system.GetfsUsageRetval{
 					{Total: 64 * humanize.GiByte, Avail: 64 * humanize.GiByte},
@@ -1770,7 +1770,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			},
 			targetCount: 5,
 			ctrlMdPath:  "/var/daos/control_meta",
-			scmPageSize: 16 * humanize.MiByte,
+			memPageSize: 16 * humanize.MiByte,
 			smsc: &system.MockSysConfig{
 				GetfsUsageResps: []system.GetfsUsageRetval{
 					{Total: 64 * humanize.GiByte, Avail: 64 * humanize.GiByte},
@@ -1925,7 +1925,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				cs = mockControlService(t, log, sCfg, nil, tc.smbc, tc.smsc)
 			}
 			for _, ei := range cs.harness.Instances() {
-				ei.(*EngineInstance).setScmPageSize(tc.scmPageSize)
+				ei.(*EngineInstance).setMemPageSize(tc.memPageSize)
 			}
 
 			scanBdevs = func(_ context.Context, c *ControlService, _ *ctlpb.ScanNvmeReq, _ []*ctlpb.ScmNamespace) (*ctlpb.ScanNvmeResp, error) {
@@ -4469,7 +4469,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 		ctrlMdPath  string
 		mountPoints []string
 		targetCount int
-		scmPageSize uint64 // Reported by the engine when it is ready
+		memPageSize uint64 // Reported by the engine when it is ready
 		notStarted  bool   // The engine is not started, so not ready
 	}
 
@@ -4642,7 +4642,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/mnt",
 						mountPoints: []string{"/mnt", "/opt"},
 						targetCount: 1,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4676,7 +4676,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 			},
 		},
 		// room      = 64 GiB (avail bytes) - 1 GiB (RDB) - 16 MiB (control plane metadata)
-		//             - 1 MiB (file system metadata) = 16510720 pages of 4 KiB (scmPageSize)
+		//             - 1 MiB (file system metadata) = 16510720 pages of 4 KiB (memPageSize)
 		// left over = 16510720 pages % 3 targets = 1 page
 		// usable    = room: a PMem engine is not aligned, the page left over is not removed
 		"PMem with 3 targets filling the room": {
@@ -4686,7 +4686,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						mdCap:       "DAOS_MD_CAP=1024",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 3,
-						scmPageSize: 4 * humanize.KiByte,
+						memPageSize: 4 * humanize.KiByte,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4720,7 +4720,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 5,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4752,7 +4752,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 3,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4785,7 +4785,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/mnt",
 						mountPoints: []string{"/mnt"},
 						targetCount: 4,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4823,14 +4823,14 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 5,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 					{
 						mdCap:       "DAOS_MD_CAP=1024",
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos1"},
 						targetCount: 5,
-						scmPageSize: 4 * mdOnSsdPageSize,
+						memPageSize: 4 * mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4871,7 +4871,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 3,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 						notStarted:  true,
 					},
 				},
@@ -4906,7 +4906,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 5,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 						notStarted:  true,
 					},
 					{
@@ -4914,7 +4914,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos1"},
 						targetCount: 5,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4956,7 +4956,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 3,
-						scmPageSize: 0,
+						memPageSize: 0,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4982,7 +4982,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						mdCap:       "DAOS_MD_CAP=1024",
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -5009,7 +5009,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						ctrlMdPath:  "/var/daos/control_meta",
 						mountPoints: []string{"/mnt/daos0"},
 						targetCount: 3,
-						scmPageSize: mdOnSsdPageSize,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -5073,7 +5073,7 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 				cs.harness.instances = nil
 			}
 			for idx, ei := range cs.harness.Instances() {
-				ei.(*EngineInstance).setScmPageSize(tc.input.configs[idx].scmPageSize)
+				ei.(*EngineInstance).setMemPageSize(tc.input.configs[idx].memPageSize)
 			}
 
 			err := cs.adjustScmSize(tc.input.response)

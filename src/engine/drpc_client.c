@@ -182,7 +182,7 @@ drpc_notify_ready(bool check_mode)
 	req.ntgts = dss_tgt_nr;
 	req.check_mode = check_mode;
 	/* The control plane needs the alignment of the VOS files to size the pools */
-	req.scm_page_size = umempobj_pgsz(umempobj_get_backend_type());
+	req.mem_page_size = umempobj_pgsz(umempobj_get_backend_type());
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);

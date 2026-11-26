@@ -689,12 +689,12 @@ func (cs *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	}
 }
 
-// getScmPageSize returns the page size, in bytes, of the memory files of the VOS targets of the
+// getMemPageSize returns the page size, in bytes, of the memory files of the VOS targets of the
 // engine, as reported by the engine when it became ready.
 //
 // It returns errEngineNotReady if the engine is not ready, because it may not have reported its
 // page size yet. Any other error is a failure.
-func (cs *ControlService) getScmPageSize(engineCfg *engine.Config) (uint64, error) {
+func (cs *ControlService) getMemPageSize(engineCfg *engine.Config) (uint64, error) {
 	for _, ei := range cs.harness.Instances() {
 		if ei.Index() != engineCfg.Index {
 			continue
@@ -704,7 +704,7 @@ func (cs *ControlService) getScmPageSize(engineCfg *engine.Config) (uint64, erro
 			return 0, errEngineNotReady
 		}
 
-		pageSize := ei.GetScmPageSize()
+		pageSize := ei.GetMemPageSize()
 		if pageSize == 0 {
 			return 0, errors.Errorf("engine %d did not report the page size of the memory "+
 				"files of its targets: is its version different from the one of the "+
@@ -789,7 +789,7 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) error {
 				return errors.Errorf("engine %d: invalid target count %d", engineCfg.Index,
 					engineCfg.TargetCount)
 			}
-			pageSize, err := cs.getScmPageSize(engineCfg)
+			pageSize, err := cs.getMemPageSize(engineCfg)
 			if errors.Is(err, errEngineNotReady) {
 				cs.log.Noticef("Adjusting usable size of engine %d to 0 Bytes of SCM device %q: %s",
 					engineCfg.Index, mountPath, err.Error())

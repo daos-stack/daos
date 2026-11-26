@@ -33,7 +33,7 @@ func getTestNotifyReadyReq(t *testing.T, sockPath string, idx uint32) *srvpb.Not
 	return &srvpb.NotifyReadyReq{
 		DrpcListenerSock: sockPath,
 		InstanceIdx:      idx,
-		ScmPageSize:      16 << 20,
+		MemPageSize:      16 << 20,
 	}
 }
 
@@ -51,14 +51,14 @@ func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	instance := getTestEngineInstance(log)
-	test.AssertEqual(t, uint64(0), instance.GetScmPageSize(), "expected no page size before ready")
+	test.AssertEqual(t, uint64(0), instance.GetMemPageSize(), "expected no page size before ready")
 
 	req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
 
 	instance.NotifyDrpcReady(req)
 
 	test.AssertEqual(t, req.DrpcListenerSock, instance.getDrpcSocket(), "expected socket value set")
-	test.AssertEqual(t, req.ScmPageSize, instance.GetScmPageSize(), "expected page size set")
+	test.AssertEqual(t, req.MemPageSize, instance.GetMemPageSize(), "expected page size set")
 
 	waitForEngineReady(t, instance)
 }
