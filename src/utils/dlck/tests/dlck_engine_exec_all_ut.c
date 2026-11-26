@@ -22,13 +22,11 @@
 #define TARGET_COUNT 3
 
 /** per-test context: the engine and the custom arguments passed to the exec callbacks */
-struct exec_all_ut_ctx {
+struct tctx {
 	struct dlck_engine engine;
 	int                custom_alloc;
 	int                custom_free;
 };
-
-static struct exec_all_ut_ctx Ctx;
 
 #define EXPECT_EXEC_STATE(CTX, MOCK, TARGETS)                                                      \
 	do {                                                                                       \
@@ -40,30 +38,30 @@ static struct exec_all_ut_ctx Ctx;
 
 #define EXPECT_EXEC_INIT(CTX, ENGINE, RC)                                                          \
 	do {                                                                                       \
-		expect_value(__wrap_dlck_exec_init, engine, ENGINE);                               \
-		EXPECT_EXEC_STATE(CTX, __wrap_dlck_exec_init, TARGET_COUNT);                       \
-		will_return(__wrap_dlck_exec_init, RC);                                            \
+		expect_value(dlck_exec_init, engine, ENGINE);                                      \
+		EXPECT_EXEC_STATE(CTX, dlck_exec_init, TARGET_COUNT);                              \
+		will_return(dlck_exec_init, RC);                                                   \
 	} while (0)
 
-#define EXPECT_ENGINE_EXEC(CTX, ENGINE, RC, JOIN_FAIL)                                             \
+#define EXPECT_ENGINE_EXEC(CTX, RC, JOIN_FAIL)                                                     \
 	do {                                                                                       \
-		expect_value(__wrap_dlck_engine_exec, engine, ENGINE);                             \
-		EXPECT_EXEC_STATE(CTX, __wrap_dlck_engine_exec, TARGET_COUNT);                     \
-		will_return(__wrap_dlck_engine_exec, JOIN_FAIL);                                   \
-		will_return(__wrap_dlck_engine_exec, RC);                                          \
+		expect_value(dlck_engine_exec, engine, &(CTX)->engine);                            \
+		EXPECT_EXEC_STATE(CTX, dlck_engine_exec, TARGET_COUNT);                            \
+		will_return(dlck_engine_exec, JOIN_FAIL);                                          \
+		will_return(dlck_engine_exec, RC);                                                 \
 	} while (0)
 
 #define EXPECT_EXEC_JOIN(CTX, RC, JOIN_FAIL)                                                       \
 	do {                                                                                       \
-		EXPECT_EXEC_STATE(CTX, __wrap_dlck_exec_join, TARGET_COUNT);                       \
-		will_return(__wrap_dlck_exec_join, JOIN_FAIL);                                     \
-		will_return(__wrap_dlck_exec_join, RC);                                            \
+		EXPECT_EXEC_STATE(CTX, dlck_exec_join, TARGET_COUNT);                              \
+		will_return(dlck_exec_join, JOIN_FAIL);                                            \
+		will_return(dlck_exec_join, RC);                                                   \
 	} while (0)
 
-#define EXPECT_EXEC_FINI(CTX) EXPECT_EXEC_STATE(CTX, __wrap_dlck_exec_fini, TARGET_COUNT)
+#define EXPECT_EXEC_FINI(CTX) EXPECT_EXEC_STATE(CTX, dlck_exec_fini, TARGET_COUNT)
 
 int
-__wrap_dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de)
+dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de)
 {
 	check_expected_ptr(engine);
 	assert_non_null(de);
@@ -79,7 +77,7 @@ __wrap_dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de)
 }
 
 int
-__wrap_dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
+dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
 {
 	check_expected_ptr(engine);
 	assert_non_null(de);
@@ -96,7 +94,7 @@ __wrap_dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
 }
 
 int
-__wrap_dlck_exec_join(struct dlck_exec *de)
+dlck_exec_join(struct dlck_exec *de)
 {
 	assert_non_null(de);
 	check_expected(de->targets);
@@ -112,7 +110,7 @@ __wrap_dlck_exec_join(struct dlck_exec *de)
 }
 
 void
-__wrap_dlck_exec_fini(struct dlck_exec *de)
+dlck_exec_fini(struct dlck_exec *de)
 {
 	assert_non_null(de);
 	check_expected(de->targets);
@@ -127,9 +125,11 @@ __wrap_dlck_exec_fini(struct dlck_exec *de)
 static int
 setup(void **state)
 {
-	memset(&Ctx, 0, sizeof(Ctx));
-	Ctx.engine.targets = TARGET_COUNT;
-	*state             = &Ctx;
+	static struct tctx ctx;
+
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.engine.targets = TARGET_COUNT;
+	*state             = &ctx;
 
 	return 0;
 }
@@ -138,8 +138,8 @@ setup(void **state)
 static void
 test_exec_all_init_failure(void **state)
 {
-	struct exec_all_ut_ctx *ctx = *state;
-	int                     rc;
+	struct tctx *ctx = *state;
+	int          rc;
 
 	EXPECT_EXEC_INIT(ctx, &ctx->engine, -DER_NOMEM);
 
@@ -154,11 +154,11 @@ test_exec_all_init_failure(void **state)
 static void
 test_exec_all_exec_failure(void **state)
 {
-	struct exec_all_ut_ctx *ctx = *state;
-	int                     rc;
+	struct tctx *ctx = *state;
+	int          rc;
 
 	EXPECT_EXEC_INIT(ctx, &ctx->engine, DER_SUCCESS);
-	EXPECT_ENGINE_EXEC(ctx, &ctx->engine, -DER_IO, false);
+	EXPECT_ENGINE_EXEC(ctx, -DER_IO, false);
 	EXPECT_EXEC_FINI(ctx);
 
 	rc = dlck_engine_exec_all(&ctx->engine, mock_arg_alloc_fn, &ctx->custom_alloc,
@@ -172,11 +172,11 @@ test_exec_all_exec_failure(void **state)
 static void
 test_exec_all_exec_join_failure(void **state)
 {
-	struct exec_all_ut_ctx *ctx = *state;
-	int                     rc;
+	struct tctx *ctx = *state;
+	int          rc;
 
 	EXPECT_EXEC_INIT(ctx, &ctx->engine, DER_SUCCESS);
-	EXPECT_ENGINE_EXEC(ctx, &ctx->engine, -DER_NOMEM, true);
+	EXPECT_ENGINE_EXEC(ctx, -DER_NOMEM, true);
 	EXPECT_EXEC_FINI(ctx);
 
 	rc = dlck_engine_exec_all(&ctx->engine, mock_arg_alloc_fn, &ctx->custom_alloc,
@@ -190,11 +190,11 @@ test_exec_all_exec_join_failure(void **state)
 static void
 test_exec_all_success(void **state)
 {
-	struct exec_all_ut_ctx *ctx = *state;
-	int                     rc;
+	struct tctx *ctx = *state;
+	int          rc;
 
 	EXPECT_EXEC_INIT(ctx, &ctx->engine, DER_SUCCESS);
-	EXPECT_ENGINE_EXEC(ctx, &ctx->engine, DER_SUCCESS, false);
+	EXPECT_ENGINE_EXEC(ctx, DER_SUCCESS, false);
 	EXPECT_EXEC_JOIN(ctx, DER_SUCCESS, false);
 	EXPECT_EXEC_FINI(ctx);
 
@@ -209,11 +209,11 @@ test_exec_all_success(void **state)
 static void
 test_exec_all_join_failure(void **state)
 {
-	struct exec_all_ut_ctx *ctx = *state;
-	int                     rc;
+	struct tctx *ctx = *state;
+	int          rc;
 
 	EXPECT_EXEC_INIT(ctx, &ctx->engine, DER_SUCCESS);
-	EXPECT_ENGINE_EXEC(ctx, &ctx->engine, DER_SUCCESS, false);
+	EXPECT_ENGINE_EXEC(ctx, DER_SUCCESS, false);
 	EXPECT_EXEC_JOIN(ctx, -DER_INVAL, true);
 	EXPECT_EXEC_FINI(ctx);
 
@@ -228,12 +228,12 @@ test_exec_all_join_failure(void **state)
 static void
 test_exec_all_preserves_engine_join_failure(void **state)
 {
-	struct exec_all_ut_ctx *ctx = *state;
-	int                     rc;
+	struct tctx *ctx = *state;
+	int          rc;
 
 	ctx->engine.join_fail = true;
 	EXPECT_EXEC_INIT(ctx, &ctx->engine, DER_SUCCESS);
-	EXPECT_ENGINE_EXEC(ctx, &ctx->engine, DER_SUCCESS, false);
+	EXPECT_ENGINE_EXEC(ctx, DER_SUCCESS, false);
 	EXPECT_EXEC_JOIN(ctx, DER_SUCCESS, false);
 	EXPECT_EXEC_FINI(ctx);
 

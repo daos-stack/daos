@@ -42,8 +42,7 @@
 
 /**
  * per-test context: the engine arguments, the engine and its execution streams, and the
- * buffers handed out by the strict d_calloc mock; allocated by the setups and passed to the
- * tests through the CMocka state
+ * buffers handed out by the strict d_calloc mock;
  */
 struct engine_ut_ctx {
 	struct dlck_args_engine args;
@@ -88,13 +87,13 @@ static struct engine_ut_ctx Ctx;
 	} while (0)
 
 /** the common successful prelude of dlck_engine_init() up to vos_sys_db_init() */
-#define EXPECT_ENGINE_INIT_COMMON(ctx)                                                             \
+#define EXPECT_ENGINE_INIT(ctx)                                                                    \
 	do {                                                                                       \
 		EXPECT_ENGINE_ALLOC(ctx, (ctx)->args.targets);                                     \
 		will_return(__wrap_dss_register_dbtree_classes, DER_SUCCESS);                      \
 		EXPECT_BIO_NVME_INIT(&(ctx)->args, DER_SUCCESS);                                   \
-		expect_value(__wrap_dlck_engine_register_key, key, &daos_srv_modkey);              \
-		expect_value(__wrap_dlck_engine_register_key, key, &vos_module_key);               \
+		expect_value(__wrap_daos_register_key, key, &daos_srv_modkey);                     \
+		expect_value(__wrap_daos_register_key, key, &vos_module_key);                      \
 		will_return(mock_sm_init, DER_SUCCESS);                                            \
 		will_return(__wrap_ds_tls_key_create, 0);                                          \
 		EXPECT_VOS_STANDALONE_TLS_INIT(SYS_TAG, DER_SUCCESS);                              \
@@ -166,15 +165,15 @@ static struct engine_ut_ctx Ctx;
 		EXPECT_DLCK_XSTREAM_FREE(&(ctx)->xss[IDX], DER_SUCCESS);                           \
 	} while (0)
 
-/** the unwinding tail shared by dlck_engine_start() failures past vos_sys_db_init() */
+/** common expectations for finalizing engine-level resources */
 #define EXPECT_ENGINE_FINI(ctx)                                                                    \
 	do {                                                                                       \
 		expect_function_call(__wrap_vos_db_fini);                                          \
 		expect_function_call(__wrap_vos_standalone_tls_fini);                              \
 		expect_function_call(__wrap_ds_tls_key_delete);                                    \
 		will_return(mock_sm_fini, DER_SUCCESS);                                            \
-		expect_value(__wrap_dlck_engine_unregister_key, key, &vos_module_key);             \
-		expect_value(__wrap_dlck_engine_unregister_key, key, &daos_srv_modkey);            \
+		expect_value(__wrap_daos_unregister_key, key, &vos_module_key);                    \
+		expect_value(__wrap_daos_unregister_key, key, &daos_srv_modkey);                   \
 		expect_function_call(__wrap_bio_nvme_fini);                                        \
 		EXPECT_ENGINE_FREE(ctx);                                                           \
 	} while (0)
@@ -182,24 +181,24 @@ static struct engine_ut_ctx Ctx;
 /** engines built manually for the exec and stop suites */
 
 static void
-engine_build(struct engine_ut_ctx *ctx, unsigned targets)
+engine_build(struct engine_ut_ctx *ctx)
 {
-	ctx->engine.targets   = targets;
+	ctx->engine.targets   = ctx->args.targets;
 	ctx->engine.xss       = ctx->xss;
 	ctx->engine.join_fail = false;
 
-	for (unsigned i = 0; i <= targets; ++i) {
-		ctx->xss[i].tgt_id = (i == targets ? -1 : (int)i);
+	for (unsigned i = 0; i <= ctx->args.targets; ++i) {
+		ctx->xss[i].tgt_id = (i == ctx->args.targets ? -1 : (int)i);
 		ctx->xss[i].pool   = MOCK_POOL(i);
 	}
 }
 
 static void
-engine_build_nvme(struct engine_ut_ctx *ctx, unsigned targets)
+engine_build_nvme(struct engine_ut_ctx *ctx)
 {
-	engine_build(ctx, targets);
+	engine_build(ctx);
 
-	for (unsigned i = 0; i <= targets; ++i) {
+	for (unsigned i = 0; i <= ctx->args.targets; ++i) {
 		ctx->xss[i].nvme_poll.thread = MOCK_THREAD(i);
 		ctx->xss[i].nvme_poll_done   = MOCK_EVENTUAL(i);
 	}
@@ -208,7 +207,7 @@ engine_build_nvme(struct engine_ut_ctx *ctx, unsigned targets)
 }
 
 static void
-exec_prepare(struct engine_ut_ctx *ctx, unsigned targets)
+exec_prepare(struct engine_ut_ctx *ctx)
 {
 	ctx->exec.arg_alloc_fn     = mock_arg_alloc_fn;
 	ctx->exec.arg_alloc_fn_arg = &ctx->custom_alloc;
@@ -216,19 +215,19 @@ exec_prepare(struct engine_ut_ctx *ctx, unsigned targets)
 	ctx->exec.arg_free_fn_arg  = &ctx->custom_free;
 	ctx->exec.exec_one         = mock_exec_one;
 	ctx->exec.ck               = NULL;
-	ctx->exec.targets          = targets;
+	ctx->exec.targets          = ctx->args.targets;
 	ctx->exec.join_fail        = false;
 }
 
 /** build a job batch manually for the exec, join, and fini suites */
 static void
-exec_build(struct engine_ut_ctx *ctx, unsigned targets)
+exec_build(struct engine_ut_ctx *ctx)
 {
-	exec_prepare(ctx, targets);
+	exec_prepare(ctx);
 	ctx->exec.ults     = ctx->ults;
 	ctx->exec.ult_args = ctx->ult_args;
 
-	for (unsigned i = 0; i < targets; ++i) {
+	for (unsigned i = 0; i < ctx->args.targets; ++i) {
 		ctx->ults[i].thread = ABT_THREAD_NULL;
 		ctx->ult_args[i]    = &ctx->payload[i];
 	}
@@ -261,7 +260,7 @@ ctx_reset(void **state)
 static int
 setup_reset(void **state)
 {
-	ctx_reset(state);
+	(void)ctx_reset(state);
 
 	return 0;
 }
@@ -271,8 +270,8 @@ setup_engine_exec_build_prep(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	engine_build(ctx, ctx->args.targets);
-	exec_prepare(ctx, ctx->args.targets);
+	engine_build(ctx);
+	exec_prepare(ctx);
 
 	return 0;
 }
@@ -282,8 +281,8 @@ setup_engine_exec_build(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	engine_build(ctx, ctx->args.targets);
-	exec_build(ctx, ctx->args.targets);
+	engine_build(ctx);
+	exec_build(ctx);
 
 	return 0;
 }
@@ -293,7 +292,7 @@ setup_engine_build(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	engine_build(ctx, ctx->args.targets);
+	engine_build(ctx);
 
 	return 0;
 }
@@ -303,7 +302,7 @@ setup_engine_build_nvme(void **state)
 {
 	struct engine_ut_ctx *ctx = ctx_reset(state);
 
-	engine_build_nvme(ctx, ctx->args.targets);
+	engine_build_nvme(ctx);
 
 	return 0;
 }
@@ -351,12 +350,11 @@ test_dlck_engine_xstream_arg_alloc_failure(void **state)
 
 /** verify freeing a NULL argument is a no-op */
 static void
-test_dlck_engine_xstream_arg_free_null(void **state)
+test_dlck_engine_xstream_arg_free_null(void **unused)
 {
 	struct checker_status sts[1] = {{0}};
 	void                 *arg    = NULL;
 
-	(void)state;
 	dlck_engine_xstream_arg_free(sts, &arg);
 
 	assert_null(arg);
@@ -668,7 +666,7 @@ test_dlck_engine_init_success(void **state)
 	struct dlck_engine   *engine = NULL;
 	int                   rc;
 
-	EXPECT_ENGINE_INIT_COMMON(ctx);
+	EXPECT_ENGINE_INIT(ctx);
 
 	rc = dlck_engine_init(&ctx->args, &engine);
 
@@ -679,15 +677,15 @@ test_dlck_engine_init_success(void **state)
 	assert_false(engine->join_fail);
 }
 
-/** verify initialization succeeds without NVMe configuration */
+/** verify initialization succeeds with zero targets */
 static void
-test_dlck_engine_init_success_no_nvme(void **state)
+test_dlck_engine_init_zero_targets(void **state)
 {
 	struct engine_ut_ctx *ctx    = *state;
 	struct dlck_engine   *engine = NULL;
 	int                   rc;
 
-	EXPECT_ENGINE_INIT_COMMON(ctx);
+	EXPECT_ENGINE_INIT(ctx);
 
 	rc = dlck_engine_init(&ctx->args, &engine);
 
@@ -780,11 +778,11 @@ test_dlck_engine_init_sm_init_failure(void **state)
 	EXPECT_ENGINE_ALLOC(ctx, 2);
 	will_return(__wrap_dss_register_dbtree_classes, DER_SUCCESS);
 	EXPECT_BIO_NVME_INIT(&ctx->args, DER_SUCCESS);
-	expect_value(__wrap_dlck_engine_register_key, key, &daos_srv_modkey);
-	expect_value(__wrap_dlck_engine_register_key, key, &vos_module_key);
+	expect_value(__wrap_daos_register_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_register_key, key, &vos_module_key);
 	will_return(mock_sm_init, -DER_NOMEM);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &vos_module_key);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_unregister_key, key, &vos_module_key);
+	expect_value(__wrap_daos_unregister_key, key, &daos_srv_modkey);
 	expect_function_call(__wrap_bio_nvme_fini);
 	EXPECT_ENGINE_FREE(ctx);
 
@@ -805,13 +803,13 @@ test_dlck_engine_init_tls_key_create_failure(void **state)
 	EXPECT_ENGINE_ALLOC(ctx, 2);
 	will_return(__wrap_dss_register_dbtree_classes, DER_SUCCESS);
 	EXPECT_BIO_NVME_INIT(&ctx->args, DER_SUCCESS);
-	expect_value(__wrap_dlck_engine_register_key, key, &daos_srv_modkey);
-	expect_value(__wrap_dlck_engine_register_key, key, &vos_module_key);
+	expect_value(__wrap_daos_register_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_register_key, key, &vos_module_key);
 	will_return(mock_sm_init, DER_SUCCESS);
 	will_return(__wrap_ds_tls_key_create, ENOMEM);
 	will_return(mock_sm_fini, DER_SUCCESS);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &vos_module_key);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_unregister_key, key, &vos_module_key);
+	expect_value(__wrap_daos_unregister_key, key, &daos_srv_modkey);
 	expect_function_call(__wrap_bio_nvme_fini);
 	EXPECT_ENGINE_FREE(ctx);
 
@@ -832,15 +830,15 @@ test_dlck_engine_init_vos_tls_init_failure(void **state)
 	EXPECT_ENGINE_ALLOC(ctx, 2);
 	will_return(__wrap_dss_register_dbtree_classes, DER_SUCCESS);
 	EXPECT_BIO_NVME_INIT(&ctx->args, DER_SUCCESS);
-	expect_value(__wrap_dlck_engine_register_key, key, &daos_srv_modkey);
-	expect_value(__wrap_dlck_engine_register_key, key, &vos_module_key);
+	expect_value(__wrap_daos_register_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_register_key, key, &vos_module_key);
 	will_return(mock_sm_init, DER_SUCCESS);
 	will_return(__wrap_ds_tls_key_create, 0);
 	EXPECT_VOS_STANDALONE_TLS_INIT(SYS_TAG, -DER_NOMEM);
 	expect_function_call(__wrap_ds_tls_key_delete);
 	will_return(mock_sm_fini, DER_SUCCESS);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &vos_module_key);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_unregister_key, key, &vos_module_key);
+	expect_value(__wrap_daos_unregister_key, key, &daos_srv_modkey);
 	expect_function_call(__wrap_bio_nvme_fini);
 	EXPECT_ENGINE_FREE(ctx);
 
@@ -861,8 +859,8 @@ test_dlck_engine_init_vos_sys_db_init_failure(void **state)
 	EXPECT_ENGINE_ALLOC(ctx, 2);
 	will_return(__wrap_dss_register_dbtree_classes, DER_SUCCESS);
 	EXPECT_BIO_NVME_INIT(&ctx->args, DER_SUCCESS);
-	expect_value(__wrap_dlck_engine_register_key, key, &daos_srv_modkey);
-	expect_value(__wrap_dlck_engine_register_key, key, &vos_module_key);
+	expect_value(__wrap_daos_register_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_register_key, key, &vos_module_key);
 	will_return(mock_sm_init, DER_SUCCESS);
 	will_return(__wrap_ds_tls_key_create, 0);
 	EXPECT_VOS_STANDALONE_TLS_INIT(SYS_TAG, DER_SUCCESS);
@@ -870,8 +868,8 @@ test_dlck_engine_init_vos_sys_db_init_failure(void **state)
 	expect_function_call(__wrap_vos_standalone_tls_fini);
 	expect_function_call(__wrap_ds_tls_key_delete);
 	will_return(mock_sm_fini, DER_SUCCESS);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &vos_module_key);
-	expect_value(__wrap_dlck_engine_unregister_key, key, &daos_srv_modkey);
+	expect_value(__wrap_daos_unregister_key, key, &vos_module_key);
+	expect_value(__wrap_daos_unregister_key, key, &daos_srv_modkey);
 	expect_function_call(__wrap_bio_nvme_fini);
 	EXPECT_ENGINE_FREE(ctx);
 
@@ -881,7 +879,7 @@ test_dlck_engine_init_vos_sys_db_init_failure(void **state)
 	assert_null(engine);
 }
 
-/** verify an execution stream creation failure unwinds everything */
+/** verify an execution stream creation failure stops previously created streams */
 static void
 test_dlck_engine_start_xs_create_failure(void **state)
 {
@@ -896,7 +894,7 @@ test_dlck_engine_start_xs_create_failure(void **state)
 	assert_int_equal(rc, -DER_NOMEM);
 }
 
-/** verify a TLS initialization failure of the sys execution stream unwinds everything */
+/** verify a sys execution stream TLS initialization failure stops created streams */
 static void
 test_dlck_engine_start_xs_init_tls_failure(void **state)
 {
@@ -1020,7 +1018,7 @@ test_dlck_engine_start_polling_eventual_test_success(void **state)
 
 /** tests - dlck_engine_stop */
 
-/** verify the full stop sequence finalizes NVMe and non-NVMe execution streams */
+/** verify the stop sequence finalizes both sys and io streams */
 static void
 test_dlck_engine_stop_success(void **state)
 {
@@ -1174,7 +1172,7 @@ test_dlck_engine_stop_fini_ult_create_failure(void **state)
 static const struct CMUnitTest dlck_engine_tests[] = {
     TEST_TARGETS(101, test_dlck_engine_xstream_arg_alloc_success, setup_engine_build, 2),
     TEST_TARGETS(102, test_dlck_engine_xstream_arg_alloc_failure, setup_engine_build, 2),
-    TEST_TARGETS(103, test_dlck_engine_xstream_arg_free_null, setup_reset, 0),
+    TEST_TARGETS(103, test_dlck_engine_xstream_arg_free_null, NULL, 0),
     TEST_TARGETS(104, test_dlck_engine_xstream_arg_free_collects_outputs, setup_engine_build, 2),
     TEST_TARGETS(105, test_dlck_exec_init_success, setup_engine_exec_build_prep, 2),
     TEST_TARGETS(106, test_dlck_exec_init_ults_alloc_failure, setup_engine_exec_build_prep, 2),
@@ -1190,7 +1188,7 @@ static const struct CMUnitTest dlck_engine_tests[] = {
     TEST_TARGETS(116, test_dlck_exec_fini_success, setup_engine_exec_build, 2),
     TEST_TARGETS(117, test_dlck_exec_fini_skips_unjoined, setup_engine_exec_build, 2),
     TEST_TARGETS(118, test_dlck_engine_init_success, setup_reset, 2),
-    TEST_TARGETS(119, test_dlck_engine_init_success_no_nvme, setup_reset, 0),
+    TEST_TARGETS(119, test_dlck_engine_init_zero_targets, setup_reset, 0),
     TEST_TARGETS(120, test_dlck_engine_init_engine_alloc_failure, setup_reset, 2),
     TEST_TARGETS(121, test_dlck_engine_init_xss_alloc_failure, setup_reset, 2),
     TEST_TARGETS(122, test_dlck_engine_init_dbtree_classes_failure, setup_reset, 2),

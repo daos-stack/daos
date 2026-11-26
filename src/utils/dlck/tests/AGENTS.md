@@ -61,8 +61,6 @@
 - For APIs returning status and an output handle, queue the handle only on success.
 - For mocks which are expected to set `errno` on error, queue an `errno` only on error.
 - Successful free APIs have to have fixed output effects, such as clearing a handle.
-- Use a distinct sentinel for each resource instance so tests catch resources mixed between
-  execution streams. Initialize ABT handles to their explicit null constants, which may be nonzero.
 
 ## Checking Parameters
 
@@ -104,8 +102,6 @@
   `dlck_engine_start()`, `dlck_engine_stop()` or `dlck_engine_fini()`. Prepare prerequisite engine
   state in setup callbacks instead of calling neighboring lifecycle phases in the test body.
 - The `dlck_engine_ut` binary replaces `dlck_abt.c` with the `ut_dlck_abt_mock.c` mocks.
-- The `dlck_abt_ut` binary compiles the real `dlck_abt.c` and wraps only the ABT calls it uses.
-  Keep `ut_dlck_abt_mock.c` consistent with the real behavior it replaces.
 - `dlck_ult_create` mock runs successful ULTs synchronously, so queue their expectations before
   creating them.
 

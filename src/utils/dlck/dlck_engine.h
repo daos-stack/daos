@@ -40,7 +40,14 @@ typedef void (*dlck_ult_func)(void *arg);
 int
 dlck_engine_init(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
 
-/** Start the execution streams of an initialized engine. */
+/**
+ * Create and initialize daos_sys_0 and daos_io_* execution streams (XS).
+ *
+ * \param[in,out]	engine	Engine to start its XSes.
+ *
+ * \retval DER_SUCCESS	Success.
+ * \retval -DER_*	Error.
+ */
 int
 dlck_engine_start(struct dlck_engine *engine);
 
@@ -56,7 +63,7 @@ dlck_engine_start(struct dlck_engine *engine);
 int
 dlck_engine_stop(struct dlck_engine *engine);
 
-/** Finalize the non-xstream resources of an engine after it has stopped. */
+/** Free the non-xstream resources of an engine after it has stopped. */
 int
 dlck_engine_fini(struct dlck_engine *engine);
 

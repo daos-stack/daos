@@ -107,8 +107,6 @@ def build_dlck_checker_worker_ut(henv):
 def build_dlck_engine_exec_all_ut(henv):
     """Build dlck_engine_exec_all_ut"""
     henv.Append(OBJPREFIX="dlck_engine_exec_all_ut_")
-    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=dlck_exec_init', '-Wl,--wrap=dlck_engine_exec',
-                                 '-Wl,--wrap=dlck_exec_join', '-Wl,--wrap=dlck_exec_fini'])
     henv.require('argobots', 'cmocka')
 
     libs = ['gurt', 'cmocka']
@@ -136,6 +134,7 @@ def build_dlck_engine_ut(henv):
                                  '-Wl,--wrap=dss_tls_init', '-Wl,--wrap=dss_tls_fini',
                                  '-Wl,--wrap=dss_tls_get', '-Wl,--wrap=ds_tls_key_create',
                                  '-Wl,--wrap=ds_tls_key_delete',
+                                 '-Wl,--wrap=daos_register_key', '-Wl,--wrap=daos_unregister_key',
                                  '-Wl,--wrap=ABT_thread_join',
                                  '-Wl,--wrap=ABT_thread_free', '-Wl,--wrap=ABT_thread_yield',
                                  '-Wl,--wrap=ABT_pool_is_empty', '-Wl,--wrap=ABT_eventual_create',

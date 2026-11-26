@@ -24,33 +24,9 @@ extern struct dss_module_key vos_module_key;
 
 #ifdef DLCK_ENGINE_UNIT_TEST
 struct dss_module_info *
-__wrap_dlck_engine_get_module_info(void);
-void
-__wrap_dlck_engine_register_key(struct dss_module_key *key);
-void
-__wrap_dlck_engine_unregister_key(struct dss_module_key *key);
-
-#define dlck_engine_get_module_info()   __wrap_dlck_engine_get_module_info()
-#define dlck_engine_register_key(KEY)   __wrap_dlck_engine_register_key(KEY)
-#define dlck_engine_unregister_key(KEY) __wrap_dlck_engine_unregister_key(KEY)
+dlck_engine_get_module_info(void);
 #else
-struct dss_module_info *
-dlck_engine_get_module_info(void)
-{
-	return dss_get_module_info();
-}
-
-void
-dlck_engine_register_key(struct dss_module_key *key)
-{
-	dss_register_key(key);
-}
-
-void
-dlck_engine_unregister_key(struct dss_module_key *key)
-{
-	dss_unregister_key(key);
-}
+#define dlck_engine_get_module_info dss_get_module_info
 #endif
 
 /**
@@ -365,14 +341,6 @@ xstream_init(struct dlck_xstream *xs)
 	return xs->ult_rc;
 }
 
-/**
- * Create and initialize daos_sys_0 and daos_io_* execution streams (XS).
- *
- * \param[in,out]	engine	Engine to start its XSes.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Error.
- */
 int
 dlck_engine_start(struct dlck_engine *engine)
 {
@@ -423,18 +391,6 @@ xstream_stop_all:
 
 #define ULT_FINI_FAIL_FMT "[%d] ULT finalization failed - cannot safely free the XS: " DF_RC "\n"
 
-/**
- * Stop and free daos_sys_0 and all the daos_io_* execution streams belonging to the provided
- * engine.
- *
- * Note: All the XSes have to be idle before calling this function. No other ULTs present except for
- * the NMVe polling ULT in their pools.
- *
- * \param[in,out]	engine	Engine to stop the xstream of.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Error.
- */
 int
 dlck_engine_stop(struct dlck_engine *engine)
 {
@@ -529,8 +485,8 @@ dlck_engine_init(struct dlck_args_engine *args, struct dlck_engine **engine_ptr)
 		goto fail_engine_free;
 	}
 
-	dlck_engine_register_key(&daos_srv_modkey);
-	dlck_engine_register_key(&vos_module_key);
+	dss_register_key(&daos_srv_modkey);
+	dss_register_key(&vos_module_key);
 
 	rc = vos_srv_module.sm_init();
 	if (rc != DER_SUCCESS) {
@@ -564,8 +520,8 @@ fail_tls_key_delete:
 fail_vos_sm_fini:
 	(void)vos_srv_module.sm_fini();
 fail_unregister_keys:
-	dlck_engine_unregister_key(&vos_module_key);
-	dlck_engine_unregister_key(&daos_srv_modkey);
+	dss_unregister_key(&vos_module_key);
+	dss_unregister_key(&daos_srv_modkey);
 	bio_nvme_fini();
 fail_engine_free:
 	dlck_engine_free(engine);
@@ -590,8 +546,8 @@ dlck_engine_fini(struct dlck_engine *engine)
 		return rc;
 	}
 
-	dlck_engine_unregister_key(&vos_module_key);
-	dlck_engine_unregister_key(&daos_srv_modkey);
+	dss_unregister_key(&vos_module_key);
+	dss_unregister_key(&daos_srv_modkey);
 
 	bio_nvme_fini();
 
