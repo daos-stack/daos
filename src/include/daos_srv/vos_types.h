@@ -188,7 +188,7 @@ typedef struct {
 	daos_size_t		ci_used;
 	/** Highest (Last) aggregated epoch */
 	daos_epoch_t		ci_hae;
-	/** latest epoch for writes that require aggregation */
+	/** latest epoch for writes that require aggregation, DAOS_EPOCH_MAX if not tracked */
 	daos_epoch_t            ci_agg_write;
 	/** TODO */
 } vos_cont_info_t;
