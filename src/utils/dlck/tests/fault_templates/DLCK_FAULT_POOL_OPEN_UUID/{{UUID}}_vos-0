@@ -1,0 +1,10 @@
+VOS file allocation: ok.
+Check pool:
+	path: {{STORAGE}}/{{UUID}}/vos-0
+	uuid: {{UUID}}
+- NVMe devices (if applicable)... ok.
+- Open the pool: ok.
+- Magic... ok.
+- Version... ok.
+- UUID... error: mismatch (requested={{UUID}}, received={{UUID}})
+error: Check pool: DER_ID_MISMATCH(-2035): 'ID mismatch'

@@ -141,6 +141,12 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
 		++(ck)->ck_status.errors_num;                                                      \
 	}
 
+#define CK_RC_SET(ck, rc)                                                                          \
+	if (IS_CHECKER(ck)) {                                                                      \
+		if ((ck)->ck_status.rc == DER_SUCCESS)                                             \
+			(ck)->ck_status.rc = (rc);                                                 \
+	}
+
 #define CK_APPENDFL_ERR(ck, fmt, ...)                                                              \
 	do {                                                                                       \
 		CK_PRINTF_WO_PREFIX(ck, CHECKER_ERROR_INFIX fmt "\n", ##__VA_ARGS__);              \
@@ -169,8 +175,14 @@ ck_common_printf(struct checker *ck, const char *fmt, ...)
 
 #define CK_PRINTF_ERR(ck, fmt, ...)                                                                \
 	do {                                                                                       \
-		CK_PRINTF(ck, fmt, ##__VA_ARGS__);                                                 \
+		CK_PRINTF(ck, CHECKER_ERROR_INFIX fmt, ##__VA_ARGS__);                             \
 		CK_ERR_NUM_INC(ck);                                                                \
+	} while (0)
+
+#define CK_PRINTF_WARN(ck, fmt, ...)                                                               \
+	do {                                                                                       \
+		CK_PRINTF(ck, CHECKER_WARNING_INFIX fmt, ##__VA_ARGS__);                           \
+		CK_WARN_NUM_INC(ck);                                                               \
 	} while (0)
 
 /**
