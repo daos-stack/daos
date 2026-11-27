@@ -358,7 +358,7 @@ class ReplayTests(TestWithServers):
         """
         frequency = 5
         container = self.create_container(
-            properties=f'rd_fac:0,space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
+            properties=f'space_rb:0,checkpoint:timed,checkpoint_freq:{frequency}')
         self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
 
         self.log_step('Write data to the container (ior)')

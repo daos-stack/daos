@@ -13,11 +13,11 @@ server_config:
 
 pool:
   size: 50G
-  properties: rd_fac:0
 
 container:
   type: POSIX
   dfs_oclass: SX
+  properties: rd_fac:0
 
 ior: &ior_base
   ppn: 4

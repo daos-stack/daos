@@ -32,7 +32,7 @@ pool:
   nvme_size: 108000000000
   svcn: 4
   rebuild_timeout: 240
-  properties: rd_fac:0,space_rb:0,scrub:timed
+  properties: space_rb:0,scrub:timed
 
 container:
   type: POSIX
