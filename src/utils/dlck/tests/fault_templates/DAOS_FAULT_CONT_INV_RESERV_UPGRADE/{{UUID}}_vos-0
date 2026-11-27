@@ -1,25 +1,4 @@
 VOS file allocation: ok.
-Check pool:
-	path: {{STORAGE}}/{{UUID}}/vos-0
-	uuid: {{UUID}}
-- NVMe devices (if applicable)... ok.
-- Open the pool: ok.
-- Magic... ok.
-- Version... ok.
-- UUID... ok.
-- Containers tree...
--- Tree class... ok.
--- Tree features... ok.
--- Node (off=0xa7a4c0)... ok.
-- Containers tree: ok.
-- Pool extension (off=0x400550)...
-- Pool extension (off=0x400550): ok.
-- Garbage collector's tree...
--- Tree class... ok.
--- Tree features... ok.
--- Empty tree
-- Garbage collector's tree: ok.
-Check pool: ok.
 Check container:
 	uuid: {{UUID}}
 - uuid... ok.
@@ -63,17 +42,3 @@ Check container:
 -- DTX blob (off=0x514650)... ok.
 - Active DTX blob list: ok.
 Check container: ok.
-Check oid: 1185667690.2136093645.0.0...
-- Dkey tree...
--- Tree class... ok.
--- Tree features... ok.
--- Node (off=0xb01880)... ok.
-- Dkey tree: ok.
-Check oid: 1185667690.2136093645.0.0: ok.
-Check oid: 471378945.1581695481.0.0...
-- Dkey tree...
--- Tree class... ok.
--- Tree features... ok.
--- Node (off=0xb016a0)... ok.
-- Dkey tree: ok.
-Check oid: 471378945.1581695481.0.0: ok.

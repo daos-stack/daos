@@ -6,6 +6,7 @@ All rights reserved.
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import argparse
+import difflib
 import json
 import os
 import re
@@ -166,9 +167,9 @@ class DlckRunner:
         """Return True if an NVMe device is specified."""
         return self._nvme is not None
 
-    def run(self, config):
+    def run(self, config, env={}):
         """Run dlck with the fault config; return the exit code and stdout."""
-        env = dict(os.environ, D_FI_CONFIG=str(config))
+        env = dict(os.environ, D_FI_CONFIG=str(config), **env)
         cmd = ["sudo", "-E", str(self._dlck), "--file", self._file_arg,
                "--storage", self._storage, "--targets", "1"]
         if self._nvme is not None:
@@ -196,17 +197,11 @@ class TemplateMatcher:
 
     @classmethod
     def compare_text(cls, name, expected, actual):
-        """Return mismatch messages between a template and the actual text, line by line."""
-        errors = []
+        """Return a unified diff between a template and the actual text, empty if they match."""
         exp_lines = cls.normalize(expected).splitlines()
         act_lines = cls.normalize(actual).splitlines()
-        if len(exp_lines) != len(act_lines):
-            errors.append(f"{name}: {len(act_lines)} line(s), template has {len(exp_lines)}")
-        # enumerate(..., 1) starts line numbering at 1
-        for num, (exp, act) in enumerate(zip(exp_lines, act_lines), 1):
-            if exp != act:
-                errors.append(f"{name}:{num}: expected '{exp}', got '{act}'")
-        return errors
+        return list(difflib.unified_diff(exp_lines, act_lines, fromfile=f"template/{name}",
+                                         tofile=f"actual/{name}", lineterm=""))
 
     @classmethod
     def compare_logs(cls, expected_files, actual_dir):
@@ -297,21 +292,31 @@ class FaultInjectionTest:
         return yaml.safe_dump({"fault_config": [{"id": int(fault_id)}]}, sort_keys=False)
 
     @staticmethod
+    def _env(name):
+        """Return the environment variables for the given fault."""
+        pool_faults = ["ENGINE", "POOL", "CONT_TREE"]
+        cont_faults = ["CONT", "OBJ_ILOG", "DAE", "DBD"]
+        env_check_pool_only = {
+            "DLCK_CHECK_NO_CONTAINERS": "1",
+            "DLCK_CHECK_NO_OBJECTS": "1",
+        }
+        env_check_cont_only = {
+            "DLCK_CHECK_NO_POOLS": "1",
+            "DLCK_CHECK_NO_OBJECTS": "1",
+        }
+        if any(fault in name for fault in pool_faults):
+            return env_check_pool_only
+        elif any(fault in name for fault in cont_faults):
+            return env_check_cont_only
+        return {}
+
+    @staticmethod
     def _collect_logs(log_dir, dest):
         """Copy dlck's log directory to dest and remove the original."""
         subprocess.run(["sudo", "cp", "-r", log_dir, str(dest)], check=True)
         subprocess.run(["sudo", "chown", "-R", f"{os.getuid()}:{os.getgid()}",
                         str(dest)], check=True)
         subprocess.run(["sudo", "rm", "-rf", log_dir], check=True)
-
-    @staticmethod
-    def _print_logs(logs_dir):
-        """Print the content of every collected log file to stdout."""
-        if not logs_dir.is_dir():
-            return
-        for log in sorted(p for p in logs_dir.rglob("*") if p.is_file()):
-            print(f"--- {log.relative_to(logs_dir)} ---")
-            print(log.read_text())
 
     def _skip_code(self, name):
         """Return the ReturnCode for a fault that must be skipped, or None to run it."""
@@ -339,13 +344,14 @@ class FaultInjectionTest:
         if skip_code is not None:
             return skip_code
 
-        # generate result directory and config for the fault
+        # generate result directory, config, and env for the fault
         result_dir = Path(tempfile.mkdtemp(prefix=f"{name}_"))
         config = result_dir / "fault_injection_dlck.yaml"
         config.write_text(self._make_config(fault_id))
+        env = self._env(name)
 
         # run dlck with the generated config and capture output
-        rc, output, errors = self._runner.run(config)
+        rc, output, errors = self._runner.run(config, env)
         (result_dir / "output.txt").write_text(output)
 
         # collect logs if dlck produced any
@@ -373,7 +379,6 @@ class FaultInjectionTest:
         if errors:
             print("FAIL")
             print("\n".join(errors))
-            self._print_logs(logs_dir)
             return self.ReturnCode.FAIL
         print("PASS")
         return self.ReturnCode.OK

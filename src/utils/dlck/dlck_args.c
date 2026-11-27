@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,10 +61,27 @@ parser(int key, char *arg, struct argp_state *state)
 static struct argp argp = {empty_options, parser, NULL /** usage */, doc, children};
 
 void
+dlck_env(struct dlck_control *ctrl)
+{
+	char *env;
+
+	/**
+	 * Provide an environment variable to disable checking of specific scopes.
+	 * When no environment variable is set, the corresponding scope will be checked.
+	 */
+	ctrl->scope.pools      = d_agetenv_str(&env, "DLCK_CHECK_NO_POOLS") != DER_SUCCESS;
+	ctrl->scope.containers = d_agetenv_str(&env, "DLCK_CHECK_NO_CONTAINERS") != DER_SUCCESS;
+	ctrl->scope.objects    = d_agetenv_str(&env, "DLCK_CHECK_NO_OBJECTS") != DER_SUCCESS;
+}
+
+void
 dlck_args_parse(int argc, char *argv[], struct dlck_control *ctrl)
 {
-	error_t ret = argp_parse(&argp, argc, argv, ARGP_IN_ORDER, 0, ctrl);
+	error_t ret;
 
+	dlck_env(ctrl);
+
+	ret = argp_parse(&argp, argc, argv, ARGP_IN_ORDER, 0, ctrl);
 	if (ret != 0) {
 		D_ERROR("Parsing arguments failed: %d", ret);
 		exit(ret);
