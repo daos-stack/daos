@@ -18,4 +18,5 @@ export STAGE_NAME="$STAGE_NAME"
 
 export DAOS_HTTPS_PROXY="${DAOS_HTTPS_PROXY:-}"
 export DAOS_NO_PROXY="${DAOS_NO_PROXY:-}"
+export REPO_FILE_URL="${REPO_FILE_URL:-}"
 /usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"

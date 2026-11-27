@@ -69,6 +69,7 @@ fi
 
 MAJOR_VER="${BASE_DISTRO##*:}"
 MAJOR_VER="${MAJOR_VER%%.*}"
+echo "Detected major version: $MAJOR_VER"
 repos_dir=/etc/yum.repos.d/
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
