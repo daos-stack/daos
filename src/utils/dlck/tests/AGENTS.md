@@ -5,6 +5,8 @@
 - Use `git commit --signoff` for every commit, including amended commits; each requires a
   `Signed-off-by` trailer.
 - Follow `.clang-format` for C/C++ and test tables. The column limit is 100; count tabs as 8.
+- Keep lists, sources, includes, libraries and registrations in alphabetical order wherever
+  possible. Keep ordering that is fixed by sequential test IDs or dependencies.
 
 ## Unit Tests
 
@@ -20,11 +22,15 @@
 - For suites with repeated CMocka registration fields, define small registration macros for common
   fixture variants (for example, with setup/teardown and without a fixture). Keep IDs sequential and
   derive the test name from the ID and function name so table entries stay concise and consistent.
+- Put setup shared by multiple tests in named CMocka setup callbacks. Move only common state
+  preparation there; keep assertions and values unique to a test in the test body.
 - For meaningful paths, prepare inputs and expectations, call the production entry point, then
   assert result and state. Cover success and relevant failures, not every theoretical branch.
 - Assert the correct error mapping and cleanup.
 - Mock only external calls whose results or arguments need control. Add `-Wl,--wrap=<symbol>` and
   implement the exact `__wrap_<symbol>` signature.
+- Mock at the shallowest useful boundary. Do not mock the internals reached through a header-defined
+  inline helper, if the owning implementation can expose a direct test seam for that helper.
 - Register `d_register_alt_assert(mock_assert)` in `main()` before `expect_assert_failure()` for
   DAOS assertions.
 - Keep numbered test IDs sequential from 101 in suites using descriptive IDs.
@@ -36,7 +42,7 @@
 
 ## Mocking Functions
 
-- Shared per-area files provide memory, stdio, ABT mutex and checker callback mocks. Each test
+- Shared per-area files provide memory, stdio, ABT, DAOS and checker callback mocks. Each test
   binary compiles only the mock areas it needs and enables only its required linker wraps.
 - Tests include the headers for the mock areas they use directly; do not rely on
   `ut_dlck_checker_mock.h` to include the required header for you.
@@ -78,6 +84,26 @@
 - For I/O mocks check also printf-style formats.
 - Never use `__real_*()` variants.
 - Never pass fake `FILE *` values to real stdio.
+
+## DLCK Engine Batch
+
+- Exercise batch initialization, execution, joining and finalization in `dlck_engine_ut`.  
+- Test `dlck_engine_exec_all()` orchestration in `dlck_engine_exec_all_ut`,  
+  mocking every function declared in `dlck_engine_internal.h`. The start message spans  
+  initialization and execution; joining reports its own result. 
+- The caller owns and initializes `dlck_exec`, including its ULT callback, allocation callbacks,
+  target count and optional checker. `dlck_exec_fini()` releases resources, not the structure.
+- After execution or joining, propagate the batch's `join_fail` to the engine before finalization.
+- Finalization must not free arguments belonging to ULTs that have not joined.
+- Test allocation and partial-start failures, join failures, and cleanup with distinct resources
+  for each target.
+- Allocation cleanup may call the free callback with a null argument.
+- In lifecycle tests, each test should call at most one of `dlck_engine_init()`,
+  `dlck_engine_start()`, `dlck_engine_stop()` or `dlck_engine_fini()`. Prepare prerequisite engine
+  state in setup callbacks instead of calling neighboring lifecycle phases in the test body.
+- The `dlck_engine_ut` binary replaces `dlck_abt.c` with the `ut_dlck_abt_mock.c` mocks.
+- `dlck_ult_create` mock runs successful ULTs synchronously, so queue their expectations before
+  creating them.
 
 ## DLCK Checker Tests
 

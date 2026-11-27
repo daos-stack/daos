@@ -371,9 +371,14 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	dss_register_key(dtx_module.sm_key);
 
 	/** start an engine */
-	rc = dlck_engine_start(&args->engine, &engine);
+	rc = dlck_engine_init(&args->engine, &engine);
 	if (rc != DER_SUCCESS) {
 		goto fail_unregister;
+	}
+
+	rc = dlck_engine_start(engine);
+	if (rc != DER_SUCCESS) {
+		goto fail_engine_fini;
 	}
 
 	if (d_list_empty(&args->files.list)) {
@@ -416,7 +421,12 @@ setup(struct dlck_helper_args *args, struct bundle *bundle)
 	return DER_SUCCESS;
 
 fail_engine_stop:
-	(void)dlck_engine_stop(engine);
+	if (dlck_engine_stop(engine) == DER_SUCCESS) {
+		(void)dlck_engine_fini(engine);
+	}
+	goto fail_unregister;
+fail_engine_fini:
+	(void)dlck_engine_fini(engine);
 fail_unregister:
 	dss_unregister_key(dtx_module.sm_key);
 	(void)ABT_finalize();
@@ -433,6 +443,11 @@ teardown(struct bundle *bundle)
 	D_FREE(bundle->paths.oids);
 
 	rc = dlck_engine_stop(bundle->engine);
+	if (rc != DER_SUCCESS) {
+		goto fail_unregister;
+	}
+
+	rc = dlck_engine_fini(bundle->engine);
 	if (rc != DER_SUCCESS) {
 		goto fail_unregister;
 	}
@@ -472,7 +487,7 @@ main(int argc, char **argv)
 	}
 
 	rc =
-	    dlck_engine_exec_all(bundle.engine, exec_one, arg_alloc, &bundle, arg_free, NULL, NULL);
+	    dlck_engine_exec_all(bundle.engine, arg_alloc, &bundle, arg_free, NULL, exec_one, NULL);
 	if (rc != DER_SUCCESS) {
 		goto fail_teardown;
 	}

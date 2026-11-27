@@ -20,6 +20,8 @@ def scons():
         'dlck_args.c',
         'dlck_checker.c',
         'dlck_engine.c',
+        'dlck_engine_exec_all.c',
+        'dlck_xstream.c',
         'dlck_main.c',
         'dlck_pool.c',
         'dlck_report.c',

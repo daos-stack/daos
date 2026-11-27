@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include "ut_stdio_mock.h"

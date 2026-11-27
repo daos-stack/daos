@@ -7,24 +7,13 @@
 #ifndef __DLCK_ENGINE__
 #define __DLCK_ENGINE__
 
+#include <stdbool.h>
+
 #include <abt.h>
 
+#include "dlck_abt.h"
 #include "dlck_args.h"
-
-struct dlck_ult {
-	ABT_thread thread;
-};
-
-struct dlck_xstream {
-	ABT_xstream     xstream;
-	ABT_pool        pool;
-
-	int             tgt_id;
-	struct dlck_ult nvme_poll;
-	ABT_eventual    nvme_poll_done;
-
-	int             ult_rc;
-};
+#include "dlck_xstream.h"
 
 struct dlck_engine {
 	unsigned             targets;
@@ -32,20 +21,20 @@ struct dlck_engine {
 	bool                 join_fail;
 };
 
-typedef void (*dlck_ult_func)(void *arg);
+/** Initialize the non-xstream resources of an engine. */
+int
+dlck_engine_init(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
 
 /**
- * Start an engine.
+ * Create and initialize daos_sys_0 and daos_io_* execution streams (XS).
  *
- * \param[in]	args		Engine's arguments.
- * \param[out]	engine_ptr	Started engine.
+ * \param[in,out]	engine	Engine to start its XSes.
  *
  * \retval DER_SUCCESS	Success.
- * \retval -DER_NOMEM	Out of memory.
- * \retval -DER_*	Other errors.
+ * \retval -DER_*	Error.
  */
 int
-dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr);
+dlck_engine_start(struct dlck_engine *engine);
 
 /**
  * Stop an engine.
@@ -59,45 +48,12 @@ dlck_engine_start(struct dlck_args_engine *args, struct dlck_engine **engine_ptr
 int
 dlck_engine_stop(struct dlck_engine *engine);
 
-/** dlck_abt.c */
-
-/**
- * Just create an ABT execution stream.
- *
- * \param[out]	xs	Where the created execution stream will be stored.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Error.
- */
+/** Free the non-xstream resources of an engine after it has stopped. */
 int
-dlck_xstream_create(struct dlck_xstream *xs);
-
-/**
- * Free an ABT execution stream.
- *
- * \param[out]	xs	Execution stream to free.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Error.
- */
-int
-dlck_xstream_free(struct dlck_xstream *xs);
-
-/**
- * Create an ABT thread (ULT).
- *
- * \param[in]	pool	Pool to put the created ULT in.
- * \param[in]	func	Function to start on the created ULT.
- * \param[in]	arg	Argument pointer for the function.
- * \param[out]	ult	Created ULT.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_*	Error.
- */
-int
-dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult);
+dlck_engine_fini(struct dlck_engine *engine);
 
 typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
+/** Must accept \*arg == NULL for slots whose allocation failed. */
 typedef void (*arg_free_fn_t)(void *custom, void **arg);
 
 /**
@@ -110,34 +66,20 @@ typedef void (*arg_free_fn_t)(void *custom, void **arg);
  * Each of ULTs has a separate arguments allocated for its own use.
  *
  * \param[in]	engine			Engine to run the created ULTs.
- * \param[in]	exec_one		Function to run in the ULTs.
  * \param[in]	arg_alloc_fn		Function to allocate arguments for an ULT.
  * \param[in]	arg_alloc_fn_arg	Custom parameters for \p arg_alloc_fn.
  * \param[in]	arg_free_fn		Function to free arguments.
  * \param[in]	arg_free_fn_arg		Custom parameters for \p arg_free_fn.
- * \param[in]	checker			Checker.
+ * \param[in]	exec_one		Function to run in the ULTs.
+ * \param[in]	ck			Checker.
  *
  * \retval DER_SUCCESS	Success.
  * \retval -DER_*	Error.
  */
 int
-dlck_engine_exec_all(struct dlck_engine *engine, dlck_ult_func exec_one,
-		     arg_alloc_fn_t arg_alloc_fn, void *arg_alloc_fn_arg, arg_free_fn_t arg_free_fn,
-		     void *arg_free_fn_arg, struct checker *ck);
-
-/**
- * @struct xstream_arg
- *
- * Arguments passed to the main ULT on each of the execution streams.
- */
-struct xstream_arg {
-	/** in */
-	struct dlck_control *ctrl;   /** Control state. */
-	struct dlck_engine  *engine; /** Engine itself. */
-	struct dlck_xstream *xs;     /** The execution stream the ULT is run in. */
-	/** out */
-	struct checker_status status;
-};
+dlck_engine_exec_all(struct dlck_engine *engine, arg_alloc_fn_t arg_alloc_fn,
+		     void *arg_alloc_fn_arg, arg_free_fn_t arg_free_fn, void *arg_free_fn_arg,
+		     dlck_ult_func exec_one, struct checker *ck);
 
 static inline unsigned
 dlck_uadd_no_overflow(unsigned a, unsigned b)
@@ -174,29 +116,5 @@ dlck_status_set(struct checker_status *status, struct checker_status *cks)
 	cks->errors_num   = 0;
 	cks->rc           = DER_SUCCESS;
 }
-
-/**
- * Allocate arguments for a ULT.
- *
- * \param[in]	engine		Engine the ULT is about to be run in.
- * \param[in]	idx		ULT ID.
- * \param[in]	ctrl_ptr	Control state to be passed to the ULT.
- * \param[out]	output_arg	Allocated argument for the ULT.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_NOMEM	Out of memory.
- */
-int
-dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr,
-			      void **output_arg);
-
-/**
- * Free arguments of a ULT.
- *
- * \param[out]		ctrl_ptr	Control state to collect stats in.
- * \param[in,out]	arg		ULT arguments to process and free.
- */
-void
-dlck_engine_xstream_arg_free(void *ctrl_ptr, void **arg);
 
 #endif /** __DLCK_ENGINE__ */
