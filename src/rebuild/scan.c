@@ -1361,8 +1361,8 @@ rebuild_scan_leader(void *data)
 
 	/*
 	 * Wait for dtx resync to finish and EC aggregation to be paused on all engines. Do not
-	 * skip it even if sp_gl_dtx_resync_version >= rt_rebuild_ver, which does not cover the
-	 * EC aggregation pause of this rebuild.
+	 * skip it based on a previous rebuild's result, which does not cover the EC aggregation
+	 * pause of this rebuild.
 	 */
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 		if (!rpt->rt_abort && !rpt->rt_finishing) {
@@ -1379,12 +1379,6 @@ rebuild_scan_leader(void *data)
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
 	}
-	if (rpt->rt_pool->sp_gl_dtx_resync_version < rpt->rt_global_dtx_resync_version) {
-		rpt->rt_pool->sp_gl_dtx_resync_version = rpt->rt_global_dtx_resync_version;
-		D_INFO(DF_RB " update sp_gl_dtx_resync_version to %d", DP_RB_RPT(rpt),
-		       rpt->rt_pool->sp_gl_dtx_resync_version);
-	}
-
 	/*
 	 * Reintegration pre-discard runs independently of the rebuild task and can outlive
 	 * an admin stop. The stopped reintegration targets stay UP and FAIL_RECLAIM scans
