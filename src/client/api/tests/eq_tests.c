@@ -21,6 +21,8 @@
 #include <daos/common.h>
 #include <daos_event.h>
 #include <daos/event.h>
+#include <daos/object.h>
+#include <daos_obj.h>
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
@@ -32,6 +34,8 @@
  * some internal api of event queue, and for real use
  * cases, this daos_eq_internal should not be exposed */
 #include "../client_internal.h"
+#include "../../../object/cli_mem_attr.h"
+#include "../../../cart/crt_mem.h"
 
 #define EQT_EV_COUNT		1000
 #define EQ_COUNT		5
@@ -1278,6 +1282,80 @@ eq_test_ctx_limit(void **state)
 	assert_int_equal(ctx_num, initial_ctx_num);
 }
 
+/*
+ * A registered region is registered on each CaRT context by its first I/O there, once, and the
+ * registration is dropped when the context is destroyed, while the handle stays usable.
+ */
+static void
+eq_test_11(void **state)
+{
+	struct daos_eq_private *eqx;
+	struct d_hlink         *hlink;
+	daos_mem_attr_t         attr = {0};
+	struct crt_mem_handle  *cmh;
+	daos_handle_t           eqh;
+	crt_context_t           eq_ctx;
+	daos_net_domain_t       domain;
+	char                    buf[4096];
+	int                     rc;
+
+	rc = daos_mem_register(buf, sizeof(buf), NULL, &attr.ma_handle);
+	if (rc == -DER_NOSYS)
+		skip();
+	assert_int_equal(rc, 0);
+	cmh = dc_mem_handle2crt(attr.ma_handle);
+	assert_int_equal(cmh->ctx_nr, 0);
+
+	/* binding needs a handle and the network domain of an existing event queue */
+	assert_int_equal(daos_eq_net_domain(DAOS_HDL_INVAL, NULL), -DER_INVAL);
+	eqh.cookie = 0xdeadbeef;
+	assert_int_equal(daos_eq_net_domain(eqh, &domain), -DER_NONEXIST);
+	assert_int_equal(daos_eq_net_domain(DAOS_HDL_INVAL, &domain), 0);
+	assert_ptr_equal(domain, daos_get_crt_ctx());
+	assert_int_equal(daos_mem_bind(NULL, domain), -DER_INVAL);
+	assert_int_equal(daos_mem_bind(attr.ma_handle, NULL), -DER_INVAL);
+	assert_int_equal(cmh->ctx_nr, 0);
+
+	/* blocking I/O domain: bound once, then found by the I/O path */
+	assert_int_equal(daos_mem_bind(attr.ma_handle, domain), 0);
+	assert_int_equal(daos_mem_bind(attr.ma_handle, domain), 0);
+	assert_int_equal(dc_obj_mem_attr_ctx_prep(&attr, daos_get_crt_ctx()), 0);
+	assert_int_equal(cmh->ctx_nr, 1);
+	assert_ptr_equal(cmh->ctx_bulks[0].ctx, daos_get_crt_ctx());
+	assert_true(cmh->ctx_bulks[0].bulk != CRT_BULK_NULL);
+
+	/* an event queue's context */
+	assert_int_equal(daos_eq_create(&eqh), 0);
+	hlink = daos_hhash_link_lookup(eqh.cookie);
+	assert_non_null(hlink);
+	eqx    = container_of(hlink, struct daos_eq_private, eqx_hlink);
+	eq_ctx = eqx->eqx_ctx;
+	daos_hhash_link_putref(hlink);
+	assert_int_equal(daos_eq_net_domain(eqh, &domain), 0);
+	assert_ptr_equal(domain, eq_ctx);
+	assert_int_equal(daos_mem_bind(attr.ma_handle, domain), 0);
+	assert_int_equal(cmh->ctx_nr, 2);
+	assert_ptr_equal(cmh->ctx_bulks[1].ctx, eq_ctx);
+	assert_int_equal(dc_obj_mem_attr_ctx_prep(&attr, eq_ctx), 0);
+	assert_int_equal(cmh->ctx_nr, 2);
+
+	/* destroying the event queue drops only its registration */
+	assert_int_equal(daos_eq_destroy(eqh, DAOS_EQ_DESTROY_FORCE), 0);
+	assert_int_equal(cmh->ctx_nr, 1);
+	assert_ptr_equal(cmh->ctx_bulks[0].ctx, daos_get_crt_ctx());
+
+	/* no context: rejected and not remembered, and the I/O goes on without the region */
+	assert_int_equal(crt_mem_bind(cmh, NULL), -DER_INVAL);
+	assert_int_equal(dc_obj_mem_attr_ctx_prep(&attr, NULL), 0);
+	assert_int_equal(cmh->ctx_nr, 1);
+
+	/* in-flight I/O blocks deregistration */
+	crt_mem_addref(cmh);
+	assert_int_equal(daos_mem_deregister(attr.ma_handle), -DER_BUSY);
+	crt_mem_decref(cmh);
+	assert_int_equal(daos_mem_deregister(attr.ma_handle), 0);
+}
+
 static int
 eq_ut_setup(void **state)
 {
@@ -1334,7 +1412,8 @@ static const struct CMUnitTest eq_uts[] = {{"EQ_Test_1", eq_test_1, NULL, NULL},
 					   {"EQ_Test_8", eq_test_8, NULL, NULL},
 					   {"EQ_Test_9", eq_test_9, NULL, NULL},
 					   {"EQ_Test_10", eq_test_10, NULL, NULL},
-					   {"EQ_Test_CTX_Limit", eq_test_ctx_limit, NULL, NULL}};
+					   {"EQ_Test_CTX_Limit", eq_test_ctx_limit, NULL, NULL},
+					   {"EQ_Test_11", eq_test_11, NULL, NULL}};
 
 int main(int argc, char **argv)
 {

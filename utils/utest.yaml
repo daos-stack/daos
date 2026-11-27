@@ -169,6 +169,7 @@
     - cmd: ["src/vos/tests/pool_scrubbing_tests"]
     - cmd: ["src/object/tests/srv_checksum_tests"]
     - cmd: ["src/object/tests/cli_checksum_tests"]
+    - cmd: ["src/object/tests/cli_mem_attr_tests"]
 - name: bio
   base: "BUILD_DIR"
   tests:
