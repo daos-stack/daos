@@ -1049,13 +1049,16 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(pool_id));
 
+	CK_PRINTF(ck, "Open BIO meta context... ");
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
-	CK_PRINTFL_RC(ck, rc, "Open BIO meta context");
 	if (rc) {
+		CK_APPENDL_RC(ck, rc);
+		CK_RC_SET(ck, rc);
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID", "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
 		return rc;
 	}
+	CK_APPENDL_OK(ck);
 
 	init_umem_store(&store, mc);
 	store.stor_stats = metrics;
@@ -1844,12 +1847,15 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	if (rc != 0)
 		return rc;
 
+	CK_PRINTF(ck, "NVMe devices (if applicable)... ");
 	rc = bio_xsctxt_health_check(vos_xsctxt_get(), false, false);
-	CK_PRINTFL_RC(ck, rc, "NVMe devices (if applicable)");
 	if (rc) {
+		CK_APPENDL_RC(ck, rc);
+		CK_RC_SET(ck, rc);
 		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
 		goto out;
 	}
+	CK_APPENDL_OK(ck);
 
 	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, ck, &ph);
 	if (rc) {
@@ -1895,11 +1901,10 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 out:
 	rc = pool_open_post(&ph, pool_df, flags, metrics, pool, ck, rc);
+	checker_print_indent_dec(ck);
+	CK_PRINTFL_RC(ck, rc, "Check pool");
 	if (rc == 0) {
 		*poh = vos_pool2hdl(pool);
-
-		checker_print_indent_dec(ck);
-		CK_PRINTFL_RC(ck, rc, "Check pool");
 	}
 
 	/* Close this local handle, if it hasn't been consumed nor already

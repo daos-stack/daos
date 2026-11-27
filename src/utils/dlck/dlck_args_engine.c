@@ -43,7 +43,9 @@ args_engine_check(struct argp_state *state, struct dlck_args_engine *args)
 
 	if (d_fault_inject_is_enabled()) {
 		if (args->targets > 1) {
-			RETURN_FAIL(state, EINVAL, "Fault injection requires targets == 1");
+			RETURN_FAIL(state, EINVAL,
+				    "Fault injection requires targets == 1, actual targets == %u",
+				    args->targets);
 		}
 	}
 

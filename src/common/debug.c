@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2016-2023 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -262,7 +262,6 @@ DP_UUID(const void *uuid)
 	return buf;
 }
 
-#ifndef DAOS_BUILD_RELEASE
 #define DF_KEY_STR_SIZE 64
 #define DF_KEY_MAX      8
 
@@ -270,7 +269,7 @@ static __thread int thread_key_buf_idx;
 static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
 
 char *
-daos_key2str(daos_key_t *key)
+daos_key2str_insecure(daos_key_t *key)
 {
 	char *buf = thread_key_buf[thread_key_buf_idx];
 
@@ -306,6 +305,14 @@ daos_key2str(daos_key_t *key)
 	}
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
 	return buf;
+}
+
+#ifndef DAOS_BUILD_RELEASE
+
+char *
+daos_key2str(daos_key_t *key)
+{
+	return daos_key2str_insecure(key);
 }
 
 /* Format a directory entry suitable for logging.
@@ -349,4 +356,4 @@ daos_path2str(const char *path)
 	return "<path too long>";
 }
 
-#endif
+#endif /* DAOS_BUILD_RELEASE */

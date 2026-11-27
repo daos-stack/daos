@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,7 +36,6 @@ dlck_pool_mkdir(const char *storage_path, uuid_t po_uuid, struct checker *ck)
 	}
 	if (rc != 0 && errno != EEXIST) {
 		rc = daos_errno2der(errno);
-		CK_PRINTFL_RC(ck, rc, "Cannot create a pool directory: %s", path);
 	} else {
 		rc = DER_SUCCESS;
 	}

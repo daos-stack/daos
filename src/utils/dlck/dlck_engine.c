@@ -106,6 +106,10 @@ dlck_engine_xstream_is_sys(int tgt_id)
 static inline bool
 dlck_engine_xstream_has_nvme(int tgt_id)
 {
+	if (getenv("DLCK_NO_NVME") != NULL) {
+		return false;
+	}
+
 	/**
 	 * Since there are no helper execution streams (XS) right now. All non-sys XSes are main
 	 * XSes as defined for daos_engine.

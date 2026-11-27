@@ -1,0 +1,4 @@
+Effective user: root
+Log directory: {{LOG_DIR}}
+Start the engine... ok.
+Create pools directories... error: DER_INVAL(-1003): 'Invalid parameters'

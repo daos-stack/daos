@@ -4613,9 +4613,9 @@ btr_class_feats_init(unsigned int tree_class, uint64_t *tree_feats, struct btr_c
 
 #define TREE_CLASS_STR           "Tree class... "
 #define TREE_FEATURES_STR        "Tree features... "
-#define INVALID_CLASS_FMT        "Invalid class id: %d\n"
-#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d\n"
-#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64 "\n"
+#define INVALID_CLASS_FMT        "Invalid class id: %d"
+#define UNREGISTERED_CLASS_FMT   "Unregistered class id %d"
+#define UNSUPPORTED_FEATURES_FMT "Unsupported features " DF_X64 "/" DF_X64
 #define OK_STR                   "ok.\n"
 
 /**
@@ -4654,14 +4654,14 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	CK_PRINTF(ck, TREE_CLASS_STR);
 	if (tree_class >= BTR_TYPE_MAX || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_INV_CLASS)) {
 		CK_APPENDFL_ERR(ck, INVALID_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, INVALID_CLASS_FMT "\n", tree_class);
 		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
 	if (tc->tc_ops == NULL || DAOS_FAIL_CHECK(DAOS_FAULT_BTREE_OPEN_UNREG_CLASS)) {
 		CK_APPENDFL_ERR(ck, UNREGISTERED_CLASS_FMT, tree_class);
-		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT, tree_class);
+		D_DEBUG(DB_TRACE, UNREGISTERED_CLASS_FMT "\n", tree_class);
 		return -DER_NONEXIST;
 	}
 	CK_APPENDL_OK(ck);
@@ -4670,7 +4670,7 @@ btr_class_init(umem_off_t root_off, struct btr_root *root, unsigned int tree_cla
 	rc = btr_class_feats_init(tree_class, tree_feats, tc);
 	if (rc != DER_SUCCESS) {
 		CK_APPENDFL_ERR(ck, UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
-		D_ERROR(UNSUPPORTED_FEATURES_FMT, *tree_feats, tc->tc_feats);
+		D_ERROR(UNSUPPORTED_FEATURES_FMT "\n", *tree_feats, tc->tc_feats);
 		return rc;
 	}
 	CK_APPENDL_OK(ck);
@@ -4801,18 +4801,19 @@ btr_rec_check(struct btr_context *tcx, struct btr_record *rec, struct checker *c
 static int
 btr_recs_check(struct btr_context *tcx, struct btr_node *nd, struct checker *ck)
 {
+	int                rc_final = DER_SUCCESS;
 	int                rc;
 	struct btr_record *rec;
 
 	for (int at = 0; at < nd->tn_keyn; ++at) {
 		rec = btr_node_rec_at_ptr(tcx, nd, at);
 		rc  = btr_rec_check(tcx, rec, ck);
-		if (rc != DER_SUCCESS) {
-			return rc;
+		if (rc != DER_SUCCESS && rc_final == DER_SUCCESS) {
+			rc_final = rc;
 		}
 	}
 
-	return DER_SUCCESS;
+	return rc_final;
 }
 
 #define CK_BTREE_NODE_FMT             "Node (off=%#lx)... "
@@ -4865,6 +4866,27 @@ btr_node_check(struct btr_node *nd, umem_off_t nd_off, struct checker *ck)
 	return DER_SUCCESS;
 }
 
+static int
+btr_check_embedded(struct btr_context *tcx, struct checker *ck)
+{
+	struct btr_record *rec = &tcx->tc_record;
+
+	if (btr_is_int_key(tcx)) {
+		CK_PRINTF_ERR(ck,
+			      "Unsupported feature bits: %#" PRIx64
+			      " (embedded value and integer keys)\n",
+			      tcx->tc_feats);
+		return -DER_NOTYPE;
+	}
+
+	/** Use the fake record since only the user allocated part is stored
+	 *  in the tree root.
+	 */
+	rec->rec_off = tcx->tc_tins.ti_root->tr_node;
+
+	return btr_rec_check(tcx, rec, ck);
+}
+
 /**
  * \struct node_info
  *
@@ -4903,7 +4925,11 @@ btr_nodes_check(struct btr_context *tcx, struct checker *ck)
 		return DER_SUCCESS;
 	}
 
-	D_ASSERT(!btr_has_embedded_value(tcx));
+	if (btr_has_embedded_value(tcx)) {
+		CK_PRINTF(ck, "Embedded value:\n");
+		CK_INDENT(ck, rc = btr_check_embedded(tcx, ck));
+		return rc;
+	}
 
 	/** add the root node to the node list */
 	D_ALLOC_PTR(ni);
