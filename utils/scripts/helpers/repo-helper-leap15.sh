@@ -16,8 +16,8 @@ set -uex
 : "${BASE_DISTRO:=opensuse/leap:15.6}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
-: "${REPOSITORY_NAME:=artifactory}"
 : "${DAOS_LAB_CA_FILE_URL:=}"
+: "${REPOSITORY_NAME:=artifactory}"
 
 # shellcheck disable=SC2120
 disable_repos () {
@@ -163,6 +163,9 @@ module_hotfixes=true\n" >> "$repos_dir$repo:$branch:$build_number".repo
 done
 
 disable_repos "$repos_dir" "${save_repos[@]}"
+if [ -n "$REPO_FILE_URL" ]; then
+    dnf config-manager --set-disabled daos-stack-deps-sl-15-stable-local-artifactory
+fi
 
 if [ -e /etc/profile.d/lmod.sh ]; then
     if ! grep "MODULEPATH=.*/usr/share/modules" /etc/profile.d/lmod.sh; then
@@ -198,16 +201,8 @@ if [ -n "$REPO_FILE_URL" ]; then
     no_color = true
     quiet = 1
 EOF
-
-# Set up the uv (a part of SPDK installer)
-# to use the artifactory as the installation packages source
-    mkdir -p /etc/uv
-    cat <<EOF > /etc/uv/uv.toml
-index-url = "${pypi_proxy_url}"
-native-tls = true
-EOF
     else
-        echo "Skipping pip/uv proxy setup: ${pypi_proxy_url} is unreachable"
+        echo "Skipping pip proxy setup: ${pypi_proxy_url} is unreachable"
     fi
 
 # Setup RubyGems to use artifactory/repository as the installation source only
@@ -222,5 +217,4 @@ EOF
     else
         echo "Skipping /etc/gemrc setup: ${gem_proxy_url} is unreachable"
     fi
-
 fi
