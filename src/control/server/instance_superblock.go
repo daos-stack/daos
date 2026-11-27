@@ -199,6 +199,34 @@ func (ei *EngineInstance) RemoveSuperblock() error {
 	return os.Remove(ei.superblockPath())
 }
 
+// PrepareEngineReformat removes a stopped engine's superblock and persists the removal.
+// An already-removed superblock is not an error.
+func PrepareEngineReformat(eng Engine) error {
+	engineIndex := eng.Index()
+	if eng.IsStarted() {
+		return errors.Errorf("engine %d is still running; stop the engine "+
+			"before preparing it for reformat", engineIndex)
+	}
+
+	sbDir := eng.GetStorage().ControlMetadataEnginePath()
+	if _, err := os.Stat(sbDir); err != nil {
+		return errors.Wrapf(err, "engine %d metadata directory %q", engineIndex, sbDir)
+	}
+
+	if err := eng.RemoveSuperblock(); err != nil {
+		if !os.IsNotExist(err) {
+			return errors.Wrapf(err, "engine %d", engineIndex)
+		}
+		return nil
+	}
+
+	if err := common.SyncDir(sbDir); err != nil {
+		return errors.Wrapf(err, "engine %d: fsync superblock dir %q", engineIndex, sbDir)
+	}
+
+	return nil
+}
+
 // WriteSuperblock writes a Superblock to storage.
 func WriteSuperblock(sbPath string, sb *Superblock) error {
 	data, err := sb.Marshal()
