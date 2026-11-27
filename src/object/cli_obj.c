@@ -1176,6 +1176,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		D_ASSERTF(reasb_req->orr_iod_nr == args->nr, "%d != %d.\n",
 			  reasb_req->orr_iod_nr, args->nr);
 		memset(reasb_req->orr_fetch_stat, 0, args->nr * sizeof(*reasb_req->orr_fetch_stat));
+		reasb_req->orr_shard_failed = false;
 		if (!reasb_req->orr_size_fetched)
 			return 0;
 	}
@@ -5615,6 +5616,14 @@ obj_ec_comp_cb(struct obj_auxi_args *obj_auxi)
 	obj_reasb_io_fini(obj_auxi, false);
 }
 
+static ATOMIC uint64_t ec_fetch_again_nr;
+
+uint64_t
+dc_obj_ec_fetch_again_nr(void)
+{
+	return atomic_load(&ec_fetch_again_nr);
+}
+
 static int
 obj_comp_cb(tse_task_t *task, void *data)
 {
@@ -5637,8 +5646,15 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 	rc = obj_comp_cb_internal(obj_auxi);
 	if (rc != 0 || obj_auxi->result) {
-		if (task->dt_result == 0)
-			task->dt_result = rc ? rc : obj_auxi->result;
+		int err = rc ? rc : obj_auxi->result;
+
+		/* The -DER_NONEXIST of the shards without the key, that tse populated to the
+		 * EC cond_fetch task, must not hide the failure of another shard.
+		 */
+		if (task->dt_result == 0 ||
+		    (task->dt_result == -DER_NONEXIST && err != -DER_NONEXIST &&
+		     obj_req_is_ec_cond_fetch(obj_auxi)))
+			task->dt_result = err;
 	} else if (obj_req_is_ec_cond_fetch(obj_auxi) && task->dt_result == -DER_NONEXIST &&
 		   !obj_auxi->cond_fetch_split) {
 		/* EC cond_fetch/check_exist task created multiple shard tasks, tse will populate
@@ -5748,7 +5764,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 		/* Remove the original shard fetch tasks and will recreate new shard fetch tasks */
 		obj_io_set_new_shard_task(obj_auxi);
 		obj_auxi->io_retry = 1;
-		pm_stale = 1;
+		/* Only the degraded fetch and the data recovery need the pool map refresh,
+		 * otherwise it is a record size conflict, see dc_shard_update_size().
+		 */
+		if (obj_auxi->ec_wait_recov || obj_auxi->ec_degrade_fetch)
+			pm_stale = true;
+		atomic_fetch_add(&ec_fetch_again_nr, 1);
 		obj_auxi->ec_wait_recov = 0;
 		obj_auxi->ec_in_recov = 0;
 		obj_reasb_io_fini(obj_auxi, true);

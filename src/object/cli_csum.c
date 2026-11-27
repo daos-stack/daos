@@ -128,58 +128,33 @@ dc_obj_csum_fetch(struct daos_csummer *csummer, daos_key_t *dkey, daos_iod_t *io
 	return 0;
 }
 
-/* Result of deciding how an EC single value reply must be verified. */
-enum singv_lo_status {
-	/* Verify the reply as a contiguous record, without a layout. */
-	SINGV_LO_NONE,
-	/* Verify using the layout returned through singv_lo. */
-	SINGV_LO_USE,
-	/* The reply does not match the layout this request was built for. */
-	SINGV_LO_STALE,
-};
-
-/* Decide how the single value carried by this shard reply must be verified.
+/* Get the layout to verify the EC single value of this shard reply with, NULL to verify it
+ * as a contiguous record.
  *
- * The layout is returned through singv_lo rather than completed in place in
- * reasb_req->orr_singv_los. That array is shared by every shard of the request,
- * while each shard replies its own record size, so completing it in place lets
- * one shard callback overwrite the layout another one is about to verify with.
+ * The server lays the reply out and checksums it by the record size it stores and replies,
+ * which can differ from the size the request was built for (a guess from the buffer size
+ * for DAOS_REC_ANY). So the layout is built from the replied size, in \a singv_lo rather
+ * than in reasb_req->orr_singv_los that is shared by all the shards of the request.
  */
-static enum singv_lo_status
+static struct dcs_layout *
 dc_rw_cb_singv_lo_get(struct obj_reasb_req *reasb_req, uint32_t iod_idx, daos_size_t rec_size,
 		      struct dcs_layout *singv_lo)
 {
 	struct dcs_layout *reasb_lo;
-	uint64_t           cell_bytes;
 
 	if (reasb_req == NULL || reasb_req->orr_singv_los == NULL)
-		return SINGV_LO_NONE;
+		return NULL;
 
 	reasb_lo = &reasb_req->orr_singv_los[iod_idx];
-	if (reasb_lo->cs_even_dist == 0 || rec_size == DAOS_REC_ANY || rec_size == 0)
-		return SINGV_LO_NONE;
-
-	/* On a fetch vos_fetch_begin() overwrites iod_size with the stored record
-	 * size before obj_singv_ec_rw_filter() runs, so the server lays the reply
-	 * out and checksums it according to the size it replies with. The request
-	 * was built from the size the caller asked with, which for DAOS_REC_ANY is
-	 * only a guess taken from the sgl buffer size and may be an over-estimate
-	 * otherwise. When the two sizes imply different layouts the reply does not
-	 * describe the same record this request asked for, so it cannot be
-	 * verified here.
-	 */
-	if (obj_ec_singv_one_tgt(rec_size, NULL, reasb_req->orr_oca))
-		return SINGV_LO_STALE;
-
-	cell_bytes = obj_ec_singv_cell_bytes(rec_size, reasb_req->orr_oca);
-	if (reasb_lo->cs_bytes != 0 && reasb_lo->cs_bytes != cell_bytes)
-		return SINGV_LO_STALE;
+	if (reasb_lo->cs_even_dist == 0 || rec_size == DAOS_REC_ANY ||
+	    obj_ec_singv_one_tgt(rec_size, NULL, reasb_req->orr_oca))
+		return NULL;
 
 	*singv_lo               = *reasb_lo;
-	singv_lo->cs_bytes      = cell_bytes;
+	singv_lo->cs_bytes      = obj_ec_singv_cell_bytes(rec_size, reasb_req->orr_oca);
 	singv_lo->cs_cell_align = 1;
 
-	return SINGV_LO_USE;
+	return singv_lo;
 }
 
 static int
@@ -360,31 +335,9 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 		}
 
 		singv_lo = NULL;
-		if (iod->iod_type != DAOS_IOD_ARRAY) {
-			enum singv_lo_status lo_status;
-
-			lo_status = dc_rw_cb_singv_lo_get(args->reasb_req, i, args->sizes[i],
-							  &singv_lo_local);
-			/* Ask the caller to re-assemble the request from the replied
-			 * record size and fetch again. obj_reasb_io_fini() restores the
-			 * user iods for -DER_FETCH_AGAIN, and dc_shard_update_size() has
-			 * already stored the replied size in them, so the retry is built
-			 * for the layout the server actually used and is verified
-			 * normally. Verification is deferred, never skipped.
-			 */
-			if (lo_status == SINGV_LO_STALE) {
-				D_DEBUG(DB_CSUM,
-					DF_C_UOID_DKEY " [%d] iod single value replied size " DF_U64
-						       " does not match the requested EC layout, "
-						       "fetch again\n",
-					DP_C_UOID_DKEY(args->oid, args->dkey), i, args->sizes[i]);
-				rc = -DER_FETCH_AGAIN;
-				D_FREE(iovs_alloc);
-				break;
-			}
-			if (lo_status == SINGV_LO_USE)
-				singv_lo = &singv_lo_local;
-		}
+		if (iod->iod_type != DAOS_IOD_ARRAY)
+			singv_lo = dc_rw_cb_singv_lo_get(args->reasb_req, i, args->sizes[i],
+							 &singv_lo_local);
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod, &shard_sgl, iod_csum,
 					     singv_lo, args->shard_idx, map);
 		D_FREE(iovs_alloc);
