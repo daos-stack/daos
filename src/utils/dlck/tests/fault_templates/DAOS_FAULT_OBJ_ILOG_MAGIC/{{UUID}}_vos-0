@@ -1,0 +1,17 @@
+VOS file allocation: ok.
+Check container:
+	uuid: {{UUID}}
+- uuid... ok.
+- Padding (cd_pad)... ok.
+- Padding (cd_used)... ok.
+- Reserved (cd_reserv_upgrade)... ok.
+- Object index tree...
+-- Tree class... ok.
+-- Tree features... ok.
+-- Node (off=0xa7a6c0)... ok.
+--- Record fetch (off=0xac05c0)... ok.
+---- Object (oid=1185667690.2136093645.0.0)... 
+----- ILOG... error: invalid magic (0x46).
+---- Object (oid=1185667690.2136093645.0.0)... error: DER_DF_INVAL(-2022): 'Unsupported durable format'
+- error: Object index tree: DER_DF_INVAL(-2022): 'Unsupported durable format'
+error: Check container: DER_DF_INVAL(-2022): 'Unsupported durable format'

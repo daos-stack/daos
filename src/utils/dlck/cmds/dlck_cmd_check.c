@@ -21,7 +21,8 @@
 #define REPORT_RESULT(CK, PREFIX_FMT, TGT_ID, UUID, RC, WARN_NUM)                                  \
 	do {                                                                                       \
 		if (RC == DER_SUCCESS && WARN_NUM > 0) {                                           \
-			CK_PRINTF(CK, PREFIX_FMT CHECKER_OK_INFIX DLCK_WARNINGS_NUM_FMT ".\n",     \
+			CK_PRINTF(CK,                                                              \
+				  PREFIX_FMT ": " CHECKER_OK_INFIX DLCK_WARNINGS_NUM_FMT ".\n",    \
 				  TGT_ID, DP_UUID(UUID), WARN_NUM);                                \
 		} else {                                                                           \
 			CK_PRINTFL_RC(CK, RC, PREFIX_FMT, TGT_ID, DP_UUID(UUID));                  \
@@ -62,10 +63,12 @@ obj_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	struct checker *ck   = bndl->ck;
 	int             rc;
 
-	CK_PRINTF(ck, CK_OID_FMT "...\n", DP_UOID(entry->ie_oid));
-	CK_INDENT(ck, rc = vos_iter_check(ih, ck));
-	CK_PRINTFL_RC(ck, rc, CK_OID_FMT, DP_UOID(entry->ie_oid));
-	dlck_status_set(&bndl->xa->status, &ck->ck_status);
+	if (bndl->xa->ctrl->scope.objects) {
+		CK_PRINTF(ck, CK_OID_FMT "...\n", DP_UOID(entry->ie_oid));
+		CK_INDENT(ck, rc = vos_iter_check(ih, ck));
+		CK_PRINTFL_RC(ck, rc, CK_OID_FMT, DP_UOID(entry->ie_oid));
+		dlck_status_set(&bndl->xa->status, &ck->ck_status);
+	}
 
 	/** continue checking other objects even if this one failed */
 	return 0;
@@ -116,13 +119,14 @@ cont_process(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	struct xstream_arg *xa      = bndl->xa;
 	struct checker     *main_ck = &xa->ctrl->checker;
 	struct checker     *ck      = bndl->ck;
+	struct checker     *eff_ck  = xa->ctrl->scope.containers ? ck : NULL;
 	bool                fi_reenable;
 	const uint64_t      exp_fail_locs[] = {DLCK_FAULT_CONT_DOES_NOT_EXIST, 0};
 	daos_handle_t       coh;
 	int                 rc;
 
 	checker_fi_entry(exp_fail_locs, &fi_reenable);
-	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, ck, &coh);
+	rc = vos_cont_open_ex(param->ip_hdl, entry->ie_couuid, eff_ck, &coh);
 	CONT_REPORT_RESULT(main_ck, xa->xs->tgt_id, entry->ie_couuid, rc,
 			   ck->ck_status.warnings_num);
 	checker_fi_exit(fi_reenable);
@@ -175,6 +179,7 @@ static void
 pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 {
 	struct checker *main_ck = &xa->ctrl->checker;
+	struct checker *eff_ck  = xa->ctrl->scope.pools ? ck : NULL;
 	char           *path    = NULL;
 	bool            fi_reenable;
 	const uint64_t  exp_fail_locs[] = {DLCK_FAULT_POOL_NVME_HEALTH,
@@ -213,14 +218,12 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 	}
 
 	checker_fi_entry(exp_fail_locs, &fi_reenable);
-	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
+	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, eff_ck, &poh);
 	checker_fi_exit(fi_reenable);
+	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 	/** vos_pool_open_metrics() is fully instrumented, so rc is already accounted for in the
 	 * checker's status. */
 	dlck_status_set(&xa->status, &ck->ck_status);
-
-report:
-	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 	if (rc == DER_SUCCESS) {
 		conts_process(xa, poh, ck);
 		(void)vos_pool_close(poh);
@@ -228,6 +231,10 @@ report:
 	if (path != NULL) {
 		D_FREE(path);
 	}
+	return;
+
+report:
+	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 }
 
 /**

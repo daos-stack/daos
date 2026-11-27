@@ -105,6 +105,12 @@ dlck_args_files_num(struct dlck_args_files *files)
 	return num;
 }
 
+struct dlck_check_scope {
+	bool pools;
+	bool containers;
+	bool objects;
+};
+
 /**
  * @struct dlck_control
  *
@@ -114,6 +120,7 @@ struct dlck_control {
 	/** in */
 	struct dlck_args_common common;
 	struct dlck_args_files  files;
+	struct dlck_check_scope scope;
 	struct dlck_args_engine engine;
 	/** checker */
 	struct checker          checker;

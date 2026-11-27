@@ -1,0 +1,3 @@
+Effective user: root
+Log directory: {{LOG_DIR}}
+Start the engine... error: DER_INVAL(-1003): 'Invalid parameters'
