@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1255,9 +1255,9 @@ iod_should_retry(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 	 * When there isn't any in-flight IODs, it means the whole DMA buffer
 	 * isn't large enough to satisfy current huge IOD, don't retry.
 	 *
-	 * When current IOD is for copy target, take the source IOD into account.
+	 * When current IOD is the source of a copy, take the destination IOD into account.
 	 */
-	if (biod->bd_copy_dst) {
+	if (biod->bd_copy_src) {
 		D_ASSERT(bdb->bdb_active_iods >= 1);
 		return bdb->bdb_active_iods > 1;
 	}
@@ -1290,8 +1290,11 @@ iod_fifo_in(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 	/*
 	 * Non-blocking prep request is usually from high priority job like checkpointing,
 	 * so we allow it jump the queue.
+	 *
+	 * The source of a copy is prepared with the destination buffer held, it must not wait
+	 * (see bio_copy_prep()).
 	 */
-	if (biod->bd_non_blocking)
+	if (biod->bd_non_blocking || biod->bd_copy_src)
 		return;
 
 	biod->bd_in_fifo = 1;
@@ -1401,7 +1404,11 @@ retry:
 			goto out;
 		}
 
-		if (biod->bd_non_blocking) {
+		/*
+		 * The source of a copy can't wait here, the destination buffer is held:
+		 * bio_copy_prep() releases it, waits and prepares both IODs again.
+		 */
+		if (biod->bd_non_blocking || biod->bd_copy_src) {
 			rc = -DER_AGAIN;
 			goto out;
 		}
@@ -1461,7 +1468,11 @@ iod_prep_internal(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
 
 	if (biod->bd_type < BIO_IOD_TYPE_GETBUF) {
-		rc = ABT_eventual_create(0, &biod->bd_dma_done);
+		/* An IOD of a copy is prepared again when bio_copy_prep() retries */
+		if (biod->bd_dma_done != ABT_EVENTUAL_NULL)
+			rc = ABT_eventual_reset(biod->bd_dma_done);
+		else
+			rc = ABT_eventual_create(0, &biod->bd_dma_done);
 		if (rc != ABT_SUCCESS) {
 			rc = -DER_NOMEM;
 			goto failed;
@@ -1878,12 +1889,45 @@ free:
 	return NULL;
 }
 
+/*
+ * The copy can't get the buffer of its source while other IODs are active: wait for one of them
+ * to complete. Called without any buffer held, see bio_copy_prep().
+ */
+static void
+copy_wait_iods(struct bio_desc *biod, struct bio_dma_buffer *bdb)
+{
+	/* The caller made sure of it: an active IOD is going to wake us up */
+	D_ASSERT(bdb->bdb_active_iods > 0);
+
+	/* Other waiters are queued, the destination IOD is going to join the FIFO queue on retry */
+	if (bdb->bdb_queued_iods != 0)
+		return;
+
+	/* Wait as the first waiter, it's woken up when an active IOD is completed */
+	iod_fifo_wait(biod, bdb);
+	iod_fifo_out(biod, bdb);
+}
+
+/*
+ * A copy needs DMA buffer for both the destination and the source, and copies run concurrently
+ * on an xstream (VOS aggregation, one per container). A copy must not yield while it holds only
+ * one of the two buffers: when the DMA buffer is short and can't grow, concurrent copies holding
+ * one buffer each would wait for each other forever, or keep taking the buffer another copy
+ * just gave up.
+ *
+ * So the destination IOD is prepared first: it waits for buffer as any IOD, with nothing held,
+ * and loads nothing from media. Then the source IOD is prepared without waiting nor yielding in
+ * between: either the copy gets both buffers, and only then yields to load the source, or it
+ * releases the destination buffer, waits for an active IOD to complete and starts over.
+ */
 int
 bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
 	      struct bio_copy_desc **desc)
 {
 	struct bio_copy_desc	*copy_desc;
+	struct bio_desc         *biod_src, *biod_dst;
+	struct bio_dma_buffer   *bdb;
 	int			 rc, ret;
 
 	copy_desc = alloc_copy_desc(ioctxt, umem, bsgl_src, bsgl_dst);
@@ -1891,17 +1935,49 @@ bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
 		*desc = NULL;
 		return -DER_NOMEM;
 	}
-
-	rc = bio_iod_prep(copy_desc->bcd_iod_src, BIO_CHK_TYPE_LOCAL, NULL, 0);
+	biod_src = copy_desc->bcd_iod_src;
+	biod_dst = copy_desc->bcd_iod_dst;
+retry:
+	rc = bio_iod_prep(biod_dst, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc)
 		goto free;
 
-	copy_desc->bcd_iod_dst->bd_copy_dst = 1;
-	rc = bio_iod_prep(copy_desc->bcd_iod_dst, BIO_CHK_TYPE_LOCAL, NULL, 0);
+	/*
+	 * The source IOD must not wait if the destination IOD holds DMA buffer. A destination
+	 * accessing SCM directly holds none, the source is then prepared as any IOD.
+	 */
+	biod_src->bd_copy_src = (biod_dst->bd_rsrvd.brd_rg_cnt != 0);
+
+	rc = bio_iod_prep(biod_src, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		ret = bio_iod_post(copy_desc->bcd_iod_src, 0);
-		D_ASSERT(ret == 0);
+		bdb = biod_src->bd_copy_src ? iod_dma_buf(biod_src) : NULL;
+
+		/* Release the destination buffer, nothing is written on error */
+		ret = bio_iod_post(biod_dst, rc);
+		D_ASSERT(ret == rc);
+		/*
+		 * No DMA buffer for the source while other IODs are active: wait for one of
+		 * them to complete and start over. If none is active, the DMA buffer isn't
+		 * large enough for this copy and the error is returned.
+		 */
+		if (rc == -DER_AGAIN && bdb != NULL && bdb->bdb_active_iods > 0) {
+			copy_wait_iods(biod_dst, bdb);
+			goto retry;
+		}
 		goto free;
+	}
+
+	/*
+	 * For unit test only. In a server the copy yields while the source is loaded from NVMe,
+	 * a unit test polls the completion itself: yield here for the time of the load (fail
+	 * value, in microseconds) so that copies interleave as in a server.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_NVME_COPY_YIELD)) {
+		uint64_t start = daos_getutime();
+
+		do {
+			ABT_thread_yield();
+		} while (daos_getutime() < start + daos_fail_value_get());
 	}
 
 	*desc = copy_desc;
