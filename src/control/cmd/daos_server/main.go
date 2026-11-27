@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,6 +50,7 @@ type mainOpts struct {
 	// Define subcommands
 	SCM      scmStorageCmd           `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
 	NVMe     nvmeStorageCmd          `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	Storage  storageCmd              `command:"storage" description:"Perform local engine storage maintenance"`
 	Start    startCmd                `command:"start" description:"Start daos_server"`
 	Network  networkCmd              `command:"network" description:"Perform network device scan based on fabric provider"`
 	Version  versionCmd              `command:"version" description:"Print daos_server version"`
