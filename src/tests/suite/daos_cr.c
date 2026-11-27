@@ -193,7 +193,7 @@ cr_debug_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, bool nowait)
 
 	for (i = 0; i < 10; i++) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
-		if (rc == 0 || rc != -DER_TIMEDOUT || nowait)
+		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_CANCELED) || nowait)
 			break;
 
 		sleep(2);
