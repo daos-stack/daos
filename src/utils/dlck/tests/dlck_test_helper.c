@@ -115,9 +115,10 @@ cont_teardown(struct xstream_state *xst)
 }
 
 static void
-dtx_update(daos_handle_t coh, uuid_t dti_uuid, struct io *io, bool is_leader, bool commit,
+dtx_update(struct xstream_state *xst, uuid_t dti_uuid, struct io *io, bool is_leader, bool commit,
 	   bool keep_act)
 {
+	daos_handle_t             coh        = xst->coh;
 	struct dtx_id             dti        = {0};
 	struct dtx_epoch          epoch      = {0};
 	daos_unit_oid_t           leader_oid = {0};
@@ -130,7 +131,9 @@ dtx_update(daos_handle_t coh, uuid_t dti_uuid, struct io *io, bool is_leader, bo
 	uuid_copy(dti.dti_uuid, dti_uuid);
 	dti.dti_hlc = d_hlc_get();
 
-	epoch.oe_value = d_hlc_get();
+	epoch.oe_value = DAOS_EPOCH_MAX - 10000 - rand_r(&xst->seed) % 10000;
+	/* Our epoch range should be large enough. */
+	assert(epoch.oe_value > dti.dti_hlc);
 
 	if (is_leader) {
 		rc = dtx_leader_begin(coh, &dti, &epoch, 1, 0, &leader_oid, NULL, 0, NULL, 0, 0,
@@ -233,7 +236,7 @@ update_one(struct xstream_state *xst, daos_iod_type_t iod_type, bool is_leader, 
 	io_init_random(xst, value, iod_type, io);
 	printf("Update: " DF_OID "/%" PRIx64 "/%" PRIx64 "\n", DP_OID(io->oid.id_pub), io->dkey_buf,
 	       io->akey_buf);
-	dtx_update(xst->coh, dti_uuid, io, is_leader, commit, keep_act);
+	dtx_update(xst, dti_uuid, io, is_leader, commit, keep_act);
 	io_fini(io);
 }
 
