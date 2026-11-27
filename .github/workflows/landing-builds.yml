@@ -54,15 +54,18 @@ jobs:
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
+            with: opensuse/leap:15.6
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_LEAP15
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       PYTHON_VERSION: ${{ matrix.python }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -80,6 +83,7 @@ jobs:
           concurrency: 1
       - name: Prepare base image in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DAOS_DEPS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
@@ -87,6 +91,7 @@ jobs:
                             --target build-local
       - name: Build dependencies in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
@@ -178,16 +183,19 @@ jobs:
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
+            with: opensuse/leap:15.6
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_LEAP15
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
       PYTHON_VERSION: ${{ matrix.python }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -207,6 +215,7 @@ jobs:
           skip-save: true
       - name: Build in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -216,6 +225,7 @@ jobs:
                             --tag build-image
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -224,6 +234,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -233,6 +244,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -258,10 +270,12 @@ jobs:
             base: el.9
             with: almalinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: rocky.9
             base: el.9
             with: rockylinux/rockylinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:24.04
@@ -270,6 +284,7 @@ jobs:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       PYTHON_VERSION: ${{ matrix.python }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -278,6 +293,7 @@ jobs:
           fetch-depth: 500
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -285,6 +301,7 @@ jobs:
                             --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -294,6 +311,7 @@ jobs:
                             --tag build-image
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -302,6 +320,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -311,6 +330,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -320,6 +340,7 @@ jobs:
                             --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -328,6 +349,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -337,6 +359,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -368,16 +391,19 @@ jobs:
             base: el.9
             with: almalinux:9
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_EL9
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.5
+            with: opensuse/leap:15.6
             python: 3.11
+            deps_repo_secret: DAOS_DEPS_REPO_LEAP15
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
       PYTHON_VERSION: ${{ matrix.python }}
+      DAOS_DEPS_EXT_REPO: ${{ matrix.deps_repo_secret && secrets[matrix.deps_repo_secret] || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -386,6 +412,7 @@ jobs:
           fetch-depth: 500
       - name: Build dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -393,6 +420,7 @@ jobs:
                             --target build-local
       - name: Build in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -402,6 +430,7 @@ jobs:
                             --tag build-image
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -410,6 +439,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with clang.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -419,6 +449,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with clang
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -428,6 +459,7 @@ jobs:
                             --target build-local
       - name: Build in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -436,6 +468,7 @@ jobs:
                             --target build-local
       - name: Build debug in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
@@ -445,6 +478,7 @@ jobs:
                             --target build-local
       - name: Build devel in docker with gcc
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_EXT_REPO
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg PYTHON_VERSION
