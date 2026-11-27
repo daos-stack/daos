@@ -1,19 +1,20 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP.
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP.
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC DD_FAC(tests)
 
-#include <stddef.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
 
 #include <daos/common.h>
 
 #include "../dlck_args.h"
+#include "dlck_ut.h"
 
 /** globals */
 
@@ -137,6 +138,9 @@ static const struct CMUnitTest dlck_args_tests[] = {
 int
 main(int argc, char **argv)
 {
+	if (argc > 1) {
+		dlck_ut_filter(argc, argv);
+	}
 	/** collect function pointers to real parsers */
 	Argp_engine_parser_real = argp_engine.parser;
 
