@@ -475,6 +475,34 @@ func TestControl_StorageFormat(t *testing.T) {
 			},
 			expResponse: new(StorageFormatResp),
 		},
+		"ms connection failure wrapped by convertMSResponse is swallowed": {
+			// checkFormatReq() should swallow a wrapped MS connection failure. Unlike
+			// the "nil message" case below, which injects the bare
+			// errMSConnectionFailure sentinel and so never exercises the real
+			// wrap/unwrap path, this supplies a genuine connection fault that
+			// convertMSResponse() wraps, the way it would in production.
+			//
+			// FaultConnectionNoRoute is used rather than FaultConnectionRefused
+			// because the latter is retryable, so SystemQuery silently retries and
+			// consumes the second mocked response meant for the follow-up format
+			// RPC -- masking the bug. FaultConnectionNoRoute still triggers the
+			// wrap but is not retryable, so it fails deterministically on the
+			// first (SystemQuery) call.
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", FaultConnectionNoRoute("host1"), nil),
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "host1",
+								Message: &ctlpb.StorageFormatResp{},
+							},
+						},
+					},
+				},
+			},
+			expResponse: MockFormatResp(t, MockFormatConf{Hosts: 1}),
+		},
 		"nil message": {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
