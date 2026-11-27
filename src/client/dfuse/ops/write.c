@@ -20,6 +20,12 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 		else
 			DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
 	} else {
+		if (ev->de_ev.ev_error != 0) {
+			dfuse_wb_error_record(ev->de_oh->doh_ie, ev->de_ev.ev_error);
+			DHS_ERROR(ev->de_oh, ev->de_ev.ev_error,
+				  "Write-back failed at offset %#zx, length %#zx",
+				  (size_t)ev->de_req_position, ev->de_req_len);
+		}
 		D_RWLOCK_UNLOCK(&ev->de_oh->doh_ie->ie_wlock);
 	}
 	daos_event_fini(&ev->de_ev);
