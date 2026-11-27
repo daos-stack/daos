@@ -182,6 +182,9 @@ typedef void *crt_rpc_output_t;
 typedef void *crt_bulk_t; /**< abstract bulk handle */
 typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 
+/** Opaque handle of a memory region registered with crt_mem_register(). */
+typedef struct crt_mem_handle *crt_mem_handle_t;
+
 #define CRT_BULK_NULL		(NULL)
 /**
  * max size of input/output parameters defined as 64M bytes, for larger length
