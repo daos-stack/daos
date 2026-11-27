@@ -716,7 +716,7 @@ discover_dfuse_mounts(void)
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
-		if (memcmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) != 0)
+		if (strncmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) != 0)
 			continue;
 
 		if (num_dfs >= MAX_DAOS_MT) {
@@ -1163,9 +1163,9 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 	}
 
 	/* handle special cases. Needed to work with git. */
-	if ((memcmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
-	    (memcmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
-	    (memcmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
+	if ((strncmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
 		*is_target_path = 0;
 		return 0;
 	}
@@ -4492,17 +4492,23 @@ pre_envp(char *const envp[], char ***new_envp)
 	} else {
 		while (envp[num_entry]) {
 			/* scan the env in env_list[] to check whether they exist or not */
-			if (memcmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
+			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
 			    preload_included == false) {
 				preload_included = true;
 				idx_preload      = num_entry;
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
-			} else if (memcmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_NO_BYPASS")) ==
-				   0 && no_bypass_included == false) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_NO_BYPASS")) ==
+				       0 &&
+				   no_bypass_included == false) {
 				no_bypass_included = true;
-				num_entry_found++;
+				/* D_IL_NO_BYPASS is required (counted in num_env_append) only if
+				 * bypass_allowed is false. Count it in num_entry_found under the
+				 * same condition, otherwise it could hide a missing required env.
+				 */
+				if (bypass_allowed == false)
+					num_entry_found++;
 			}
 			/* The list of env is not too long. We use a simple loop to lookup for
 			 * simplicity. This function is not performance critical.
@@ -4512,8 +4518,8 @@ pre_envp(char *const envp[], char ***new_envp)
 				if (!env_set[i])
 					continue;
 				if (!env_found[i]) {
-					if (memcmp(envp[num_entry], env_list[i],
-						   strlen(env_list[i])) == 0) {
+					if (strncmp(envp[num_entry], env_list[i],
+						    strlen(env_list[i])) == 0) {
 						env_found[i] = true;
 						num_entry_found++;
 					}
@@ -4527,8 +4533,11 @@ pre_envp(char *const envp[], char ***new_envp)
 	if (num_entry_found == num_env_append && pil4dfs_in_preload == true)
 		return 0;
 
-	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end */
-	*new_envp = calloc(num_entry + num_env_append + 1, sizeof(char *));
+	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end.
+	 * D_IL_NO_BYPASS is appended whenever it is missing, but num_env_append counts it only if
+	 * bypass_allowed is false, so one more slot is reserved (left unused in that case).
+	 */
+	*new_envp = calloc(num_entry + num_env_append + 2, sizeof(char *));
 	if (*new_envp == NULL) {
 		rc = ENOMEM;
 		goto err_out0;
@@ -7234,7 +7243,8 @@ register_handler(int sig, struct sigaction *old_handler)
 static inline void
 check_exe_sh_bash(void)
 {
-	if (memcmp(exe_short_name, "bash", 5) == 0 || memcmp(exe_short_name, "sh", 3) == 0)
+	if (strncmp(exe_short_name, STR_AND_SIZE("bash")) == 0 ||
+	    strncmp(exe_short_name, STR_AND_SIZE("sh")) == 0)
 		is_bash = true;
 }
 
@@ -7286,7 +7296,8 @@ extract_exe_name_1st_arg(void)
 
 	for (p = buf; p < end;) {
 		if (count == 1) {
-			if (p[0] == '/' || memcmp(p, "./", 2) == 0 || memcmp(p, "../", 3) == 0) {
+			if (p[0] == '/' || strncmp(p, STR_AND_SIZE_M1("./")) == 0 ||
+			    strncmp(p, STR_AND_SIZE_M1("../")) == 0) {
 				/* Extract the first argument in command line */
 				first_arg = basename(p);
 				if (first_arg == NULL) {
@@ -7358,8 +7369,8 @@ check_bypasslist(void)
 		}
 	}
 
-	if ((memcmp(exe_short_name, STR_AND_SIZE("python")) == 0 ||
-	     memcmp(exe_short_name, STR_AND_SIZE("python3")) == 0) &&
+	if ((strncmp(exe_short_name, STR_AND_SIZE("python")) == 0 ||
+	     strncmp(exe_short_name, STR_AND_SIZE("python3")) == 0) &&
 	    first_arg) {
 		/* built-in list of python scripts to skip */
 		for (i = 0; i < ARRAY_SIZE(bypass_python3_cmd_list); i++) {
