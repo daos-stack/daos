@@ -1659,6 +1659,184 @@ dump_csum_recx_tests(void **state)
 	assert_rc_equal(-DER_INVAL, rc);
 }
 
+static int
+dump_csum_recx_minor_head_cb(void *cb_args, struct daos_recx_ep_list *recx_rel,
+			     daos_epoch_t sv_epoch, struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx    *csum_ctx = cb_args;
+	struct dcs_iod_csums **ics;
+
+	assert_non_null(csum_ctx);
+	assert_int_equal(sv_epoch, 0);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_int_equal(recx_rel->re_nr, 2);
+
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HEAD)];
+
+	/* B=[0, S/2)@10.2 */
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, csum_ctx->dct_recx_size / 2);
+	assert_int_equal(recx_rel->re_items[0].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 0),
+						   ics[1]->ic_data));
+
+	/* A=[0, S)@10.1 */
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_nr, csum_ctx->dct_recx_size);
+	assert_int_equal(recx_rel->re_items[1].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 1),
+						   ics[0]->ic_data));
+
+	return 0;
+}
+
+static int
+dump_csum_recx_minor_middle_cb(void *cb_args, struct daos_recx_ep_list *recx_rel,
+			       daos_epoch_t sv_epoch, struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx    *csum_ctx = cb_args;
+	struct dcs_iod_csums **ics;
+	uint64_t               chunk;
+
+	assert_non_null(csum_ctx);
+	assert_int_equal(sv_epoch, 0);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_int_equal(recx_rel->re_nr, 3);
+
+	chunk = csum_ctx->dct_chunk_size;
+	ics   = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_MIDDLE)];
+
+	/* A=[0, 3C)@10.1, listed for its first visible piece [0, C) */
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, 3 * chunk);
+	assert_int_equal(recx_rel->re_items[0].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 0),
+						   ics[0]->ic_data));
+
+	/* B=[C, 2C)@10.2 */
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_idx, chunk);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_nr, chunk);
+	assert_int_equal(recx_rel->re_items[1].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 1),
+						   ics[1]->ic_data));
+
+	/* A=[0, 3C)@10.1, listed for its second visible piece [2C, 3C) */
+	assert_int_equal(recx_rel->re_items[2].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[2].re_recx.rx_nr, 3 * chunk);
+	assert_int_equal(recx_rel->re_items[2].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 2),
+						   ics[0]->ic_data));
+
+	return 0;
+}
+
+static int
+dump_csum_recx_minor_chunk_cb(void *cb_args, struct daos_recx_ep_list *recx_rel,
+			      daos_epoch_t sv_epoch, struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx    *csum_ctx = cb_args;
+	struct dcs_iod_csums **ics;
+	uint64_t               size;
+	uint64_t               chunk;
+
+	assert_non_null(csum_ctx);
+	assert_int_equal(sv_epoch, 0);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_int_equal(recx_rel->re_nr, 3);
+
+	size  = csum_ctx->dct_recx_size;
+	chunk = csum_ctx->dct_chunk_size;
+	ics   = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_CHUNK)];
+
+	/* A=[0, S)@10.1, listed for its first visible piece [0, C/4) */
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, size);
+	assert_int_equal(recx_rel->re_items[0].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 0),
+						   ics[0]->ic_data));
+
+	/* B=[C/4, C/2)@10.2 */
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_idx, chunk / 4);
+	assert_int_equal(recx_rel->re_items[1].re_recx.rx_nr, chunk / 4);
+	assert_int_equal(recx_rel->re_items[1].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 1),
+						   ics[1]->ic_data));
+
+	/* A=[0, S)@10.1, listed for its second visible piece [C/2, S) */
+	assert_int_equal(recx_rel->re_items[2].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[2].re_recx.rx_nr, size);
+	assert_int_equal(recx_rel->re_items[2].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 2),
+						   ics[0]->ic_data));
+
+	return 0;
+}
+
+static int
+dump_csum_recx_minor_hidden_cb(void *cb_args, struct daos_recx_ep_list *recx_rel,
+			       daos_epoch_t sv_epoch, struct dcs_ci_list *cil)
+{
+	struct dt_csum_ctx    *csum_ctx = cb_args;
+	struct dcs_iod_csums **ics;
+
+	assert_non_null(csum_ctx);
+	assert_int_equal(sv_epoch, 0);
+	assert_csum_recx_consistent(recx_rel, cil);
+	assert_int_equal(recx_rel->re_nr, 1);
+
+	ics = csum_ctx->dct_minor_ics[DVT_FAKE_MINOR_ICS_IDX(DVT_FAKE_MINOR_OID_HIDDEN)];
+
+	/* A=[0, S)@10.2, the second write */
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_idx, 0);
+	assert_int_equal(recx_rel->re_items[0].re_recx.rx_nr, csum_ctx->dct_recx_size);
+	assert_int_equal(recx_rel->re_items[0].re_ep, DVT_FAKE_MAJOR_EPOCH);
+	assert_true(daos_csummer_compare_csum_info(csum_ctx->dct_csummer, dcs_csum_info_get(cil, 0),
+						   ics[1]->ic_data));
+
+	return 0;
+}
+
+static void
+dump_csum_recx_minor_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx     = *state;
+	struct dt_csum_ctx     *csum_ctx = tctx->dvt_extra;
+	const uint64_t          chunk    = csum_ctx->dct_chunk_size;
+	struct dv_tree_path     path     = {0};
+	int                     rc;
+
+	uuid_copy(path.vtp_cont, csum_ctx->dct_cont_uuid);
+	path.vtp_dkey        = g_dkeys[0];
+	path.vtp_akey        = g_akeys[DVT_FAKE_CSUM_AKEY_RECX]; /* array value type */
+	path.vtp_is_recx     = true;
+	path.vtp_recx.rx_idx = 0;
+	path.vtp_recx.rx_nr  = 3 * chunk;
+
+	/* HEAD: A=[0, S)@10.1, B=[0, S/2)@10.2 -> {B, A}: A is listed whole, half of it hidden */
+	path.vtp_oid = g_oids[DVT_FAKE_MINOR_OID_HEAD];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_minor_head_cb,
+			  csum_ctx);
+	assert_success(rc);
+
+	/* MIDDLE: A=[0, 3C)@10.1, B=[C, 2C)@10.2 -> {A, B, A}: A once per visible piece */
+	path.vtp_oid = g_oids[DVT_FAKE_MINOR_OID_MIDDLE];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_minor_middle_cb,
+			  csum_ctx);
+	assert_success(rc);
+
+	/* CHUNK: A=[0, S)@10.1, B=[C/4, C/2)@10.2 -> {A, B, A} */
+	path.vtp_oid = g_oids[DVT_FAKE_MINOR_OID_CHUNK];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_minor_chunk_cb,
+			  csum_ctx);
+	assert_success(rc);
+
+	/* HIDDEN: B=[0, S/2)@10.1, A=[0, S)@10.2 -> {A}: B is entirely hidden by A */
+	path.vtp_oid = g_oids[DVT_FAKE_MINOR_OID_HIDDEN];
+	rc = dv_dump_csum(tctx->dvt_poh, &path, DAOS_EPOCH_MAX, dump_csum_recx_minor_hidden_cb,
+			  csum_ctx);
+	assert_success(rc);
+}
+
 /* Callback that returns *(int *)cb_args, or 0 if cb_args is NULL. */
 static int
 check_cb_return_rc(void *cb_args, struct daos_recx_ep_list *recx_rel, daos_epoch_t sv_epoch,
@@ -2539,6 +2717,7 @@ const struct CMUnitTest dv_test_cases[] = {
     TEST_CSUM(dump_csum_error_tests),
     TEST_CSUM(dump_csum_sv_tests),
     TEST_CSUM(dump_csum_recx_tests),
+    TEST_CSUM(dump_csum_recx_minor_tests),
     TEST_CSUM(check_csum_error_tests),
     TEST_CSUM(check_csum_sv_tests),
     TEST_CSUM(check_csum_recx_tests),
