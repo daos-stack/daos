@@ -711,6 +711,13 @@ pipeline {
     }
 
     stages {
+        // Must run before any stage that executes scripts from the PR
+        stage('Check /run-ci Commit') {
+            when { changeRequest() }
+            steps {
+                runCiShaCheck()
+            }
+        }
         stage('Prepare') {
             parallel {
                 stage('Set Description') {
