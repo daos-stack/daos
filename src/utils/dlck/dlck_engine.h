@@ -53,6 +53,7 @@ int
 dlck_engine_fini(struct dlck_engine *engine);
 
 typedef int (*arg_alloc_fn_t)(struct dlck_engine *engine, int idx, void *custom, void **arg);
+/** Must accept \*arg == NULL for slots whose allocation failed. */
 typedef void (*arg_free_fn_t)(void *custom, void **arg);
 
 /**

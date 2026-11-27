@@ -76,7 +76,7 @@ fail_report:
 }
 
 int
-dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
+dlck_exec_start(struct dlck_engine *engine, struct dlck_exec *de)
 {
 	int rc = DER_SUCCESS;
 

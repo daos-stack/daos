@@ -37,7 +37,7 @@ dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de);
  * release the batch with dlck_exec_fini().
  */
 int
-dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de);
+dlck_exec_start(struct dlck_engine *engine, struct dlck_exec *de);
 
 /**
  * Join all started ULTs without returning an error. Failed joins set join_fail and leave their

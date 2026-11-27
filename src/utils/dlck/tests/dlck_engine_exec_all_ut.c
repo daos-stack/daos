@@ -45,10 +45,10 @@ struct tctx {
 
 #define EXPECT_ENGINE_EXEC(CTX, RC, JOIN_FAIL)                                                     \
 	do {                                                                                       \
-		expect_value(dlck_engine_exec, engine, &(CTX)->engine);                            \
-		EXPECT_EXEC_STATE(CTX, dlck_engine_exec, TARGET_COUNT);                            \
-		will_return(dlck_engine_exec, JOIN_FAIL);                                          \
-		will_return(dlck_engine_exec, RC);                                                 \
+		expect_value(dlck_exec_start, engine, &(CTX)->engine);                             \
+		EXPECT_EXEC_STATE(CTX, dlck_exec_start, TARGET_COUNT);                             \
+		will_return(dlck_exec_start, JOIN_FAIL);                                           \
+		will_return(dlck_exec_start, RC);                                                  \
 	} while (0)
 
 #define EXPECT_EXEC_JOIN(CTX, RC, JOIN_FAIL)                                                       \
@@ -77,7 +77,7 @@ dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de)
 }
 
 int
-dlck_engine_exec(struct dlck_engine *engine, struct dlck_exec *de)
+dlck_exec_start(struct dlck_engine *engine, struct dlck_exec *de)
 {
 	check_expected_ptr(engine);
 	assert_non_null(de);

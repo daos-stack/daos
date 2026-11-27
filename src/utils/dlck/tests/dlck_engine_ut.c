@@ -324,11 +324,11 @@ test_dlck_exec_init_arg_alloc_failure(void **state)
 	assert_null(de->ult_args);
 }
 
-/** tests - dlck_engine_exec */
+/** tests - dlck_exec_start */
 
 /** verify each successful ULT handle is retained in its target's batch entry */
 static void
-test_dlck_engine_exec_success(void **state)
+test_dlck_exec_start_success(void **state)
 {
 	struct engine_ut_ctx *ctx = *state;
 	int                   rc;
@@ -338,7 +338,7 @@ test_dlck_engine_exec_success(void **state)
 		expect_value(mock_exec_one, arg, &ctx->payload[i]);
 	}
 
-	rc = dlck_engine_exec(&ctx->engine, &ctx->exec);
+	rc = dlck_exec_start(&ctx->engine, &ctx->exec);
 
 	assert_int_equal(rc, DER_SUCCESS);
 	for (int i = 0; i < 2; ++i) {
@@ -349,7 +349,7 @@ test_dlck_engine_exec_success(void **state)
 
 /** verify a ULT creation failure joins the already started ULTs */
 static void
-test_dlck_engine_exec_ult_create_failure(void **state)
+test_dlck_exec_start_ult_create_failure(void **state)
 {
 	struct engine_ut_ctx *ctx = *state;
 	int                   rc;
@@ -361,7 +361,7 @@ test_dlck_engine_exec_ult_create_failure(void **state)
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_SUCCESS);
 
-	rc = dlck_engine_exec(&ctx->engine, &ctx->exec);
+	rc = dlck_exec_start(&ctx->engine, &ctx->exec);
 
 	assert_int_equal(rc, -DER_NOMEM);
 	for (int i = 0; i < 2; ++i) {
@@ -872,8 +872,8 @@ static const struct CMUnitTest dlck_engine_tests[] = {
     TEST_TARGETS(102, test_dlck_exec_init_ults_alloc_failure, setup_engine_exec_build_prep, 2),
     TEST_TARGETS(103, test_dlck_exec_init_args_alloc_failure, setup_engine_exec_build_prep, 2),
     TEST_TARGETS(104, test_dlck_exec_init_arg_alloc_failure, setup_engine_exec_build_prep, 2),
-    TEST_TARGETS(105, test_dlck_engine_exec_success, setup_engine_exec_build, 2),
-    TEST_TARGETS(106, test_dlck_engine_exec_ult_create_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(105, test_dlck_exec_start_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(106, test_dlck_exec_start_ult_create_failure, setup_engine_exec_build, 2),
     TEST_TARGETS(107, test_dlck_exec_join_no_error_success, setup_engine_exec_build, 2),
     TEST_TARGETS(108, test_dlck_exec_join_no_error_join_failure, setup_engine_exec_build, 2),
     TEST_TARGETS(109, test_dlck_exec_join_success, setup_engine_exec_build, 2),

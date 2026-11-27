@@ -33,7 +33,7 @@ dlck_engine_exec_all(struct dlck_engine *engine, arg_alloc_fn_t arg_alloc_fn,
 		return rc;
 	}
 
-	rc = dlck_engine_exec(engine, &de);
+	rc = dlck_exec_start(engine, &de);
 	CK_APPENDL_RC(ck, rc);
 
 	if (rc == DER_SUCCESS) {
