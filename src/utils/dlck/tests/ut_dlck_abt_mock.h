@@ -6,25 +6,7 @@
 #ifndef __UT_DLCK_ABT_MOCK_H__
 #define __UT_DLCK_ABT_MOCK_H__
 
-/*
- * Shared dlck_abt.c replacements. Link ut_dlck_abt_mock.c instead of ../dlck_abt.c in the test
- * binary.
- */
-
-#define EXPECT_DLCK_XSTREAM_CREATE(XS, RC, POOL)                                                   \
-	do {                                                                                       \
-		expect_value(dlck_xstream_create, xs, XS);                                         \
-		will_return(dlck_xstream_create, RC);                                              \
-		if ((RC) == DER_SUCCESS) {                                                         \
-			will_return(dlck_xstream_create, POOL);                                    \
-		}                                                                                  \
-	} while (0)
-
-#define EXPECT_DLCK_XSTREAM_FREE(XS, RC)                                                           \
-	do {                                                                                       \
-		expect_value(dlck_xstream_free, xs, XS);                                           \
-		will_return(dlck_xstream_free, RC);                                                \
-	} while (0)
+/* Link ut_dlck_abt_mock.c instead of dlck_abt.c to replace dlck_ult_create(). */
 
 /**
  * Queue a dlck_ult_create() call. On DER_SUCCESS the mock stores THREAD in the ULT handle

@@ -15,17 +15,17 @@ dlck_exec_join_no_error(struct dlck_exec *de)
 	int rc;
 
 	for (int i = 0; i < de->targets; ++i) {
-		if (de->ults[i].thread == ABT_THREAD_NULL) {
+		if (de->ults[i] == ABT_THREAD_NULL) {
 			continue;
 		}
 
-		rc = ABT_thread_join(de->ults[i].thread);
+		rc = ABT_thread_join(de->ults[i]);
 		if (rc != ABT_SUCCESS) {
 			de->join_fail = true;
 			continue;
 		}
-		(void)ABT_thread_free(&de->ults[i].thread);
-		de->ults[i].thread = ABT_THREAD_NULL;
+		(void)ABT_thread_free(&de->ults[i]);
+		de->ults[i] = ABT_THREAD_NULL;
 	}
 }
 
@@ -46,7 +46,7 @@ dlck_exec_init(struct dlck_engine *engine, struct dlck_exec *de)
 	}
 
 	for (int i = 0; i < de->targets; ++i) {
-		de->ults[i].thread = ABT_THREAD_NULL;
+		de->ults[i] = ABT_THREAD_NULL;
 	}
 
 	D_ALLOC_ARRAY(de->ult_args, de->targets);
@@ -105,7 +105,7 @@ dlck_exec_join(struct dlck_exec *de)
 	}
 
 	for (int i = 0; i < de->targets; ++i) {
-		rc_abt = ABT_thread_join(de->ults[i].thread);
+		rc_abt = ABT_thread_join(de->ults[i]);
 		if (rc_abt != ABT_SUCCESS) {
 			de->join_fail = true;
 			if (rc == DER_SUCCESS) {
@@ -114,11 +114,11 @@ dlck_exec_join(struct dlck_exec *de)
 			continue;
 		}
 
-		rc_abt = ABT_thread_free(&de->ults[i].thread);
+		rc_abt = ABT_thread_free(&de->ults[i]);
 		if (rc_abt != ABT_SUCCESS && rc == DER_SUCCESS) {
 			rc = dss_abterr2der(rc_abt);
 		}
-		de->ults[i].thread = ABT_THREAD_NULL;
+		de->ults[i] = ABT_THREAD_NULL;
 	}
 
 	return rc;
@@ -128,7 +128,7 @@ void
 dlck_exec_fini(struct dlck_exec *de)
 {
 	for (int i = 0; i < de->targets; ++i) {
-		if (de->ults[i].thread == ABT_THREAD_NULL) {
+		if (de->ults[i] == ABT_THREAD_NULL) {
 			de->arg_free_fn(de->arg_free_fn_arg, &de->ult_args[i]);
 		}
 	}

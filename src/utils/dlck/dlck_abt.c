@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,43 +50,7 @@ dlck_abt_attr_free(ABT_thread_attr *attr)
 }
 
 int
-dlck_xstream_create(struct dlck_xstream *xs)
-{
-	int rc;
-
-	rc = ABT_xstream_create(ABT_SCHED_NULL, &xs->xstream);
-	if (rc != ABT_SUCCESS) {
-		return dss_abterr2der(rc);
-	}
-
-	rc = ABT_xstream_get_main_pools(xs->xstream, 1, &xs->pool);
-	if (rc != ABT_SUCCESS) {
-		(void)ABT_xstream_free(&xs->xstream);
-		return dss_abterr2der(rc);
-	}
-
-	return DER_SUCCESS;
-}
-
-int
-dlck_xstream_free(struct dlck_xstream *xs)
-{
-	int rc;
-
-	if (xs->xstream == ABT_XSTREAM_NULL) {
-		return DER_SUCCESS;
-	}
-
-	rc = ABT_xstream_free(&xs->xstream);
-	if (rc != ABT_SUCCESS) {
-		return dss_abterr2der(rc);
-	}
-
-	return DER_SUCCESS;
-}
-
-int
-dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *ult)
+dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, ABT_thread *thread)
 {
 	ABT_thread_attr attr;
 	int             rc;
@@ -96,7 +60,7 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 		return rc;
 	}
 
-	rc = ABT_thread_create(pool, func, arg, attr, &ult->thread);
+	rc = ABT_thread_create(pool, func, arg, attr, thread);
 	if (rc != ABT_SUCCESS) {
 		(void)dlck_abt_attr_free(&attr);
 		return dss_abterr2der(rc);
@@ -104,7 +68,7 @@ dlck_ult_create(ABT_pool pool, dlck_ult_func func, void *arg, struct dlck_ult *u
 
 	rc = dlck_abt_attr_free(&attr);
 	if (rc != DER_SUCCESS) {
-		(void)ABT_thread_free(&ult->thread);
+		(void)ABT_thread_free(thread);
 		return rc;
 	}
 

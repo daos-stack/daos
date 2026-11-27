@@ -5,7 +5,6 @@
  */
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <daos/mem.h>
 #include <daos/btree_class.h>
 #include <daos_srv/vos.h>
@@ -21,13 +20,6 @@ int
 
 extern struct dss_module     vos_srv_module;
 extern struct dss_module_key vos_module_key;
-
-#ifdef DLCK_ENGINE_UNIT_TEST
-struct dss_module_info *
-dlck_engine_get_module_info(void);
-#else
-#define dlck_engine_get_module_info dss_get_module_info
-#endif
 
 /**
  * Allocate an engine.
@@ -67,278 +59,11 @@ dlck_engine_alloc(unsigned targets, struct dlck_engine **engine_ptr)
  *
  * \param[in]	engine	An engine to free.
  */
-static void
+static inline void
 dlck_engine_free(struct dlck_engine *engine)
 {
 	D_FREE(engine->xss);
 	D_FREE(engine);
-}
-
-/**
- * Poll for NVMe operations.
- *
- * \param[in]	arg	ABT_eventual too wait for.
- */
-static void
-nvme_polling(void *arg)
-{
-	struct dlck_xstream    *xs = arg;
-	ABT_bool                is_ready;
-	struct dss_module_info *dmi;
-	int                     rc;
-
-	dmi = dlck_engine_get_module_info();
-	D_ASSERT(dmi != NULL);
-
-	do {
-		(void)bio_nvme_poll(dmi->dmi_nvme_ctxt);
-		ABT_thread_yield();
-
-		rc = ABT_eventual_test(xs->nvme_poll_done, NULL, &is_ready);
-		if (rc != 0) {
-			return;
-		}
-	} while (is_ready == ABT_FALSE);
-}
-
-static inline bool
-dlck_engine_xstream_is_sys(int tgt_id)
-{
-	return (tgt_id < 0);
-}
-
-/**
- * This function ought to strictly follow it counterpart in daos_engine (dss_xstream_has_nvme).
- */
-static inline bool
-dlck_engine_xstream_has_nvme(int tgt_id)
-{
-	/**
-	 * Since there are no helper execution streams (XS) right now. All non-sys XSes are main
-	 * XSes as defined for daos_engine.
-	 */
-	if (!dlck_engine_xstream_is_sys(tgt_id)) {
-		return true;
-	}
-
-	/** DLCK employs only one sys XS and this is the one which talks to NVMe as necessary. */
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		return true;
-	}
-
-	return false;
-}
-
-/**
- * Initialize an execution stream.
- *
- * \param[in,out]	xs	Execution stream to initialize.
- *
- * \retval DER_SUCCESS	Success.
- * \retval -DER_INVAL	Thread name generation failed.
- * \retval -DER_NOMEM	Out of memory.
- * \retval -DER_*	Other errors.
- */
-static int
-dlck_engine_xstream_init(struct dlck_xstream *xs)
-{
-	int                     tag;
-	int                     tgt_id = xs->tgt_id;
-	int                     xs_id;
-	char                    name[DSS_XS_NAME_LEN];
-	void                   *tls;
-	struct dss_module_info *dmi;
-	int                     rc;
-
-	if (dlck_engine_xstream_is_sys(tgt_id)) {
-		tag   = DAOS_SERVER_TAG - DAOS_TGT_TAG;
-		xs_id = 0;
-
-		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT, 0);
-	} else {
-		tag   = DAOS_SERVER_TAG;
-		xs_id = DSS_MAIN_XS_ID_WITH_HELPER_POOL(tgt_id, DSS_SYS_XS_NR_DEFAULT);
-
-		rc = snprintf(name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT, tgt_id);
-	}
-
-	/**
-	 * >= DSS_XS_NAME_LEN	the output was truncated
-	 * < 0			other error
-	 */
-	if (rc < 0 || rc >= DSS_XS_NAME_LEN) {
-		return -DER_INVAL;
-	}
-
-	(void)pthread_setname_np(pthread_self(), name);
-
-	tls = dss_tls_init(tag, xs_id, tgt_id);
-	if (tls == NULL) {
-		/** Note:  dss_tls_init() returns NULL also on other issues */
-		return -DER_NOMEM;
-	}
-
-	if (dlck_engine_xstream_has_nvme(tgt_id)) {
-		dmi = dlck_engine_get_module_info();
-		D_ASSERT(dmi != NULL);
-
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, tgt_id, false);
-		if (rc != DER_SUCCESS) {
-			goto fail_tls_fini;
-		}
-
-		rc = ABT_eventual_create(0, &xs->nvme_poll_done);
-		if (rc != ABT_SUCCESS) {
-			rc = dss_abterr2der(rc);
-			goto fail_xsctxt_free;
-		}
-
-		rc = dlck_ult_create(xs->pool, nvme_polling, xs, &xs->nvme_poll);
-		if (rc != DER_SUCCESS) {
-			goto fail_eventual_free;
-		}
-	}
-
-	return DER_SUCCESS;
-
-fail_eventual_free:
-	ABT_eventual_free(&xs->nvme_poll_done);
-fail_xsctxt_free:
-	bio_xsctxt_free(dmi->dmi_nvme_ctxt);
-fail_tls_fini:
-	dss_tls_fini(tls);
-
-	return rc;
-}
-
-static void
-dlck_engine_xstream_init_ult(void *arg)
-{
-	struct dlck_xstream *xs = arg;
-
-	xs->ult_rc = dlck_engine_xstream_init(xs);
-}
-
-/**
- * Finalize an execution stream.
- *
- * \param[in,out]	xs	Execution stream to finalize.
- *
- * \retval DER_SUCCESS	Success. Supposedly it can't fail.
- */
-static int
-dlck_engine_xstream_fini(struct dlck_xstream *xs)
-{
-	struct dss_module_info *dmi;
-	void                   *tls = dss_tls_get();
-	int                     rc  = DER_SUCCESS;
-
-	if (tls == NULL) {
-		/** Nothing to do here. */
-		return DER_SUCCESS;
-	}
-
-	if (dlck_engine_xstream_has_nvme(xs->tgt_id)) {
-		rc = ABT_eventual_set(xs->nvme_poll_done, NULL, 0);
-		rc = dss_abterr2der(rc);
-		if (rc != DER_SUCCESS) {
-			goto fail;
-		}
-
-		rc = ABT_thread_join(xs->nvme_poll.thread);
-		rc = dss_abterr2der(rc);
-		if (rc != DER_SUCCESS) {
-			goto fail;
-		}
-
-		rc = ABT_thread_free(&xs->nvme_poll.thread);
-		rc = dss_abterr2der(rc);
-		if (rc != DER_SUCCESS) {
-			/**
-			 * After the NVMe polling thread joined we can safely free TLS irrespective
-			 * of the error occurred while freeing the thread.
-			 */
-		}
-
-		dmi = dlck_engine_get_module_info();
-		D_ASSERT(dmi != NULL);
-		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
-	}
-
-	dss_tls_fini(tls);
-
-fail:
-	/**
-	 * In case of a fail we can't join/free the NVMe polling thread nor free TLS which may
-	 * result in a SIGSEGV. The best we can do is to leave the resources as they are and pass
-	 * error the caller.
-	 */
-
-	return rc;
-}
-
-static void
-dlck_engine_xstream_fini_ult(void *arg)
-{
-	struct dlck_xstream *xs = arg;
-
-	xs->ult_rc = dlck_engine_xstream_fini(xs);
-}
-
-static void
-xstream_stop_all_no_error(struct dlck_engine *engine)
-{
-	struct dlck_xstream *xs;
-	struct dlck_ult      fini_ult;
-	int                  rc;
-	int                  rc_abt;
-
-	for (int i = 0; i <= engine->targets; ++i) {
-		xs = &engine->xss[i];
-
-		rc = dlck_ult_create(xs->pool, dlck_engine_xstream_fini_ult, xs, &fini_ult);
-		if (rc != DER_SUCCESS) {
-			/** Cannot free a thread possibly with running NVMe polling ULT. */
-			continue;
-		}
-
-		/** ABT_thread_free() waits for the ULT to join internally */
-		rc_abt = ABT_thread_free(&fini_ult.thread);
-		D_ASSERT(rc_abt == ABT_SUCCESS);
-
-		(void)dlck_xstream_free(&engine->xss[i]);
-	}
-}
-
-static int
-xstream_init(struct dlck_xstream *xs)
-{
-	struct dlck_ult init_ult;
-	int             rc;
-	int             rc_abt;
-
-	rc = dlck_ult_create(xs->pool, dlck_engine_xstream_init_ult, xs, &init_ult);
-	if (rc != DER_SUCCESS) {
-		return rc;
-	}
-
-	/** ABT_thread_free() waits for the ULT to join internally */
-	rc_abt = ABT_thread_free(&init_ult.thread);
-	/**
-	 * There are two possible issues here:
-	 * 1. Something is wrong with the provided argument. This is an internal error, so an
-	 * assertion is used here.
-	 * 2. The ULT has not joined. In this case, ABT_thread_free() will never return anyway.
-	 */
-	D_ASSERT(rc_abt == ABT_SUCCESS);
-
-	if (xs->ult_rc != DER_SUCCESS) {
-		D_ERROR("[%d] Initialization of XS failed\n", xs->tgt_id);
-	} else {
-		D_EMIT("[%d] Initialization of XS succeeded\n", xs->tgt_id);
-	}
-
-	return xs->ult_rc;
 }
 
 int
@@ -364,7 +89,7 @@ dlck_engine_start(struct dlck_engine *engine)
 
 	/** initialize the daos_sys_0 XS */
 	xs = &engine->xss[daos_sys_idx];
-	rc = xstream_init(xs);
+	rc = dlck_xstream_init(xs);
 	if (rc != DER_SUCCESS) {
 		goto xstream_stop_all;
 	}
@@ -375,7 +100,7 @@ dlck_engine_start(struct dlck_engine *engine)
 
 	/** initialize all daos_io_* XSes */
 	for (int i = 0; i < engine->targets; ++i) {
-		rc = xstream_init(&engine->xss[i]);
+		rc = dlck_xstream_init(&engine->xss[i]);
 		if (rc != DER_SUCCESS) {
 			goto xstream_stop_all;
 		}
@@ -384,21 +109,15 @@ dlck_engine_start(struct dlck_engine *engine)
 	return DER_SUCCESS;
 
 xstream_stop_all:
-	xstream_stop_all_no_error(engine);
+	dlck_xstream_stop_all_no_error(engine->xss, engine->targets);
 
 	return rc;
 }
 
-#define ULT_FINI_FAIL_FMT "[%d] ULT finalization failed - cannot safely free the XS: " DF_RC "\n"
-
 int
 dlck_engine_stop(struct dlck_engine *engine)
 {
-	struct dlck_xstream *xs;
-	struct dlck_ult      fini_ult;
-	ABT_bool             is_empty;
-	int                  rc = DER_SUCCESS;
-	int                  rc_abt;
+	int rc;
 
 	if (engine->join_fail) {
 		/** Cannot stop the engine in this case. It will probably crash. */
@@ -407,46 +126,8 @@ dlck_engine_stop(struct dlck_engine *engine)
 
 	/** Note: daos_sys_0 XS is the last and it has to be stopped as the last one. */
 	for (int i = 0; i <= engine->targets; ++i) {
-		xs = &engine->xss[i];
-
-		/** Stop and release all resources hold by the ULT. */
-
-		rc = dlck_ult_create(xs->pool, dlck_engine_xstream_fini_ult, xs, &fini_ult);
+		rc = dlck_xstream_stop(&engine->xss[i]);
 		if (rc != DER_SUCCESS) {
-			D_ERROR(ULT_FINI_FAIL_FMT, xs->tgt_id, DP_RC(rc));
-			goto xstream_free_all;
-		}
-
-		/** ABT_thread_free() waits for the ULT to join internally */
-		rc_abt = ABT_thread_free(&fini_ult.thread);
-		/**
-		 * There are two possible issues here:
-		 * 1. Something is wrong with the provided argument. This is an internal error that
-		 * should never occur, so an assertion is used here.
-		 * 2. The ULT has not joined. In this case, ABT_thread_free() will never return
-		 * anyway.
-		 */
-		D_ASSERT(rc_abt == ABT_SUCCESS);
-
-		if (xs->ult_rc != DER_SUCCESS) {
-			rc = xs->ult_rc;
-			D_ERROR(ULT_FINI_FAIL_FMT, xs->tgt_id, DP_RC(rc));
-			goto xstream_free_all;
-		}
-
-		/** make sure the XS is idle */
-		rc_abt = ABT_pool_is_empty(xs->pool, &is_empty);
-		/** Can fail only because of an internal error; hence, an assertion is used. */
-		D_ASSERT(rc_abt == ABT_SUCCESS);
-		if (is_empty != ABT_TRUE) {
-			D_ERROR("[%d] cannot free XS - it is busy\n", xs->tgt_id);
-			rc = -DER_BUSY;
-			goto xstream_free_all;
-		}
-
-		rc = dlck_xstream_free(xs);
-		if (rc != DER_SUCCESS) {
-			D_ERROR("[%d] XS free failed: " DF_RC "\n", xs->tgt_id, DP_RC(rc));
 			goto xstream_free_all;
 		}
 	}
@@ -454,7 +135,7 @@ dlck_engine_stop(struct dlck_engine *engine)
 	return DER_SUCCESS;
 
 xstream_free_all:
-	xstream_stop_all_no_error(engine);
+	dlck_xstream_stop_all_no_error(engine->xss, engine->targets);
 
 	return rc;
 }
@@ -554,42 +235,4 @@ dlck_engine_fini(struct dlck_engine *engine)
 	dlck_engine_free(engine);
 
 	return rc;
-}
-
-int
-dlck_engine_xstream_arg_alloc(struct dlck_engine *engine, int idx, void *ctrl_ptr,
-			      void **output_arg)
-{
-	struct xstream_arg *xa;
-
-	D_ALLOC_PTR(xa);
-	if (xa == NULL) {
-		return -DER_NOMEM;
-	}
-
-	xa->ctrl   = ctrl_ptr;
-	xa->engine = engine;
-	xa->xs     = &engine->xss[idx];
-
-	*output_arg = xa;
-
-	return DER_SUCCESS;
-}
-
-void
-dlck_engine_xstream_arg_free(void *sts_ptr, void **arg)
-{
-	struct checker_status *sts = sts_ptr;
-	struct xstream_arg    *xa  = *arg;
-
-	if (xa == NULL) {
-		return;
-	}
-
-	sts[xa->xs->tgt_id].rc           = xa->status.rc;
-	sts[xa->xs->tgt_id].warnings_num = xa->status.warnings_num;
-	sts[xa->xs->tgt_id].errors_num   = xa->status.errors_num;
-
-	D_FREE(*arg);
-	*arg = NULL;
 }

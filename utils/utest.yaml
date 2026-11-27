@@ -220,7 +220,6 @@
 - name: dlck
   base: "BUILD_DIR"
   tests:
-    - cmd: ["src/utils/dlck/tests/dlck_abt_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_args_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_common_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_checker_macros_ut"]
@@ -228,6 +227,7 @@
     - cmd: ["src/utils/dlck/tests/dlck_checker_worker_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_engine_exec_all_ut"]
     - cmd: ["src/utils/dlck/tests/dlck_engine_ut"]
+    - cmd: ["src/utils/dlck/tests/dlck_xstream_ut"]
 - name: Source metadata testing
   memcheck: False
   asan: False

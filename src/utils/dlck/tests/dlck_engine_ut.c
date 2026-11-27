@@ -29,16 +29,8 @@
 #include "ut_dlck_abt_mock.h"
 #include "ut_dlck_cmd_mock.h"
 #include "ut_dlck_daos_mock.h"
+#include "ut_dlck_xstream_mock.h"
 #include "ut_mem_mock.h"
-
-#define TARGETS_MAX        3
-
-#define SYS_TAG            (DAOS_SERVER_TAG - DAOS_TGT_TAG)
-
-/** per-execution-stream sentinels so that resource mix-ups between the streams are caught */
-#define MOCK_POOL(IDX)     ((ABT_pool)(uintptr_t)(0x1000 + (IDX)))
-#define MOCK_EVENTUAL(IDX) ((ABT_eventual)(uintptr_t)(0x2000 + (IDX)))
-#define MOCK_THREAD(IDX)   ((ABT_thread)(uintptr_t)(0x3000 + (IDX)))
 
 /**
  * per-test context: the engine arguments, the engine and its execution streams, and the
@@ -49,7 +41,7 @@ struct engine_ut_ctx {
 	struct dlck_engine      engine;
 	struct dlck_xstream     xss[TARGETS_MAX];
 	struct dlck_exec        exec;
-	struct dlck_ult         ults[TARGETS_MAX];
+	ABT_thread              ults[TARGETS_MAX];
 	void                   *ult_args[TARGETS_MAX];
 	/** per-target payloads */
 	int                     payload[TARGETS_MAX];
@@ -64,7 +56,7 @@ static struct engine_ut_ctx Ctx;
 
 #define EXPECT_EXEC_INIT_ALLOC(ctx, T)                                                             \
 	do {                                                                                       \
-		EXPECT_D_CALLOC(T, sizeof(struct dlck_ult), (ctx)->ults);                          \
+		EXPECT_D_CALLOC(T, sizeof(ABT_thread), (ctx)->ults);                               \
 		EXPECT_D_CALLOC(T, sizeof(void *), (ctx)->ult_args);                               \
 	} while (0)
 
@@ -72,6 +64,26 @@ static struct engine_ut_ctx Ctx;
 	do {                                                                                       \
 		expect_value(__wrap_d_free, ptr, (ctx)->ult_args);                                 \
 		expect_value(__wrap_d_free, ptr, (ctx)->ults);                                     \
+	} while (0)
+
+/** the first ULT join fails and the second ULT is joined and freed */
+#define EXPECT_EXEC_JOIN_FAILURE(ctx)                                                              \
+	do {                                                                                       \
+		(ctx)->exec.ults[0] = MOCK_THREAD(0);                                              \
+		(ctx)->exec.ults[1] = MOCK_THREAD(1);                                              \
+		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);                        \
+		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);                               \
+		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(1), ABT_SUCCESS);                               \
+	} while (0)
+
+/** every ULT of the batch is joined and freed successfully */
+#define EXPECT_EXEC_JOIN_SUCCESS(ctx)                                                              \
+	do {                                                                                       \
+		for (int i = 0; i < 2; ++i) {                                                      \
+			(ctx)->exec.ults[i] = MOCK_THREAD(i);                                      \
+			EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);                       \
+			EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);                       \
+		}                                                                                  \
 	} while (0)
 
 #define EXPECT_ENGINE_ALLOC(ctx, T)                                                                \
@@ -98,71 +110,6 @@ static struct engine_ut_ctx Ctx;
 		will_return(__wrap_ds_tls_key_create, 0);                                          \
 		EXPECT_VOS_STANDALONE_TLS_INIT(SYS_TAG, DER_SUCCESS);                              \
 		EXPECT_VOS_SYS_DB_INIT(&(ctx)->args, DER_SUCCESS);                                 \
-	} while (0)
-
-#define EXPECT_XS_CREATE_ALL(ctx)                                                                  \
-	do {                                                                                       \
-		for (int ii = 0; ii <= (ctx)->args.targets; ++ii) {                                \
-			EXPECT_DLCK_XSTREAM_CREATE(&(ctx)->xss[ii], DER_SUCCESS, MOCK_POOL(ii));   \
-		}                                                                                  \
-	} while (0)
-
-/** one full nvme_polling ULT lifetime on the IDX stream concluding after ITERS iterations */
-#define EXPECT_NVME_POLLING(IDX, ITERS)                                                            \
-	do {                                                                                       \
-		EXPECT_DLCK_ULT_CREATE(MOCK_POOL(IDX), DER_SUCCESS, MOCK_THREAD(IDX));             \
-		EXPECT_DLCK_ENGINE_GET_MODULE_INFO();                                              \
-		for (int jj = 0; jj < (ITERS) - 1; ++jj) {                                         \
-			EXPECT_BIO_NVME_POLL(Mock_xs_ctxt, 0);                                     \
-			will_return(__wrap_ABT_thread_yield, ABT_SUCCESS);                         \
-			EXPECT_ABT_EVENTUAL_TEST(MOCK_EVENTUAL(IDX), ABT_SUCCESS, ABT_FALSE);      \
-		}                                                                                  \
-		EXPECT_BIO_NVME_POLL(Mock_xs_ctxt, 0);                                             \
-		will_return(__wrap_ABT_thread_yield, ABT_SUCCESS);                                 \
-		EXPECT_ABT_EVENTUAL_TEST(MOCK_EVENTUAL(IDX), ABT_SUCCESS, ABT_TRUE);               \
-	} while (0)
-
-/** successful initialization of the daos_sys_0 execution stream (at the IDX position) */
-#define EXPECT_XS_INIT_SYS(IDX, CONFIGURED, POLL_ITERS)                                            \
-	do {                                                                                       \
-		EXPECT_DLCK_ULT_CREATE(MOCK_POOL(IDX), DER_SUCCESS, Mock_thread);                  \
-		EXPECT_DSS_TLS_INIT(SYS_TAG, 0, -1, &Mock_dtls);                                   \
-		EXPECT_BIO_NVME_CONFIGURED(CONFIGURED);                                            \
-		if (CONFIGURED) {                                                                  \
-			EXPECT_DLCK_ENGINE_GET_MODULE_INFO();                                      \
-			EXPECT_BIO_XSCTXT_ALLOC(-1, DER_SUCCESS, Mock_xs_ctxt);                    \
-			EXPECT_ABT_EVENTUAL_CREATE(ABT_SUCCESS, MOCK_EVENTUAL(IDX));               \
-			EXPECT_NVME_POLLING(IDX, POLL_ITERS);                                      \
-		}                                                                                  \
-		EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);                                  \
-	} while (0)
-
-/** a fini ULT finding no TLS (nothing to finalize) followed by freeing the IDX stream */
-#define EXPECT_XS_STOP_NO_TLS(ctx, IDX, POOL)                                                      \
-	do {                                                                                       \
-		EXPECT_DLCK_ULT_CREATE(POOL, DER_SUCCESS, Mock_thread);                            \
-		will_return(__wrap_dss_tls_get, NULL);                                             \
-		EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);                                  \
-		EXPECT_DLCK_XSTREAM_FREE(&(ctx)->xss[IDX], DER_SUCCESS);                           \
-	} while (0)
-
-/** the finalization body of the IDX execution stream owning an NVMe context */
-#define EXPECT_XS_FINI_NVME_BODY(IDX)                                                              \
-	do {                                                                                       \
-		EXPECT_ABT_EVENTUAL_SET(MOCK_EVENTUAL(IDX), ABT_SUCCESS);                          \
-		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(IDX), ABT_SUCCESS);                             \
-		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(IDX), ABT_SUCCESS);                             \
-		EXPECT_DLCK_ENGINE_GET_MODULE_INFO();                                              \
-		expect_value(__wrap_bio_xsctxt_free, ctxt, Mock_xs_ctxt);                          \
-		expect_value(__wrap_dss_tls_fini, dtls, &Mock_dtls);                               \
-	} while (0)
-
-/** stopping the idle IDX execution stream after a successful fini ULT */
-#define EXPECT_XS_STOPPED(ctx, IDX)                                                                \
-	do {                                                                                       \
-		EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);                                  \
-		EXPECT_ABT_POOL_IS_EMPTY(MOCK_POOL(IDX), ABT_SUCCESS, ABT_TRUE);                   \
-		EXPECT_DLCK_XSTREAM_FREE(&(ctx)->xss[IDX], DER_SUCCESS);                           \
 	} while (0)
 
 /** common expectations for finalizing engine-level resources */
@@ -194,19 +141,6 @@ engine_build(struct engine_ut_ctx *ctx)
 }
 
 static void
-engine_build_nvme(struct engine_ut_ctx *ctx)
-{
-	engine_build(ctx);
-
-	for (unsigned i = 0; i <= ctx->args.targets; ++i) {
-		ctx->xss[i].nvme_poll.thread = MOCK_THREAD(i);
-		ctx->xss[i].nvme_poll_done   = MOCK_EVENTUAL(i);
-	}
-
-	Mock_dmi.dmi_nvme_ctxt = Mock_xs_ctxt;
-}
-
-static void
 exec_prepare(struct engine_ut_ctx *ctx)
 {
 	ctx->exec.arg_alloc_fn     = mock_arg_alloc_fn;
@@ -228,8 +162,8 @@ exec_build(struct engine_ut_ctx *ctx)
 	ctx->exec.ult_args = ctx->ult_args;
 
 	for (unsigned i = 0; i < ctx->args.targets; ++i) {
-		ctx->ults[i].thread = ABT_THREAD_NULL;
-		ctx->ult_args[i]    = &ctx->payload[i];
+		ctx->ults[i]     = ABT_THREAD_NULL;
+		ctx->ult_args[i] = &ctx->payload[i];
 	}
 }
 
@@ -297,91 +231,6 @@ setup_engine_build(void **state)
 	return 0;
 }
 
-static int
-setup_engine_build_nvme(void **state)
-{
-	struct engine_ut_ctx *ctx = ctx_reset(state);
-
-	engine_build_nvme(ctx);
-
-	return 0;
-}
-
-/** tests - dlck_engine_xstream_arg_alloc/free */
-
-/** verify a successfully allocated argument points at the right execution stream */
-static void
-test_dlck_engine_xstream_arg_alloc_success(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	struct xstream_arg    xa  = {0};
-	int                   ctrl;
-	void                 *arg = NULL;
-	int                   rc;
-
-	EXPECT_D_CALLOC(1, sizeof(struct xstream_arg), &xa);
-
-	rc = dlck_engine_xstream_arg_alloc(&ctx->engine, 1, &ctrl, &arg);
-
-	assert_int_equal(rc, DER_SUCCESS);
-	assert_ptr_equal(arg, &xa);
-	assert_ptr_equal(xa.ctrl, &ctrl);
-	assert_ptr_equal(xa.engine, &ctx->engine);
-	assert_ptr_equal(xa.xs, &ctx->xss[1]);
-	assert_int_equal(xa.status.rc, DER_SUCCESS);
-}
-
-/** verify an argument allocation failure is reported as -DER_NOMEM */
-static void
-test_dlck_engine_xstream_arg_alloc_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   ctrl;
-	void                 *arg = NULL;
-	int                   rc;
-
-	EXPECT_D_CALLOC(1, sizeof(struct xstream_arg), NULL);
-
-	rc = dlck_engine_xstream_arg_alloc(&ctx->engine, 1, &ctrl, &arg);
-
-	assert_int_equal(rc, -DER_NOMEM);
-	assert_null(arg);
-}
-
-/** verify freeing a NULL argument is a no-op */
-static void
-test_dlck_engine_xstream_arg_free_null(void **unused)
-{
-	struct checker_status sts[1] = {{0}};
-	void                 *arg    = NULL;
-
-	dlck_engine_xstream_arg_free(sts, &arg);
-
-	assert_null(arg);
-}
-
-/** verify the ULT's status is collected into its target's slot while freeing its argument */
-static void
-test_dlck_engine_xstream_arg_free_collects_outputs(void **state)
-{
-	struct engine_ut_ctx *ctx    = *state;
-	struct xstream_arg    xa     = {.xs = &ctx->xss[1]};
-	struct checker_status sts[2] = {{0}};
-	void                 *arg    = &xa;
-
-	xa.status.rc           = -DER_IO;
-	xa.status.warnings_num = 3;
-	xa.status.errors_num   = 2;
-	expect_value(__wrap_d_free, ptr, &xa);
-
-	dlck_engine_xstream_arg_free(sts, &arg);
-
-	assert_int_equal(sts[1].rc, -DER_IO);
-	assert_int_equal(sts[1].warnings_num, 3);
-	assert_int_equal(sts[1].errors_num, 2);
-	assert_null(arg);
-}
-
 /** tests - dlck_exec_init */
 
 /** verify the batch allocation prepares the arguments of all the targets */
@@ -412,7 +261,7 @@ test_dlck_exec_init_success(void **state)
 	assert_ptr_equal(de->ult_args, ctx->ult_args);
 	for (int i = 0; i < 2; ++i) {
 		assert_ptr_equal(de->ult_args[i], &ctx->payload[i]);
-		assert_ptr_equal(de->ults[i].thread, ABT_THREAD_NULL);
+		assert_ptr_equal(de->ults[i], ABT_THREAD_NULL);
 	}
 	assert_false(de->join_fail);
 }
@@ -425,7 +274,7 @@ test_dlck_exec_init_ults_alloc_failure(void **state)
 	struct dlck_exec     *de  = &ctx->exec;
 	int                   rc;
 
-	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), NULL);
+	EXPECT_D_CALLOC(2, sizeof(ABT_thread), NULL);
 
 	rc = dlck_exec_init(&ctx->engine, de);
 
@@ -441,7 +290,7 @@ test_dlck_exec_init_args_alloc_failure(void **state)
 	struct dlck_exec     *de  = &ctx->exec;
 	int                   rc;
 
-	EXPECT_D_CALLOC(2, sizeof(struct dlck_ult), ctx->ults);
+	EXPECT_D_CALLOC(2, sizeof(ABT_thread), ctx->ults);
 	EXPECT_D_CALLOC(2, sizeof(void *), NULL);
 	expect_value(__wrap_d_free, ptr, ctx->ults);
 
@@ -493,7 +342,7 @@ test_dlck_engine_exec_success(void **state)
 
 	assert_int_equal(rc, DER_SUCCESS);
 	for (int i = 0; i < 2; ++i) {
-		assert_ptr_equal(ctx->exec.ults[i].thread, MOCK_THREAD(i));
+		assert_ptr_equal(ctx->exec.ults[i], MOCK_THREAD(i));
 	}
 	assert_false(ctx->exec.join_fail);
 }
@@ -516,7 +365,7 @@ test_dlck_engine_exec_ult_create_failure(void **state)
 
 	assert_int_equal(rc, -DER_NOMEM);
 	for (int i = 0; i < 2; ++i) {
-		assert_ptr_equal(ctx->exec.ults[i].thread, ABT_THREAD_NULL);
+		assert_ptr_equal(ctx->exec.ults[i], ABT_THREAD_NULL);
 	}
 	assert_false(ctx->exec.join_fail);
 }
@@ -529,16 +378,12 @@ test_dlck_exec_join_no_error_success(void **state)
 {
 	struct engine_ut_ctx *ctx = *state;
 
-	for (int i = 0; i < 2; ++i) {
-		ctx->exec.ults[i].thread = MOCK_THREAD(i);
-		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
-	}
+	EXPECT_EXEC_JOIN_SUCCESS(ctx);
 
 	dlck_exec_join_no_error(&ctx->exec);
 
 	for (int i = 0; i < 2; ++i) {
-		assert_ptr_equal(ctx->exec.ults[i].thread, ABT_THREAD_NULL);
+		assert_ptr_equal(ctx->exec.ults[i], ABT_THREAD_NULL);
 	}
 	assert_false(ctx->exec.join_fail);
 }
@@ -549,16 +394,12 @@ test_dlck_exec_join_no_error_join_failure(void **state)
 {
 	struct engine_ut_ctx *ctx = *state;
 
-	ctx->exec.ults[0].thread = MOCK_THREAD(0);
-	ctx->exec.ults[1].thread = MOCK_THREAD(1);
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
-	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(1), ABT_SUCCESS);
+	EXPECT_EXEC_JOIN_FAILURE(ctx);
 
 	dlck_exec_join_no_error(&ctx->exec);
 
-	assert_ptr_equal(ctx->exec.ults[0].thread, MOCK_THREAD(0));
-	assert_ptr_equal(ctx->exec.ults[1].thread, ABT_THREAD_NULL);
+	assert_ptr_equal(ctx->exec.ults[0], MOCK_THREAD(0));
+	assert_ptr_equal(ctx->exec.ults[1], ABT_THREAD_NULL);
 	assert_true(ctx->exec.join_fail);
 }
 
@@ -571,17 +412,13 @@ test_dlck_exec_join_success(void **state)
 	struct engine_ut_ctx *ctx = *state;
 	int                   rc;
 
-	for (int i = 0; i < 2; ++i) {
-		ctx->exec.ults[i].thread = MOCK_THREAD(i);
-		EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(i), ABT_SUCCESS);
-		EXPECT_ABT_THREAD_FREE(MOCK_THREAD(i), ABT_SUCCESS);
-	}
+	EXPECT_EXEC_JOIN_SUCCESS(ctx);
 
 	rc = dlck_exec_join(&ctx->exec);
 
 	assert_int_equal(rc, DER_SUCCESS);
 	for (int i = 0; i < 2; ++i) {
-		assert_ptr_equal(ctx->exec.ults[i].thread, ABT_THREAD_NULL);
+		assert_ptr_equal(ctx->exec.ults[i], ABT_THREAD_NULL);
 	}
 	assert_false(ctx->exec.join_fail);
 }
@@ -593,17 +430,13 @@ test_dlck_exec_join_join_failure(void **state)
 	struct engine_ut_ctx *ctx = *state;
 	int                   rc;
 
-	ctx->exec.ults[0].thread = MOCK_THREAD(0);
-	ctx->exec.ults[1].thread = MOCK_THREAD(1);
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
-	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
-	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(1), ABT_SUCCESS);
+	EXPECT_EXEC_JOIN_FAILURE(ctx);
 
 	rc = dlck_exec_join(&ctx->exec);
 
 	assert_int_equal(rc, -DER_INVAL);
-	assert_ptr_equal(ctx->exec.ults[0].thread, MOCK_THREAD(0));
-	assert_ptr_equal(ctx->exec.ults[1].thread, ABT_THREAD_NULL);
+	assert_ptr_equal(ctx->exec.ults[0], MOCK_THREAD(0));
+	assert_ptr_equal(ctx->exec.ults[1], ABT_THREAD_NULL);
 	assert_true(ctx->exec.join_fail);
 }
 
@@ -614,8 +447,8 @@ test_dlck_exec_join_thread_free_failure(void **state)
 	struct engine_ut_ctx *ctx = *state;
 	int                   rc;
 
-	ctx->exec.ults[0].thread = MOCK_THREAD(0);
-	ctx->exec.ults[1].thread = MOCK_THREAD(1);
+	ctx->exec.ults[0] = MOCK_THREAD(0);
+	ctx->exec.ults[1] = MOCK_THREAD(1);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(0), ABT_SUCCESS);
 	EXPECT_ABT_THREAD_FREE(MOCK_THREAD(0), ABT_ERR_INV_THREAD);
 	EXPECT_ABT_THREAD_JOIN(MOCK_THREAD(1), ABT_SUCCESS);
@@ -625,7 +458,7 @@ test_dlck_exec_join_thread_free_failure(void **state)
 
 	assert_int_equal(rc, -DER_INVAL);
 	assert_false(ctx->exec.join_fail);
-	assert_ptr_equal(ctx->exec.ults[0].thread, ABT_THREAD_NULL);
+	assert_ptr_equal(ctx->exec.ults[0], ABT_THREAD_NULL);
 }
 
 /** tests - dlck_exec_fini */
@@ -649,7 +482,7 @@ test_dlck_exec_fini_skips_unjoined(void **state)
 {
 	struct engine_ut_ctx *ctx = *state;
 
-	ctx->exec.ults[0].thread = MOCK_THREAD(0);
+	ctx->exec.ults[0] = MOCK_THREAD(0);
 	EXPECT_mock_arg_free_fn(&ctx->custom_free, &ctx->payload[1]);
 	EXPECT_EXEC_FINI_FREE(ctx);
 
@@ -879,170 +712,114 @@ test_dlck_engine_init_vos_sys_db_init_failure(void **state)
 	assert_null(engine);
 }
 
-/** verify an execution stream creation failure stops previously created streams */
+/** verify engine start creates streams and initializes the system stream first */
 static void
-test_dlck_engine_start_xs_create_failure(void **state)
+test_dlck_engine_start_success(void **state)
 {
 	struct engine_ut_ctx *ctx = *state;
 	int                   rc;
 
-	EXPECT_DLCK_XSTREAM_CREATE(&ctx->xss[0], -DER_NOMEM, NULL);
-	/** the no-error stop still runs a fini ULT; there is no TLS to finalize */
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
+	for (int i = 0; i <= ctx->args.targets; ++i) {
+		int tgt_id = (i == ctx->args.targets ? -1 : i);
+
+		EXPECT_DLCK_XSTREAM_CREATE(&ctx->xss[i], tgt_id, DER_SUCCESS, MOCK_XSTREAM(i),
+					   MOCK_POOL(i));
+	}
+	EXPECT_DLCK_XSTREAM_INIT(&ctx->xss[ctx->args.targets], DER_SUCCESS);
+	for (int i = 0; i < ctx->args.targets; ++i) {
+		EXPECT_DLCK_XSTREAM_INIT(&ctx->xss[i], DER_SUCCESS);
+	}
 
 	rc = dlck_engine_start(&ctx->engine);
-	assert_int_equal(rc, -DER_NOMEM);
-}
 
-/** verify a sys execution stream TLS initialization failure stops created streams */
-static void
-test_dlck_engine_start_xs_init_tls_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_XS_CREATE_ALL(ctx);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	EXPECT_DSS_TLS_INIT(SYS_TAG, 0, -1, NULL);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
-
-	rc = dlck_engine_start(&ctx->engine);
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify an NVMe context allocation failure finalizes the TLS of the failed stream */
-static void
-test_dlck_engine_start_xs_init_xsctxt_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_XS_CREATE_ALL(ctx);
-	EXPECT_XS_INIT_SYS(1, true, 1);
-	/** the io execution stream fails to allocate its NVMe context */
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	EXPECT_DSS_TLS_INIT(DAOS_SERVER_TAG,
-			    DSS_MAIN_XS_ID_WITH_HELPER_POOL(0, DSS_SYS_XS_NR_DEFAULT), 0,
-			    &Mock_dtls);
-	EXPECT_DLCK_ENGINE_GET_MODULE_INFO();
-	EXPECT_BIO_XSCTXT_ALLOC(0, -DER_NOMEM, NULL);
-	expect_value(__wrap_dss_tls_fini, dtls, &Mock_dtls);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	/** the no-error stop finalizes the io stream (no TLS) and the fully set up sys stream */
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), DER_SUCCESS, Mock_thread);
-	will_return(__wrap_dss_tls_get, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(true);
-	EXPECT_XS_FINI_NVME_BODY(1);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	EXPECT_DLCK_XSTREAM_FREE(&ctx->xss[1], DER_SUCCESS);
-
-	rc = dlck_engine_start(&ctx->engine);
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify an eventual creation failure frees the NVMe context and finalizes the TLS */
-static void
-test_dlck_engine_start_xs_init_eventual_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_XS_CREATE_ALL(ctx);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	EXPECT_DSS_TLS_INIT(SYS_TAG, 0, -1, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(true);
-	EXPECT_DLCK_ENGINE_GET_MODULE_INFO();
-	EXPECT_BIO_XSCTXT_ALLOC(-1, DER_SUCCESS, Mock_xs_ctxt);
-	EXPECT_ABT_EVENTUAL_CREATE(ABT_ERR_MEM, NULL);
-	expect_value(__wrap_bio_xsctxt_free, ctxt, Mock_xs_ctxt);
-	expect_value(__wrap_dss_tls_fini, dtls, &Mock_dtls);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
-
-	rc = dlck_engine_start(&ctx->engine);
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify an NVMe polling ULT creation failure frees the eventual, the context, and the TLS */
-static void
-test_dlck_engine_start_xs_init_polling_ult_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_XS_CREATE_ALL(ctx);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	EXPECT_DSS_TLS_INIT(SYS_TAG, 0, -1, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(true);
-	EXPECT_DLCK_ENGINE_GET_MODULE_INFO();
-	EXPECT_BIO_XSCTXT_ALLOC(-1, DER_SUCCESS, Mock_xs_ctxt);
-	EXPECT_ABT_EVENTUAL_CREATE(ABT_SUCCESS, MOCK_EVENTUAL(0));
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), -DER_NOMEM, NULL);
-	EXPECT_ABT_EVENTUAL_FREE(MOCK_EVENTUAL(0), ABT_SUCCESS);
-	expect_value(__wrap_bio_xsctxt_free, ctxt, Mock_xs_ctxt);
-	expect_value(__wrap_dss_tls_fini, dtls, &Mock_dtls);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
-
-	rc = dlck_engine_start(&ctx->engine);
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
-/** verify the NVMe polling ULT stops polling when the eventual test fails */
-static void
-test_dlck_engine_start_polling_eventual_test_success(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_XS_CREATE_ALL(ctx);
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	EXPECT_DSS_TLS_INIT(SYS_TAG, 0, -1, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(true);
-	EXPECT_DLCK_ENGINE_GET_MODULE_INFO();
-	EXPECT_BIO_XSCTXT_ALLOC(-1, DER_SUCCESS, Mock_xs_ctxt);
-	EXPECT_ABT_EVENTUAL_CREATE(ABT_SUCCESS, MOCK_EVENTUAL(0));
-	/** the polling ULT concludes on the eventual test error instead of the readiness */
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, MOCK_THREAD(0));
-	EXPECT_DLCK_ENGINE_GET_MODULE_INFO();
-	EXPECT_BIO_NVME_POLL(Mock_xs_ctxt, 0);
-	will_return(__wrap_ABT_thread_yield, ABT_SUCCESS);
-	EXPECT_ABT_EVENTUAL_TEST(MOCK_EVENTUAL(0), ABT_ERR_INV_EVENTUAL, ABT_FALSE);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-
-	rc = dlck_engine_start(&ctx->engine);
 	assert_int_equal(rc, DER_SUCCESS);
+}
+
+/** verify a stream creation failure requests best-effort cleanup */
+static void
+test_dlck_engine_start_create_failure(void **state)
+{
+	struct engine_ut_ctx *ctx = *state;
+	int                   rc;
+
+	EXPECT_DLCK_XSTREAM_CREATE(&ctx->xss[0], 0, DER_SUCCESS, MOCK_XSTREAM(0), MOCK_POOL(0));
+	EXPECT_DLCK_XSTREAM_CREATE(&ctx->xss[1], -1, -DER_NOMEM, ABT_XSTREAM_NULL, ABT_POOL_NULL);
+	EXPECT_DLCK_XSTREAM_STOP_ALL_NO_ERROR(ctx->xss, ctx->args.targets);
+
+	rc = dlck_engine_start(&ctx->engine);
+
+	assert_int_equal(rc, -DER_NOMEM);
+}
+
+/** verify a system stream init failure requests best-effort cleanup */
+static void
+test_dlck_engine_start_sys_init_failure(void **state)
+{
+	struct engine_ut_ctx *ctx = *state;
+	int                   rc;
+
+	EXPECT_DLCK_XSTREAM_CREATE(&ctx->xss[0], -1, DER_SUCCESS, MOCK_XSTREAM(0), MOCK_POOL(0));
+	EXPECT_DLCK_XSTREAM_INIT(&ctx->xss[0], -DER_NOMEM);
+	EXPECT_DLCK_XSTREAM_STOP_ALL_NO_ERROR(ctx->xss, ctx->args.targets);
+
+	rc = dlck_engine_start(&ctx->engine);
+
+	assert_int_equal(rc, -DER_NOMEM);
+}
+
+/** verify an IO stream init failure requests best-effort cleanup */
+static void
+test_dlck_engine_start_io_init_failure(void **state)
+{
+	struct engine_ut_ctx *ctx = *state;
+	int                   rc;
+
+	EXPECT_DLCK_XSTREAM_CREATE(&ctx->xss[0], 0, DER_SUCCESS, MOCK_XSTREAM(0), MOCK_POOL(0));
+	EXPECT_DLCK_XSTREAM_CREATE(&ctx->xss[1], -1, DER_SUCCESS, MOCK_XSTREAM(1), MOCK_POOL(1));
+	EXPECT_DLCK_XSTREAM_INIT(&ctx->xss[1], DER_SUCCESS);
+	EXPECT_DLCK_XSTREAM_INIT(&ctx->xss[0], -DER_NOMEM);
+	EXPECT_DLCK_XSTREAM_STOP_ALL_NO_ERROR(ctx->xss, ctx->args.targets);
+
+	rc = dlck_engine_start(&ctx->engine);
+
+	assert_int_equal(rc, -DER_NOMEM);
 }
 
 /** tests - dlck_engine_stop */
 
-/** verify the stop sequence finalizes both sys and io streams */
+/** verify engine stop requests stream stops in target order */
 static void
 test_dlck_engine_stop_success(void **state)
 {
 	struct engine_ut_ctx *ctx = *state;
 	int                   rc;
 
-	/** the io execution stream owns an NVMe context */
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	will_return(__wrap_dss_tls_get, &Mock_dtls);
-	EXPECT_XS_FINI_NVME_BODY(0);
-	EXPECT_XS_STOPPED(ctx, 0);
-	/** the sys execution stream has no NVMe configured */
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(1), DER_SUCCESS, Mock_thread);
-	will_return(__wrap_dss_tls_get, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(false);
-	expect_value(__wrap_dss_tls_fini, dtls, &Mock_dtls);
-	EXPECT_XS_STOPPED(ctx, 1);
+	for (int i = 0; i <= ctx->args.targets; ++i) {
+		EXPECT_DLCK_XSTREAM_STOP(&ctx->xss[i], DER_SUCCESS);
+	}
 
 	rc = dlck_engine_stop(&ctx->engine);
 
 	assert_int_equal(rc, DER_SUCCESS);
 }
 
-/** verify a stop attempt with a failed join reports -DER_BUSY without touching anything */
+/** verify a stream stop failure triggers best-effort cleanup */
+static void
+test_dlck_engine_stop_xstream_failure(void **state)
+{
+	struct engine_ut_ctx *ctx = *state;
+	int                   rc;
+
+	EXPECT_DLCK_XSTREAM_STOP(&ctx->xss[0], DER_SUCCESS);
+	EXPECT_DLCK_XSTREAM_STOP(&ctx->xss[1], -DER_INVAL);
+	EXPECT_DLCK_XSTREAM_STOP_ALL_NO_ERROR(ctx->xss, ctx->args.targets);
+
+	rc = dlck_engine_stop(&ctx->engine);
+
+	assert_int_equal(rc, -DER_INVAL);
+}
+
+/** verify a stop attempt with a failed join reports -DER_BUSY without stopping streams */
 static void
 test_dlck_engine_stop_join_fail(void **state)
 {
@@ -1054,69 +831,6 @@ test_dlck_engine_stop_join_fail(void **state)
 	rc = dlck_engine_stop(&ctx->engine);
 
 	assert_int_equal(rc, -DER_BUSY);
-}
-
-/** verify a fini ULT failure stops the engine teardown and frees the streams */
-static void
-test_dlck_engine_stop_fini_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	will_return(__wrap_dss_tls_get, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(true);
-	EXPECT_ABT_EVENTUAL_SET(MOCK_EVENTUAL(0), ABT_ERR_INV_EVENTUAL);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	/** the no-error stop retries the fini ULT */
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
-
-	rc = dlck_engine_stop(&ctx->engine);
-
-	assert_int_equal(rc, -DER_INVAL);
-}
-
-/** verify a busy pool prevents the execution stream from being freed */
-static void
-test_dlck_engine_stop_pool_not_empty(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	will_return(__wrap_dss_tls_get, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(false);
-	expect_value(__wrap_dss_tls_fini, dtls, &Mock_dtls);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	EXPECT_ABT_POOL_IS_EMPTY(MOCK_POOL(0), ABT_SUCCESS, ABT_FALSE);
-	/** the no-error stop retries the fini ULT */
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
-
-	rc = dlck_engine_stop(&ctx->engine);
-
-	assert_int_equal(rc, -DER_BUSY);
-}
-
-/** verify an execution stream free failure falls back to the no-error stop */
-static void
-test_dlck_engine_stop_xs_free_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), DER_SUCCESS, Mock_thread);
-	will_return(__wrap_dss_tls_get, &Mock_dtls);
-	EXPECT_BIO_NVME_CONFIGURED(false);
-	expect_value(__wrap_dss_tls_fini, dtls, &Mock_dtls);
-	EXPECT_ABT_THREAD_FREE(Mock_thread, ABT_SUCCESS);
-	EXPECT_ABT_POOL_IS_EMPTY(MOCK_POOL(0), ABT_SUCCESS, ABT_TRUE);
-	EXPECT_DLCK_XSTREAM_FREE(&ctx->xss[0], -DER_INVAL);
-	/** the no-error stop retries the fini ULT */
-	EXPECT_XS_STOP_NO_TLS(ctx, 0, MOCK_POOL(0));
-
-	rc = dlck_engine_stop(&ctx->engine);
-
-	assert_int_equal(rc, -DER_INVAL);
 }
 
 /** verify a successful engine fini tears down all the modules and frees the engine */
@@ -1149,68 +863,43 @@ test_dlck_engine_fini_sm_fini_failure(void **state)
 	assert_int_equal(rc, -DER_BUSY);
 }
 
-/** verify a fini ULT creation failure leaves the execution streams untouched */
-static void
-test_dlck_engine_stop_fini_ult_create_failure(void **state)
-{
-	struct engine_ut_ctx *ctx = *state;
-	int                   rc;
-
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), -DER_NOMEM, NULL);
-	/** the no-error stop cannot create the fini ULT either */
-	EXPECT_DLCK_ULT_CREATE(MOCK_POOL(0), -DER_NOMEM, NULL);
-
-	rc = dlck_engine_stop(&ctx->engine);
-
-	assert_int_equal(rc, -DER_NOMEM);
-}
-
 /** the target count is passed as the CMocka initial state and read by the setups */
 #define TEST_TARGETS(ID, FUNC, TEST_SETUP, TARGETS)                                                \
 	{"DLCK_ENGINE_" #ID ": " #FUNC, FUNC, TEST_SETUP, NULL, (void *)(uintptr_t)(TARGETS)}
 
 static const struct CMUnitTest dlck_engine_tests[] = {
-    TEST_TARGETS(101, test_dlck_engine_xstream_arg_alloc_success, setup_engine_build, 2),
-    TEST_TARGETS(102, test_dlck_engine_xstream_arg_alloc_failure, setup_engine_build, 2),
-    TEST_TARGETS(103, test_dlck_engine_xstream_arg_free_null, NULL, 0),
-    TEST_TARGETS(104, test_dlck_engine_xstream_arg_free_collects_outputs, setup_engine_build, 2),
-    TEST_TARGETS(105, test_dlck_exec_init_success, setup_engine_exec_build_prep, 2),
-    TEST_TARGETS(106, test_dlck_exec_init_ults_alloc_failure, setup_engine_exec_build_prep, 2),
-    TEST_TARGETS(107, test_dlck_exec_init_args_alloc_failure, setup_engine_exec_build_prep, 2),
-    TEST_TARGETS(108, test_dlck_exec_init_arg_alloc_failure, setup_engine_exec_build_prep, 2),
-    TEST_TARGETS(109, test_dlck_engine_exec_success, setup_engine_exec_build, 2),
-    TEST_TARGETS(110, test_dlck_engine_exec_ult_create_failure, setup_engine_exec_build, 2),
-    TEST_TARGETS(111, test_dlck_exec_join_no_error_success, setup_engine_exec_build, 2),
-    TEST_TARGETS(112, test_dlck_exec_join_no_error_join_failure, setup_engine_exec_build, 2),
-    TEST_TARGETS(113, test_dlck_exec_join_success, setup_engine_exec_build, 2),
-    TEST_TARGETS(114, test_dlck_exec_join_join_failure, setup_engine_exec_build, 2),
-    TEST_TARGETS(115, test_dlck_exec_join_thread_free_failure, setup_engine_exec_build, 2),
-    TEST_TARGETS(116, test_dlck_exec_fini_success, setup_engine_exec_build, 2),
-    TEST_TARGETS(117, test_dlck_exec_fini_skips_unjoined, setup_engine_exec_build, 2),
-    TEST_TARGETS(118, test_dlck_engine_init_success, setup_reset, 2),
-    TEST_TARGETS(119, test_dlck_engine_init_zero_targets, setup_reset, 0),
-    TEST_TARGETS(120, test_dlck_engine_init_engine_alloc_failure, setup_reset, 2),
-    TEST_TARGETS(121, test_dlck_engine_init_xss_alloc_failure, setup_reset, 2),
-    TEST_TARGETS(122, test_dlck_engine_init_dbtree_classes_failure, setup_reset, 2),
-    TEST_TARGETS(123, test_dlck_engine_init_bio_nvme_init_failure, setup_reset, 2),
-    TEST_TARGETS(124, test_dlck_engine_init_sm_init_failure, setup_reset, 2),
-    TEST_TARGETS(125, test_dlck_engine_init_tls_key_create_failure, setup_reset, 2),
-    TEST_TARGETS(126, test_dlck_engine_init_vos_tls_init_failure, setup_reset, 2),
-    TEST_TARGETS(127, test_dlck_engine_init_vos_sys_db_init_failure, setup_reset, 2),
-    TEST_TARGETS(128, test_dlck_engine_start_xs_create_failure, setup_engine_build, 0),
-    TEST_TARGETS(129, test_dlck_engine_start_xs_init_tls_failure, setup_engine_build, 0),
-    TEST_TARGETS(130, test_dlck_engine_start_xs_init_xsctxt_failure, setup_engine_build, 1),
-    TEST_TARGETS(131, test_dlck_engine_start_xs_init_eventual_failure, setup_engine_build, 0),
-    TEST_TARGETS(132, test_dlck_engine_start_xs_init_polling_ult_failure, setup_engine_build, 0),
-    TEST_TARGETS(133, test_dlck_engine_start_polling_eventual_test_success, setup_engine_build, 0),
-    TEST_TARGETS(134, test_dlck_engine_stop_success, setup_engine_build_nvme, 1),
-    TEST_TARGETS(135, test_dlck_engine_stop_join_fail, setup_engine_build, 0),
-    TEST_TARGETS(136, test_dlck_engine_stop_fini_failure, setup_engine_build_nvme, 0),
-    TEST_TARGETS(137, test_dlck_engine_stop_pool_not_empty, setup_engine_build, 0),
-    TEST_TARGETS(138, test_dlck_engine_stop_xs_free_failure, setup_engine_build, 0),
-    TEST_TARGETS(139, test_dlck_engine_fini_success, setup_engine_build, 0),
-    TEST_TARGETS(140, test_dlck_engine_fini_sm_fini_failure, setup_engine_build, 0),
-    TEST_TARGETS(141, test_dlck_engine_stop_fini_ult_create_failure, setup_engine_build, 0),
+    TEST_TARGETS(101, test_dlck_exec_init_success, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(102, test_dlck_exec_init_ults_alloc_failure, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(103, test_dlck_exec_init_args_alloc_failure, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(104, test_dlck_exec_init_arg_alloc_failure, setup_engine_exec_build_prep, 2),
+    TEST_TARGETS(105, test_dlck_engine_exec_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(106, test_dlck_engine_exec_ult_create_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(107, test_dlck_exec_join_no_error_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(108, test_dlck_exec_join_no_error_join_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(109, test_dlck_exec_join_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(110, test_dlck_exec_join_join_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(111, test_dlck_exec_join_thread_free_failure, setup_engine_exec_build, 2),
+    TEST_TARGETS(112, test_dlck_exec_fini_success, setup_engine_exec_build, 2),
+    TEST_TARGETS(113, test_dlck_exec_fini_skips_unjoined, setup_engine_exec_build, 2),
+    TEST_TARGETS(114, test_dlck_engine_init_success, setup_reset, 2),
+    TEST_TARGETS(115, test_dlck_engine_init_zero_targets, setup_reset, 0),
+    TEST_TARGETS(116, test_dlck_engine_init_engine_alloc_failure, setup_reset, 2),
+    TEST_TARGETS(117, test_dlck_engine_init_xss_alloc_failure, setup_reset, 2),
+    TEST_TARGETS(118, test_dlck_engine_init_dbtree_classes_failure, setup_reset, 2),
+    TEST_TARGETS(119, test_dlck_engine_init_bio_nvme_init_failure, setup_reset, 2),
+    TEST_TARGETS(120, test_dlck_engine_init_sm_init_failure, setup_reset, 2),
+    TEST_TARGETS(121, test_dlck_engine_init_tls_key_create_failure, setup_reset, 2),
+    TEST_TARGETS(122, test_dlck_engine_init_vos_tls_init_failure, setup_reset, 2),
+    TEST_TARGETS(123, test_dlck_engine_init_vos_sys_db_init_failure, setup_reset, 2),
+    TEST_TARGETS(124, test_dlck_engine_start_success, setup_engine_build, 2),
+    TEST_TARGETS(125, test_dlck_engine_start_create_failure, setup_engine_build, 1),
+    TEST_TARGETS(126, test_dlck_engine_start_sys_init_failure, setup_engine_build, 0),
+    TEST_TARGETS(127, test_dlck_engine_start_io_init_failure, setup_engine_build, 1),
+    TEST_TARGETS(128, test_dlck_engine_stop_success, setup_engine_build, 2),
+    TEST_TARGETS(129, test_dlck_engine_stop_xstream_failure, setup_engine_build, 1),
+    TEST_TARGETS(130, test_dlck_engine_stop_join_fail, setup_engine_build, 0),
+    TEST_TARGETS(131, test_dlck_engine_fini_success, setup_engine_build, 0),
+    TEST_TARGETS(132, test_dlck_engine_fini_sm_fini_failure, setup_engine_build, 0),
 };
 
 int

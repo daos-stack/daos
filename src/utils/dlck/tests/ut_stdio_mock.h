@@ -27,4 +27,16 @@
 		will_return(__wrap_d_asprintf2, RC);                                               \
 	} while (0)
 
+#define EXPECT_FOPEN(PATH, MODE, ERROR)                                                            \
+	do {                                                                                       \
+		expect_string(__wrap_fopen, path, PATH);                                           \
+		expect_string(__wrap_fopen, mode, MODE);                                           \
+		if (ERROR) {                                                                       \
+			will_return(__wrap_fopen, NULL);                                           \
+			will_return(__wrap_fopen, EIO);                                            \
+		} else {                                                                           \
+			will_return(__wrap_fopen, Mock_file_stream);                               \
+		}                                                                                  \
+	} while (0)
+
 #endif /* __UT_STDIO_MOCK_H__ */

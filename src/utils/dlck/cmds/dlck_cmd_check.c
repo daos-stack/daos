@@ -184,8 +184,8 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 					   DLCK_FAULT_POOL_OPEN_VERSION,
 					   DLCK_FAULT_POOL_OPEN_UUID,
 					   0};
-	daos_handle_t poh;
-	int           rc;
+	daos_handle_t   poh;
+	int             rc;
 
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_POOL_PREALLOCATE)) { /** fault injection */
 		rc = daos_errno2der(daos_fail_value_get());
@@ -274,11 +274,11 @@ dlck_cmd_check(struct dlck_control *ctrl)
 {
 	D_ASSERT(ctrl != NULL);
 
-	struct checker     *ck                 = &ctrl->checker;
-	char                log_dir_template[] = "/tmp/dlck_check_XXXXXX";
-	struct dlck_engine *engine             = NULL;
+	struct checker        *ck                 = &ctrl->checker;
+	char                   log_dir_template[] = "/tmp/dlck_check_XXXXXX";
+	struct dlck_engine    *engine             = NULL;
 	struct checker_status *sts;
-	int                 rc;
+	int                    rc;
 
 	/** create a log directory */
 	if (DAOS_FAIL_CHECK(DLCK_FAULT_CREATE_LOG_DIR)) { /** fault injection */
@@ -337,8 +337,8 @@ dlck_cmd_check(struct dlck_control *ctrl)
 		goto err_stop_engine;
 	}
 
-	rc = dlck_engine_exec_all(engine, dlck_engine_xstream_arg_alloc, ctrl,
-				  dlck_engine_xstream_arg_free, sts, exec_one, ck);
+	rc = dlck_engine_exec_all(engine, dlck_xstream_arg_alloc, ctrl, dlck_xstream_arg_free, sts,
+				  exec_one, ck);
 	if (rc != DER_SUCCESS) {
 		goto err_free_sts;
 	}

@@ -17,7 +17,7 @@ struct dlck_exec {
 	dlck_ult_func    exec_one;
 	struct checker  *ck;
 	unsigned         targets;
-	struct dlck_ult *ults;
+	ABT_thread      *ults;
 	void           **ult_args;
 	bool             join_fail;
 };

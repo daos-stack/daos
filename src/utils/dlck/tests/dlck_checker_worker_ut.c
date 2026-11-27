@@ -44,19 +44,6 @@ teardown(void **state)
 	return 0;
 }
 
-static void
-expect_worker_fopen(bool error)
-{
-	expect_string(__wrap_fopen, path, Mock_log_file);
-	expect_string(__wrap_fopen, mode, "w");
-	if (!error) {
-		will_return(__wrap_fopen, Mock_file_stream);
-	} else {
-		will_return(__wrap_fopen, NULL);
-		will_return(__wrap_fopen, EIO);
-	}
-}
-
 static int
 mock_main_vprintf(struct checker *ck, const char *fmt, va_list args)
 {
@@ -84,7 +71,7 @@ setup_worker_checker(void **state)
 	ck = *state;
 	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
 	EXPECT_D_ASPRINTF2("%s/" DF_UUIDF "_%s%d", Mock_log_file, 573);
-	expect_worker_fopen(false);
+	EXPECT_FOPEN(Mock_log_file, "w", false);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	assert_int_equal(
 	    dlck_checker_worker_init(&options, MOCK_LOG_DIR, Mock_pool_uuid, 0, NULL, ck),
@@ -139,7 +126,7 @@ test_worker_init_log_open_failure(void **state)
 
 	EXPECT_D_CALLOC(1, sizeof(Dcw), &Dcw);
 	EXPECT_D_ASPRINTF2("%s/" DF_UUIDF "_%s%d", Mock_log_file, 573);
-	expect_worker_fopen(true);
+	EXPECT_FOPEN(Mock_log_file, "w", true);
 	expect_function_call(mock_main_vprintf);
 	expect_value(__wrap_d_free, ptr, Mock_log_file);
 	expect_value(__wrap_d_free, ptr, &Dcw);
