@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -193,6 +194,27 @@ func TestPreLoadCertData(t *testing.T) {
 				return clientDirTC
 			},
 			expErr: FaultUnreadableCertFile(""),
+		},
+		"client dir writable by others": {
+			setup: func(t *testing.T) (string, func()) {
+				dir, cleanup := test.CreateTestDir(t)
+				if err := os.Mkdir(clientDir(dir), 0777); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chmod(clientDir(dir), 0777); err != nil {
+					t.Fatal(err)
+				}
+
+				return dir, cleanup
+			},
+			getCfg: func(t *testing.T, dir string) *TransportConfig {
+				clientDirTC := ServerTC()
+				setValidVerifyTime(t, clientDirTC)
+
+				clientDirTC.ClientCertDir = clientDir(dir)
+				return clientDirTC
+			},
+			expErr: errors.New("insecure permissions"),
 		},
 		"expired cert": {
 			getCfg: func(t *testing.T, _ string) *TransportConfig {
