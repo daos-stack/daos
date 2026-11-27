@@ -657,3 +657,43 @@ func StorageNvmeAddDevice(ctx context.Context, rpcClient UnaryInvoker, req *Nvme
 
 	return resp, nil
 }
+
+// StoragePrepareReformatReq contains the parameters for the StoragePrepareReformat RPC.
+type StoragePrepareReformatReq struct {
+	unaryRequest
+	Rank uint32 `json:"rank"`
+}
+
+// StoragePrepareReformatResp contains the response from a StoragePrepareReformat request.
+type StoragePrepareReformatResp struct {
+	HostErrorsResp
+}
+
+// StoragePrepareReformat removes the superblock of the engine with the requested rank to prepare
+// it for reformat. The request must be addressed (via the host list) to the host that runs the
+// engine.
+func StoragePrepareReformat(ctx context.Context, rpcClient UnaryInvoker, req *StoragePrepareReformatReq) (*StoragePrepareReformatResp, error) {
+	pbReq := new(ctlpb.StoragePrepareReformatReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StoragePrepareReformat(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(StoragePrepareReformatResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return resp, nil
+}

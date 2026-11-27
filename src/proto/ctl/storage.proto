@@ -81,3 +81,10 @@ message NvmeAddDeviceReq {
 message NvmeAddDeviceResp {
 	ResponseState state = 1;
 }
+
+message StoragePrepareReformatReq
+{
+	uint32 rank = 1; // Rank of DAOS engine to prepare for reformat
+}
+
+message StoragePrepareReformatResp { ResponseState state = 1; }

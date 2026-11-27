@@ -162,8 +162,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		// format --replace --rank tests so checkReplaceRank() finds them.
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{
 			Members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: "excluded"},
-				{Rank: 5, State: "excluded"},
+				{Rank: 0, State: "excluded", Addr: "10.0.0.1:10001", FaultDomain: "/host1"},
+				{Rank: 5, State: "excluded", Addr: "10.0.0.1:10001", FaultDomain: "/host1"},
 			},
 		})
 	case *control.SystemCleanupReq:

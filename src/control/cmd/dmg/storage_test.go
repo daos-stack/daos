@@ -8,14 +8,17 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestStorageCommands(t *testing.T) {
@@ -30,6 +33,24 @@ func TestStorageCommands(t *testing.T) {
 		}
 		req.SetHostList([]string{"foo2.com"})
 		return req
+	}
+	prepareReformatReq := func(rank uint32) *control.StoragePrepareReformatReq {
+		req := &control.StoragePrepareReformatReq{Rank: rank}
+		req.SetHostList([]string{"10.0.0.1:10001"})
+		return req
+	}
+	rankQueryReq := func(rank ranklist.Rank) *control.SystemQueryReq {
+		req := &control.SystemQueryReq{}
+		ranks := ranklist.NewRankSet()
+		ranks.Add(rank)
+		req.SetRanks(ranks)
+		return req
+	}
+	prepareReformatCalls := func(rank uint32) string {
+		return strings.Join([]string{
+			printRequest(t, rankQueryReq(ranklist.Rank(rank))),
+			printRequest(t, prepareReformatReq(rank)),
+		}, " ")
 	}
 
 	runCmdTests(t, []cmdTest{
@@ -158,6 +179,48 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Prepare reformat; no rank",
+			"storage prepare-reformat",
+			"",
+			errMissingFlag,
+		},
+		{
+			"Prepare reformat; short opt",
+			"storage prepare-reformat -r 5",
+			prepareReformatCalls(5),
+			nil,
+		},
+		{
+			"Prepare reformat; long opt resolves host from rank",
+			"storage prepare-reformat --rank 5",
+			prepareReformatCalls(5),
+			nil,
+		},
+		{
+			"Prepare reformat; rank zero",
+			"storage prepare-reformat --rank 0",
+			prepareReformatCalls(0),
+			nil,
+		},
+		{
+			"Prepare reformat; rank not in system query",
+			"storage prepare-reformat --rank 9",
+			printRequest(t, rankQueryReq(9)),
+			errors.New("rank 9 not found in system query response"),
+		},
+		{
+			"Prepare reformat; host option not supported",
+			"storage prepare-reformat --rank 5 --host foo2.com",
+			"",
+			errors.New("unknown flag `host'"),
+		},
+		{
+			"Prepare reformat; engine-index option not supported",
+			"storage prepare-reformat --rank 5 --engine-index 1",
+			"",
+			errors.New("unknown flag `engine-index'"),
+		},
+		{
 			"Format with replace; no hosts in hostlist",
 			"storage format --replace",
 			"",
@@ -260,4 +323,70 @@ func TestStorageCommands(t *testing.T) {
 			errors.New("Unknown command"),
 		},
 	})
+}
+
+// prepareReformatInvoker fails the prepare-reformat request on its host when hostErr is set,
+// otherwise it behaves like the bridge invoker.
+type prepareReformatInvoker struct {
+	bridgeConnInvoker
+	hostErr error
+}
+
+func (pri *prepareReformatInvoker) InvokeUnaryRPC(ctx context.Context, req control.UnaryRequest) (*control.UnaryResponse, error) {
+	if _, ok := req.(*control.StoragePrepareReformatReq); ok && pri.hostErr != nil {
+		pri.conn.appendInvocation(printRequest(pri.t, req))
+		return &control.UnaryResponse{
+			Responses: []*control.HostResponse{
+				{Addr: "10.0.0.1:10001", Error: pri.hostErr},
+			},
+		}, nil
+	}
+
+	return pri.bridgeConnInvoker.InvokeUnaryRPC(ctx, req)
+}
+
+func TestStorageCommands_PrepareReformat_Output(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hostErr error
+		expErr  error
+		expOut  []string
+		notOut  string
+	}{
+		"success reports how to start the engine": {
+			expOut: []string{
+				"Rank 5 on host 10.0.0.1:10001 prepared for reformat",
+				"restarting daos_server on that host",
+				"\"dmg system start\" cannot start it",
+				"\"dmg storage format\"",
+			},
+		},
+		"failure on host does not report success": {
+			hostErr: errors.New("engine 1 is still running"),
+			expErr:  errors.New("1 host had errors"),
+			expOut:  []string{"engine 1 is still running"},
+			notOut:  "prepared for reformat",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			invoker := &prepareReformatInvoker{
+				bridgeConnInvoker: bridgeConnInvoker{
+					MockInvoker: *control.DefaultMockInvoker(log),
+					t:           t,
+					conn:        newTestConn(t),
+				},
+				hostErr: tc.hostErr,
+			}
+
+			err := runCmd(t, "storage prepare-reformat --rank 5", log, invoker)
+			test.CmpErr(t, tc.expErr, err)
+
+			test.AssertStringContains(t, buf.String(), tc.expOut...)
+			if tc.notOut != "" && strings.Contains(buf.String(), tc.notOut) {
+				t.Fatalf("unexpected %q in output:\n%s", tc.notOut, buf.String())
+			}
+		})
+	}
 }

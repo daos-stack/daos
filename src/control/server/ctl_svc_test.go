@@ -74,7 +74,7 @@ func newMockControlServiceFromBackends(t *testing.T, log logging.Logger, cfg *co
 	}
 
 	for idx, ec := range cfg.Engines {
-		storProv := storage.MockProvider(log, 0, &ec.Storage, syp, sp, bp, nil)
+		storProv := storage.MockProvider(log, idx, &ec.Storage, syp, sp, bp, nil)
 		ei := NewEngineInstance(log, storProv, nil, nil, nil)
 		setupTestEngineWithConfig(t, ei, uint32(idx), ec, !started[idx])
 		if started[idx] {

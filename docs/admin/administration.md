@@ -580,7 +580,7 @@ boro-11
     contains critical system metadata for a DAOS engine. If a SysXS device fails,
     the engine will terminate immediately. Unlike regular NVMe device faults that
     can be addressed using online hotplug, SysXS device failures require
-    **offline** device replacement using `daos_server storage prepare-reformat` followed by
+    **offline** device replacement using `storage prepare-reformat` followed by
     `dmg storage format --replace`. See
     [SysXS Device Failure Recovery](#sysxs-device-failure-recovery) for detailed
     procedures.
@@ -1157,7 +1157,7 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
 
 ### Storage Prepare Reformat
 
-`daos_server storage prepare-reformat` removes a single
+`storage prepare-reformat`, available through both `dmg` and `daos_server`, removes a single
 engine's on-disk superblock, forcing that engine to request a storage format the next time it is
 started. It is intended for recovery scenarios where an engine's storage has failed and must be
 replaced offline (e.g. a failed SSD), and provides a safe alternative to manually deleting the
@@ -1166,9 +1166,41 @@ superblock file (see the
 [SysXS Device Failure Recovery](#sysxs-device-failure-recovery) workflows below for example
 usage in context).
 
-Run the following on the affected host with `daos_server` stopped, using the same configuration
-file as the daemon. After an offline hardware replacement, run it before starting `daos_server`
-again:
+Use the variant that matches the state of `daos_server` on the affected host:
+
+| Variant | `daos_server` on the host | Engine is selected with |
+|---------|---------------------------|-------------------------|
+| `dmg storage prepare-reformat` | Running, with the engine stopped | `--rank`/`-r` |
+| `daos_server storage prepare-reformat` | Stopped | `--engine-index`/`-e` |
+
+#### Remote variant (`dmg`)
+
+Select the engine by its rank. `dmg` looks up the host that runs the rank in the system
+membership, so no host or engine index needs to be supplied:
+
+```bash
+$ dmg system stop --ranks 2   # only needed if the engine is still running
+$ dmg storage prepare-reformat --rank 2
+Rank 2 on host 10.8.1.13:10001 prepared for reformat (superblock removed).
+Start the engine by restarting daos_server on that host ("dmg system start" cannot start it); the engine will then wait for "dmg storage format".
+```
+
+- `--rank`/`-r` is the rank of the engine as listed by `dmg system query -v`. The Management
+  Service must be reachable and `daos_server` must be running on the host that runs the rank.
+- The targeted engine must be stopped, otherwise the request is refused. Use
+  `dmg system stop --ranks <rank>` to stop only that engine while `daos_server` keeps running.
+- Only the engine with the requested rank is changed; other engines on the same host (and their
+  control_metadata subdirectories or PMem superblocks) are left untouched.
+- The engine loses its rank when its superblock is removed, so repeating the command for the same
+  rank fails with `engine with rank 2 not found`. This is expected; if the superblock has to be
+  removed again, or the rank cannot be resolved, use the local variant with `daos_server`
+  stopped.
+
+#### Local variant (`daos_server`)
+
+If `daos_server` has already been stopped on the host (for example because it was powered down
+before the superblock could be removed), run the following on that host before starting
+`daos_server` again, using the same configuration file as the daemon:
 
 ```bash
 $ daos_server storage prepare-reformat --config /etc/daos/daos_server.yml --engine-index 0
@@ -1196,9 +1228,11 @@ To find the engine index of a rank, take the host reported for that rank by `dmg
 
 #### Starting the Engine After Preparing It
 
-The command neither starts the engine nor formats storage. After it succeeds:
+Neither variant starts the engine or formats storage. After the command succeeds:
 
-1. Start `daos_server` on the host, for example `systemctl start daos_server`.
+1. Start the engine by starting (or restarting) `daos_server` on the host, for example
+   `systemctl start daos_server`. `dmg system start` cannot be used because it skips an engine
+   that has no superblock, hence no known rank.
 2. The engine finds no superblock on start-up and waits for a format request.
 3. Run `dmg storage format` (with `--replace` if the engine should rejoin with its previous rank) to
    complete the format as described in [Storage Format Replace](#storage-format-replace) below.
@@ -1263,10 +1297,10 @@ including superblocks separately from the data/meta/wal SSDs used for pool stora
 
 `dmg storage format` (with or without `--replace`) safely handles control metadata formatting in
 MD-on-SSD mode. When an engine's data/meta/wal SSD fails and is replaced offline, the administrator
-must remove the engine's superblock to trigger a format request, using
-`daos_server storage prepare-reformat` locally with the server stopped
-(see [Storage Prepare Reformat](#storage-prepare-reformat) above).
-The subsequent `dmg storage format` command selectively
+must remove the engine's superblock to trigger a format request, using `storage prepare-reformat`
+(see [Storage Prepare Reformat](#storage-prepare-reformat) above): `dmg storage prepare-reformat`
+while `daos_server` is still running, or `daos_server storage prepare-reformat` locally if the
+server has already been stopped. The subsequent `dmg storage format` command selectively
 reformats only the affected engine's control_metadata
 subdirectory, preserving healthy engines' metadata on the same host; `--replace` is only required if
 the engine should rejoin using its previous rank rather than a newly-assigned one. Reusing the
@@ -1277,17 +1311,20 @@ permanently decommissioning that engine slot in favor of different hardware.
 An example workflow for SSD failure in MD-on-SSD mode would be:
 
 1. `daos_server` is running and an SSD (data/meta/wal role) fails, causing one or more engines to become excluded.
-2. `daos_server` is stopped on the affected storage server.
-3. Storage server is powered down and the faulty SSD is physically replaced.
-4. After powering up storage server, prepare the new SSD (partition, filesystem if needed).
-5. Update server configuration if the SSD device path changed.
-6. **With `daos_server` still stopped, remove the failed engine's superblock** to trigger a
-   format request on next start. Run on the affected host, with metadata storage mounted:
-   `daos_server storage prepare-reformat --config /etc/daos/daos_server.yml --engine-index <index>`
-   - For a host with multiple engines, both engines will be excluded (server was powered down)
-   - The control_metadata path remains intact; only the failed engine's superblock is removed
+2. Stop the failed engine if it is still running, leaving `daos_server` running:
+   `dmg system stop --ranks <rank>`
+3. **While `daos_server` is still running, remove the failed engine's superblock** to trigger a
+   format request on next start:
+   `dmg storage prepare-reformat --rank <rank>`
    - Only the engine whose data/meta/wal SSD failed needs to be reformatted
    - The healthy engine's control_metadata subdirectory should be preserved (do not remove its superblock)
+4. `daos_server` is stopped on the affected storage server.
+5. Storage server is powered down and the faulty SSD is physically replaced.
+6. After powering up storage server, prepare the new SSD (partition, filesystem if needed).
+   Update server configuration if the SSD device path changed.
+   - For a host with multiple engines, both engines will be excluded (server was powered down)
+   - The control_metadata path (on any persistent local storage) remains intact; only the failed
+     engine's superblock is missing
 7. Start `daos_server` again. The engine with the removed superblock will now prompt for format.
 8. Run `dmg storage format --replace` to format only the affected engine(s).
    - The command automatically identifies which engines need formatting based on missing superblocks
@@ -1295,19 +1332,27 @@ An example workflow for SSD failure in MD-on-SSD mode would be:
    - If control_metadata path itself is inaccessible: the entire directory must be recreated (all engines on that path need formatting)
 9. Formatted engine(s) will rejoin using their existing rank(s) mapped to the server's hardware.
 
+!!! note
+    If `daos_server` was already stopped before the superblock could be removed, skip steps 2-3
+    and run `daos_server storage prepare-reformat --config <server config> --engine-index <index>`
+    on the host after step 6 (the control_metadata storage must be mounted) and before starting
+    `daos_server` in step 7.
+
 **Example Scenario 1**: `storage-server-13` has two engines and a data SSD fails:
 - Engine 0 (rank 2): Data SSD fails, making the engine invalid
 - Engine 1 (rank 3): All storage healthy
 - Control_metadata path: Intact with both engines' metadata (stored on any persistent local storage)
+- **While `daos_server` is still running, administrator stops rank 2 (if still running) and
+  removes engine 0's superblock**:
+  ```bash
+  $ dmg system stop --ranks 2
+  $ dmg storage prepare-reformat --rank 2
+  ```
 - Server is powered down for SSD replacement
 - Both rank 2 and rank 3 become excluded (server offline)
 - After powering up with new data SSD:
-  - Engine 0: Still has superblock in control_metadata, but data SSD is new/empty
+  - Engine 0: Superblock missing from control_metadata, data SSD is new/empty
   - Engine 1: Healthy, superblock intact in control_metadata
-- **Before starting the server, administrator prepares engine 0 for reformat on that host**:
-  ```bash
-  $ daos_server storage prepare-reformat --config /etc/daos/daos_server.yml --engine-index 0
-  ```
 - Start `daos_server` and engine 0 detects missing superblock and prompts for format
 - Formatting without `--replace` will succeed, but engine 0 will rejoin with a **new** rank rather
   than reusing rank 2 (missing per-engine `control_metadata` subdirectories/superblocks are always
@@ -1350,10 +1395,10 @@ An example workflow for SSD failure in MD-on-SSD mode would be:
     This path can be on any persistent local storage (dedicated SSD, shared device, or any mounted
     filesystem) and is separate from the data/meta/wal SSDs used for pool storage. When an engine's
     data/meta/wal SSD fails and is replaced offline, the administrator must remove the
-    failed engine's superblock before the next server start, using
-    `daos_server storage prepare-reformat` with the server stopped
-    (see [Storage Prepare Reformat](#storage-prepare-reformat)).
-    Any engine whose `control_metadata` subdirectory or superblock is found missing has its
+    failed engine's superblock before the next server start, using `storage prepare-reformat`
+    (see [Storage Prepare Reformat](#storage-prepare-reformat)): the `dmg` variant (by rank) while
+    `daos_server` is still running, or the `daos_server` variant (by engine index) if it has been
+    stopped. Any engine whose `control_metadata` subdirectory or superblock is found missing has its
     subdirectory (re)created automatically, whether or not `--replace` is supplied; `--replace`
     additionally causes the engine to rejoin with its previous rank instead of being assigned a
     new one. If only a data/meta/wal SSD fails, the control_metadata path remains intact and the
@@ -1412,7 +1457,7 @@ errors at failure point
 - Online hotplug procedures (see [Exclusion and Hotplug](#exclusion-and-hotplug)) do not apply
 - The engine cannot self-exclude and restart; manual intervention is required
 - The failed SSD must be replaced when `daos_server` process is stopped
-- Recovery requires `daos_server storage prepare-reformat` followed by `dmg storage format --replace` to
+- Recovery requires `storage prepare-reformat` followed by `dmg storage format --replace` to
   reuse the engine's "old" rank once fixed
 
 **Example Scenario: Engine with SysXS on Data/WAL/Meta SSD**
@@ -1423,8 +1468,8 @@ If a server is configured with engines where a single SSD carries the data, WAL,
 1. The engine immediately terminates with an `engine_died` RAS event
 2. The engine becomes excluded from the system
 3. The failed SSD must be physically replaced
-4. With `daos_server` stopped, `daos_server storage prepare-reformat` is used to remove the
-   engine's superblock so that the engine requests a format when `daos_server` is next started
+4. `storage prepare-reformat` is used to remove the engine's superblock so that the engine
+   requests a format when `daos_server` is next started
 5. `dmg storage format --replace` is used to recover the engine with it's original rank
 6. `dmg system reintegrate -r <rank>` is used to reintegrate rank into it's pools
 
@@ -1443,18 +1488,28 @@ dmg storage query list-devices  # Confirm failure is on SysXS device
 grep -i "SYS target SSD is failed" /var/log/daos/daos_engine.0.log  # Check for SysXS-related errors
 ```
 
-2. Stop Server
+2. Prepare To Trigger Format Request By Removing Superblock
+While `daos_server` is still running, remove the failed engine's superblock. The engine will
+normally have terminated already, but if it has been automatically restarted by `daos_server`
+(unless `disable_engine_auto_restart` is set), stop it first with `dmg system stop --ranks <rank>`.
+```bash
+# Example for rank 2
+dmg system stop --ranks 2   # only needed if the engine is running
+dmg storage prepare-reformat --rank 2
+```
+
+3. Stop Server
 ```bash
 systemctl stop daos_server
 systemctl disable daos_server
 ```
 
-3. Physical Replacement (either online or offline)
+4. Physical Replacement (either online or offline)
 - Replace the faulty SSD
 
-4. Prepare To Trigger Format Request By Removing Superblock
-With `daos_server` stopped and its metadata storage mounted, run the command on the affected host
-(see [Storage Prepare Reformat](#storage-prepare-reformat) for how to find the engine index):
+If `daos_server` was already stopped before step 2 could be performed, skip step 2 and run the
+local variant on the host once the hardware has been replaced and its metadata storage is mounted,
+before step 5 (see [Storage Prepare Reformat](#storage-prepare-reformat)):
 ```bash
 daos_server storage prepare-reformat --config /etc/daos/daos_server.yml --engine-index <index>
 ```
@@ -1491,7 +1546,7 @@ dmg system reintegrate -r <engine_rank>
 |--------|------|------|
 | Engine Behavior | Engine may report IO and media errors | Engine terminates immediately |
 | Data Availability | System continues running | Engine goes offline |
-| Procedure | `dmg storage set nvme-faulty` + `dmg storage replace nvme` | Stop `daos_server` + hardware replacement + `daos_server storage prepare-reformat` + Start `daos_server` + `dmg storage format --replace` |
+| Procedure | `dmg storage set nvme-faulty` + `dmg storage replace nvme` | `dmg storage prepare-reformat` + Stop `daos_server` + hardware replacement + Start `daos_server` + `dmg storage format --replace` |
 | Timing | Can be performed while system is running | Requires DAOS service stop/start on affected host |
 | Recovery Time | Minutes (online) | Hours (includes downtime) |
 
@@ -1502,13 +1557,14 @@ dmg system reintegrate -r <engine_rank>
    - `dmg storage replace nvme` - Requires online hotplug support, command will fail
 
 2. **❌ Do NOT restart daos_server without removing superblock**
-   - Run `daos_server storage prepare-reformat --engine-index <index>` locally once the server is
-     stopped (do not edit control_metadata files directly)
+   - Run `dmg storage prepare-reformat --rank <rank>` while `daos_server` is still running, before
+     stopping it, or `daos_server storage prepare-reformat --engine-index <index>` locally once
+     the server is stopped (do not edit control_metadata files directly)
    - Engine won't trigger format request
    - May use wrong rank assignment
 
 3. **❌ Do NOT remove control_metadata for multi-engine hosts**
-   - Use `daos_server storage prepare-reformat` to remove only the failed engine's superblock
+   - Use `storage prepare-reformat` to remove only the failed engine's superblock
    - Preserve other engines' metadata
 
 4. **❌ Do NOT use dmg storage format without --replace flag**
@@ -1581,7 +1637,7 @@ end state a successful `dmg system erase` would have produced.
       !!! warning
           Do not remove only part of this directory on a multi-engine host
           unless intentionally preserving some engines' metadata. To reset a
-          single engine, use `daos_server storage prepare-reformat` (see
+          single engine, use `storage prepare-reformat` (see
           [Storage Prepare Reformat](#storage-prepare-reformat)) and
           [Storage Format Replace](#storage-format-replace) instead of
           deleting files by hand.

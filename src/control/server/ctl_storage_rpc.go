@@ -1282,3 +1282,36 @@ func (cs *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.N
 
 	return resp, nil
 }
+
+// StoragePrepareReformat removes the superblock of the engine with the requested rank to
+// prepare it for reformat.
+//
+// Intended for recovery from an engine storage failure (e.g. a failed SSD that must be
+// replaced offline). The engine must be stopped while daos_server is running; on the next
+// daos_server start the engine will then require a format rather than requiring manual
+// filesystem access to the superblock.
+func (cs *ControlService) StoragePrepareReformat(ctx context.Context, req *ctlpb.StoragePrepareReformatReq) (*ctlpb.StoragePrepareReformatResp, error) {
+	if req == nil {
+		return nil, errNilReq
+	}
+
+	rank := req.GetRank()
+	engines, err := cs.harness.FilterInstancesByRankSet(strconv.FormatUint(uint64(rank), 10))
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(engines) {
+	case 0:
+		return nil, errors.Errorf("engine with rank %d not found", rank)
+	case 1:
+	default:
+		return nil, errors.Errorf("multiple engines found with rank %d", rank)
+	}
+
+	if err := PrepareEngineReformat(engines[0]); err != nil {
+		return nil, err
+	}
+
+	return &ctlpb.StoragePrepareReformatResp{}, nil
+}

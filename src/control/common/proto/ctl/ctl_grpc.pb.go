@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,20 +26,21 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CtlSvc_StorageScan_FullMethodName          = "/ctl.CtlSvc/StorageScan"
-	CtlSvc_StorageFormat_FullMethodName        = "/ctl.CtlSvc/StorageFormat"
-	CtlSvc_StorageNvmeRebind_FullMethodName    = "/ctl.CtlSvc/StorageNvmeRebind"
-	CtlSvc_StorageNvmeAddDevice_FullMethodName = "/ctl.CtlSvc/StorageNvmeAddDevice"
-	CtlSvc_NetworkScan_FullMethodName          = "/ctl.CtlSvc/NetworkScan"
-	CtlSvc_SmdQuery_FullMethodName             = "/ctl.CtlSvc/SmdQuery"
-	CtlSvc_SmdManage_FullMethodName            = "/ctl.CtlSvc/SmdManage"
-	CtlSvc_SetEngineLogMasks_FullMethodName    = "/ctl.CtlSvc/SetEngineLogMasks"
-	CtlSvc_PrepShutdownRanks_FullMethodName    = "/ctl.CtlSvc/PrepShutdownRanks"
-	CtlSvc_StopRanks_FullMethodName            = "/ctl.CtlSvc/StopRanks"
-	CtlSvc_ResetFormatRanks_FullMethodName     = "/ctl.CtlSvc/ResetFormatRanks"
-	CtlSvc_StartRanks_FullMethodName           = "/ctl.CtlSvc/StartRanks"
-	CtlSvc_CollectLog_FullMethodName           = "/ctl.CtlSvc/CollectLog"
-	CtlSvc_CheckEngineRepair_FullMethodName    = "/ctl.CtlSvc/CheckEngineRepair"
+	CtlSvc_StorageScan_FullMethodName            = "/ctl.CtlSvc/StorageScan"
+	CtlSvc_StorageFormat_FullMethodName          = "/ctl.CtlSvc/StorageFormat"
+	CtlSvc_StorageNvmeRebind_FullMethodName      = "/ctl.CtlSvc/StorageNvmeRebind"
+	CtlSvc_StorageNvmeAddDevice_FullMethodName   = "/ctl.CtlSvc/StorageNvmeAddDevice"
+	CtlSvc_StoragePrepareReformat_FullMethodName = "/ctl.CtlSvc/StoragePrepareReformat"
+	CtlSvc_NetworkScan_FullMethodName            = "/ctl.CtlSvc/NetworkScan"
+	CtlSvc_SmdQuery_FullMethodName               = "/ctl.CtlSvc/SmdQuery"
+	CtlSvc_SmdManage_FullMethodName              = "/ctl.CtlSvc/SmdManage"
+	CtlSvc_SetEngineLogMasks_FullMethodName      = "/ctl.CtlSvc/SetEngineLogMasks"
+	CtlSvc_PrepShutdownRanks_FullMethodName      = "/ctl.CtlSvc/PrepShutdownRanks"
+	CtlSvc_StopRanks_FullMethodName              = "/ctl.CtlSvc/StopRanks"
+	CtlSvc_ResetFormatRanks_FullMethodName       = "/ctl.CtlSvc/ResetFormatRanks"
+	CtlSvc_StartRanks_FullMethodName             = "/ctl.CtlSvc/StartRanks"
+	CtlSvc_CollectLog_FullMethodName             = "/ctl.CtlSvc/CollectLog"
+	CtlSvc_CheckEngineRepair_FullMethodName      = "/ctl.CtlSvc/CheckEngineRepair"
 )
 
 // CtlSvcClient is the client API for CtlSvc service.
@@ -60,6 +61,8 @@ type CtlSvcClient interface {
 	StorageNvmeRebind(ctx context.Context, in *NvmeRebindReq, opts ...grpc.CallOption) (*NvmeRebindResp, error)
 	// Add newly inserted SSD to DAOS engine config
 	StorageNvmeAddDevice(ctx context.Context, in *NvmeAddDeviceReq, opts ...grpc.CallOption) (*NvmeAddDeviceResp, error)
+	// Remove engine superblock to prepare it for reformat
+	StoragePrepareReformat(ctx context.Context, in *StoragePrepareReformatReq, opts ...grpc.CallOption) (*StoragePrepareReformatResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(ctx context.Context, in *NetworkScanReq, opts ...grpc.CallOption) (*NetworkScanResp, error)
 	// Query the per-server metadata
@@ -124,6 +127,16 @@ func (c *ctlSvcClient) StorageNvmeAddDevice(ctx context.Context, in *NvmeAddDevi
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NvmeAddDeviceResp)
 	err := c.cc.Invoke(ctx, CtlSvc_StorageNvmeAddDevice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ctlSvcClient) StoragePrepareReformat(ctx context.Context, in *StoragePrepareReformatReq, opts ...grpc.CallOption) (*StoragePrepareReformatResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StoragePrepareReformatResp)
+	err := c.cc.Invoke(ctx, CtlSvc_StoragePrepareReformat_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,6 +261,8 @@ type CtlSvcServer interface {
 	StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error)
 	// Add newly inserted SSD to DAOS engine config
 	StorageNvmeAddDevice(context.Context, *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error)
+	// Remove engine superblock to prepare it for reformat
+	StoragePrepareReformat(context.Context, *StoragePrepareReformatReq) (*StoragePrepareReformatResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error)
 	// Query the per-server metadata
@@ -289,6 +304,9 @@ func (UnimplementedCtlSvcServer) StorageNvmeRebind(context.Context, *NvmeRebindR
 }
 func (UnimplementedCtlSvcServer) StorageNvmeAddDevice(context.Context, *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method StorageNvmeAddDevice not implemented")
+}
+func (UnimplementedCtlSvcServer) StoragePrepareReformat(context.Context, *StoragePrepareReformatReq) (*StoragePrepareReformatResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method StoragePrepareReformat not implemented")
 }
 func (UnimplementedCtlSvcServer) NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method NetworkScan not implemented")
@@ -409,6 +427,24 @@ func _CtlSvc_StorageNvmeAddDevice_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CtlSvcServer).StorageNvmeAddDevice(ctx, req.(*NvmeAddDeviceReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CtlSvc_StoragePrepareReformat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StoragePrepareReformatReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CtlSvcServer).StoragePrepareReformat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CtlSvc_StoragePrepareReformat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CtlSvcServer).StoragePrepareReformat(ctx, req.(*StoragePrepareReformatReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -615,6 +651,10 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StorageNvmeAddDevice",
 			Handler:    _CtlSvc_StorageNvmeAddDevice_Handler,
+		},
+		{
+			MethodName: "StoragePrepareReformat",
+			Handler:    _CtlSvc_StoragePrepareReformat_Handler,
 		},
 		{
 			MethodName: "NetworkScan",

@@ -8,6 +8,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -20,14 +22,15 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan          storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format        storageFormatCmd  `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query         storageQueryCmd   `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind    nvmeRebindCmd     `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
-	NvmeAddDevice nvmeAddDeviceCmd  `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
-	Set           setFaultyCmd      `command:"set" description:"Manually set the device state."`
-	Replace       storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	LedManage     ledManageCmd      `command:"led" description:"Manage LED status for supported drives."`
+	Scan            storageScanCmd            `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format          storageFormatCmd          `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query           storageQueryCmd           `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind      nvmeRebindCmd             `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	NvmeAddDevice   nvmeAddDeviceCmd          `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
+	Set             setFaultyCmd              `command:"set" description:"Manually set the device state."`
+	Replace         storageReplaceCmd         `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	LedManage       ledManageCmd              `command:"led" description:"Manage LED status for supported drives."`
+	PrepareReformat storagePrepareReformatCmd `command:"prepare-reformat" description:"Remove the superblock of a stopped engine, selected by rank, to prepare it for reformat."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -257,4 +260,95 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 	}
 
 	return resp.Errors()
+}
+
+// storagePrepareReformatCmd is the struct representing the prepare-reformat storage subcommand.
+type storagePrepareReformatCmd struct {
+	baseCmd
+	ctlInvokerCmd
+	cmdutil.JSONOutputCmd
+	Rank uint32 `short:"r" long:"rank" required:"1" description:"Rank of the stopped DAOS engine to prepare for reformat; its host is resolved from the system membership"`
+}
+
+// Execute is run when storagePrepareReformatCmd activates.
+//
+// Remove the superblock of the stopped engine with the given rank, so that the engine requests a
+// format when it is next started.
+func (cmd *storagePrepareReformatCmd) Execute(args []string) error {
+	ctx := cmd.MustLogCtx()
+
+	rank := ranklist.Rank(cmd.Rank)
+	host, err := resolveStoragePrepareReformatHost(ctx, cmd.ctlInvoker, rank)
+	if err != nil {
+		return err
+	}
+
+	req := &control.StoragePrepareReformatReq{Rank: cmd.Rank}
+	req.SetHostList([]string{host})
+
+	cmd.Debugf("prepare reformat req: %+v", req)
+	resp, err := control.StoragePrepareReformat(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.Error(outErr.String())
+	} else {
+		cmd.Info(prepareReformatSuccessMsg(rank, host))
+	}
+
+	return resp.Errors()
+}
+
+// prepareReformatSuccessMsg reports how to start the engine so that it requests a format. The
+// rank is no longer known to the server once its superblock is removed, so "dmg system start"
+// cannot be used and daos_server has to be restarted on the host instead.
+func prepareReformatSuccessMsg(rank ranklist.Rank, host string) string {
+	return fmt.Sprintf("Rank %d on host %s prepared for reformat (superblock removed).\n"+
+		"Start the engine by restarting daos_server on that host (\"dmg system start\" "+
+		"cannot start it); the engine will then wait for \"dmg storage format\".",
+		rank, host)
+}
+
+// resolveStoragePrepareReformatHost returns the control address of the host that runs the
+// engine with the given rank, as reported by the management service.
+func resolveStoragePrepareReformatHost(ctx context.Context, rpc control.UnaryInvoker,
+	rank ranklist.Rank,
+) (string, error) {
+	queryReq := &control.SystemQueryReq{}
+	ranks := ranklist.NewRankSet()
+	ranks.Add(rank)
+	queryReq.SetRanks(ranks)
+	queryResp, err := control.SystemQuery(ctx, rpc, queryReq)
+	if err != nil {
+		return "", errors.Wrapf(err, "resolving host for rank %d", rank)
+	}
+
+	var host string
+	for _, member := range queryResp.Members {
+		if member == nil || member.Rank != rank {
+			continue
+		}
+		if member.Addr == nil {
+			return "", errors.Errorf("system query returned no control address for rank %d", rank)
+		}
+		if host != "" && host != member.Addr.String() {
+			return "", errors.Errorf("system query returned multiple hosts for rank %d", rank)
+		}
+		host = member.Addr.String()
+	}
+	if host == "" {
+		return "", errors.Errorf("rank %d not found in system query response", rank)
+	}
+
+	return host, nil
 }

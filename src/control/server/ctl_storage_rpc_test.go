@@ -3522,6 +3522,224 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 	}
 }
 
+func TestServer_CtlSvc_StoragePrepareReformat(t *testing.T) {
+	for _, scmClass := range []storage.Class{storage.ClassDcpm, storage.ClassRam} {
+		t.Run(scmClass.String(), func(t *testing.T) {
+			// Ranks deliberately differ from engine indices so that a request is never
+			// satisfied by mistaking one for the other.
+			for name, tc := range map[string]struct {
+				req            *ctlpb.StoragePrepareReformatReq
+				ranks          []uint32 // rank of each engine, by engine index
+				notStarted     []bool   // see mockControlService; all engines run when unset
+				targetIdx      int      // engine expected to be prepared on success
+				forceRemoveErr bool     // removal of the target's superblock fails
+				noSuperblock   bool     // target's superblock file is already gone
+				expErr         error
+				expRepeatErr   error // error expected when the request is repeated after success
+				expResp        *ctlpb.StoragePrepareReformatResp
+			}{
+				"nil request": {
+					expErr: errNilReq,
+				},
+				"engine index is not a rank": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 1},
+					ranks:      []uint32{5, 2},
+					notStarted: []bool{true, true},
+					expErr:     errors.New("engine with rank 1 not found"),
+				},
+				"unknown rank": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 9},
+					ranks:      []uint32{5, 2},
+					notStarted: []bool{true, true},
+					expErr:     errors.New("engine with rank 9 not found"),
+				},
+				"duplicate rank": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 4},
+					ranks:      []uint32{4, 4},
+					notStarted: []bool{true, true},
+					expErr:     errors.New("multiple engines found with rank 4"),
+				},
+				"engine still running": {
+					req:    &ctlpb.StoragePrepareReformatReq{Rank: 3},
+					ranks:  []uint32{3},
+					expErr: errors.New("engine 0 is still running"),
+				},
+				"target running while other engine stopped": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 2},
+					ranks:      []uint32{5, 2},
+					notStarted: []bool{true, false},
+					targetIdx:  1,
+					expErr:     errors.New("engine 1 is still running"),
+				},
+				"success; single engine": {
+					req:          &ctlpb.StoragePrepareReformatReq{Rank: 3},
+					ranks:        []uint32{3},
+					notStarted:   []bool{true},
+					expRepeatErr: errors.New("engine with rank 3 not found"),
+					expResp:      &ctlpb.StoragePrepareReformatResp{},
+				},
+				"success; first of two engines": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 5},
+					ranks:      []uint32{5, 2},
+					notStarted: []bool{true, true},
+					expResp:    &ctlpb.StoragePrepareReformatResp{},
+				},
+				"success; second of two engines": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 2},
+					ranks:      []uint32{5, 2},
+					notStarted: []bool{true, true},
+					targetIdx:  1,
+					expResp:    &ctlpb.StoragePrepareReformatResp{},
+				},
+				"success; rank zero on second engine": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 0},
+					ranks:      []uint32{3, 0},
+					notStarted: []bool{true, true},
+					targetIdx:  1,
+					expResp:    &ctlpb.StoragePrepareReformatResp{},
+				},
+				"success; other engine keeps running": {
+					req:        &ctlpb.StoragePrepareReformatReq{Rank: 2},
+					ranks:      []uint32{5, 2},
+					notStarted: []bool{false, true},
+					targetIdx:  1,
+					expResp:    &ctlpb.StoragePrepareReformatResp{},
+				},
+				"success; superblock already removed": {
+					req:          &ctlpb.StoragePrepareReformatReq{Rank: 3},
+					ranks:        []uint32{3},
+					notStarted:   []bool{true},
+					noSuperblock: true,
+					expResp:      &ctlpb.StoragePrepareReformatResp{},
+				},
+				"unexpected error removing superblock is not swallowed": {
+					req:            &ctlpb.StoragePrepareReformatReq{Rank: 3},
+					ranks:          []uint32{3},
+					notStarted:     []bool{true},
+					forceRemoveErr: true,
+					expErr:         errors.New("engine 0: remove"),
+				},
+			} {
+				t.Run(name, func(t *testing.T) {
+					log, buf := logging.NewTestLogger(t.Name())
+					defer test.ShowBufferOnFailure(t, buf)
+
+					metadata := storage.ControlMetadata{}
+					preservedPaths := []string{}
+					if scmClass == storage.ClassRam {
+						metadata.Path = t.TempDir()
+						preservedPaths = append(preservedPaths,
+							filepath.Join(metadata.Directory(), "control_raft", "state"))
+					}
+
+					engineCfgs := []*engine.Config{}
+					sbPaths := []string{}
+					for idx := range tc.ranks {
+						mntPt := t.TempDir()
+						scmCfg := storage.NewTierConfig().
+							WithStorageClass(scmClass.String()).
+							WithScmMountPoint(mntPt)
+						tiers := storage.TierConfigs{scmCfg}
+						if scmClass == storage.ClassDcpm {
+							scmCfg.WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", idx))
+						} else {
+							tiers = append(tiers, storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList(fmt.Sprintf("0000:%02d:00.0", idx+1)).
+								WithBdevDeviceRoles(storage.BdevRoleAll))
+						}
+						ec := engine.MockConfig().WithStorage(tiers...).
+							WithStorageControlMetadataPath(metadata.Path)
+						ec.Index = uint32(idx)
+						engineCfgs = append(engineCfgs, ec)
+
+						sbDir := mntPt
+						if metadata.HasPath() {
+							sbDir = filepath.Join(metadata.Path, "daos_control",
+								fmt.Sprintf("engine%d", idx))
+							// MD-on-SSD superblocks must not be read from SCM.
+							preservedPaths = append(preservedPaths, filepath.Join(mntPt, "superblock"))
+						}
+						if err := os.MkdirAll(sbDir, 0755); err != nil {
+							t.Fatal(err)
+						}
+						preservedPaths = append(preservedPaths, filepath.Join(sbDir, "other-metadata"))
+						sbPath := filepath.Join(sbDir, "superblock")
+						isTarget := idx == tc.targetIdx
+						if tc.forceRemoveErr && isTarget {
+							// Make superblock path a non-empty dir so removal fails with
+							// a non-not-exist error, which the handler should not swallow.
+							if err := os.MkdirAll(sbPath, 0755); err != nil {
+								t.Fatal(err)
+							}
+							sbPath = filepath.Join(sbPath, "not-empty")
+						}
+						if !(tc.noSuperblock && isTarget) {
+							if err := os.WriteFile(sbPath, []byte("x"), 0644); err != nil {
+								t.Fatal(err)
+							}
+						}
+						sbPaths = append(sbPaths, sbPath)
+					}
+					for _, path := range preservedPaths {
+						if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(path, []byte("preserve"), 0644); err != nil {
+							t.Fatal(err)
+						}
+					}
+					serverCfg := config.DefaultServer().WithEngines(engineCfgs...).
+						WithControlMetadata(metadata)
+					cs := mockControlService(t, log, serverCfg, nil, nil, nil, tc.notStarted...)
+					for idx, eng := range cs.harness.Instances() {
+						eng.(*EngineInstance)._superblock.Rank = ranklist.NewRankPtr(tc.ranks[idx])
+					}
+
+					resp, err := cs.StoragePrepareReformat(test.Context(t), tc.req)
+					test.CmpErr(t, tc.expErr, err)
+
+					// Only the requested engine's superblock should be removed, and only on success.
+					for idx, sbPath := range sbPaths {
+						_, statErr := os.Stat(sbPath)
+						if statErr != nil && !os.IsNotExist(statErr) {
+							t.Fatal(statErr)
+						}
+						removed := os.IsNotExist(statErr)
+						expRemoved := err == nil && idx == tc.targetIdx
+						if removed != expRemoved {
+							t.Fatalf("engine %d superblock %q: expected removed=%v, got %v",
+								idx, sbPath, expRemoved, removed)
+						}
+					}
+					for _, path := range preservedPaths {
+						data, err := os.ReadFile(path)
+						if err != nil {
+							t.Fatal(err)
+						}
+						test.AssertEqual(t, string(data), "preserve", path)
+					}
+
+					if err != nil {
+						return
+					}
+
+					if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {
+						t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+					}
+
+					// The removed superblock clears the engine's rank, so the same
+					// request can no longer be matched to an engine.
+					if tc.expRepeatErr != nil {
+						_, err := cs.StoragePrepareReformat(test.Context(t), tc.req)
+						test.CmpErr(t, tc.expRepeatErr, err)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 	const (
 		clusterSize     uint64 = 32 * humanize.MiByte
