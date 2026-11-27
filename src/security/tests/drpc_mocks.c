@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -183,5 +184,19 @@ pack_validate_resp_in_drpc_call_resp_body(Auth__ValidateCredResp *resp)
 	drpc_call_resp_return_content.body.len = len;
 	D_ALLOC(body, len);
 	auth__validate_cred_resp__pack(resp, body);
+	drpc_call_resp_return_content.body.data = body;
+}
+
+void
+pack_node_cert_resp_in_drpc_call_resp_body(Auth__ValidateNodeCertResp *resp)
+{
+	size_t   len = auth__validate_node_cert_resp__get_packed_size(resp);
+	uint8_t *body;
+
+	D_FREE(drpc_call_resp_return_content.body.data);
+
+	drpc_call_resp_return_content.body.len = len;
+	D_ALLOC(body, len);
+	auth__validate_node_cert_resp__pack(resp, body);
 	drpc_call_resp_return_content.body.data = body;
 }
