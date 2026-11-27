@@ -71,10 +71,14 @@ struct  _Srv__NotifyReadyReq
    * True if engine started in checker mode
    */
   protobuf_c_boolean check_mode;
+  /*
+   * Page size, in bytes, the VOS memory files are aligned to
+   */
+  uint64_t mem_page_size;
 };
 #define SRV__NOTIFY_READY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&srv__notify_ready_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL, 0,NULL, 0, 0 }
 
 
 struct  _Srv__GetPoolSvcReq

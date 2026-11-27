@@ -1260,6 +1260,10 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 		smbc            *scm.MockBackendConfig
 		tierCfgs        storage.TierConfigs
 		enginesNotReady bool
+		smsc            *system.MockSysConfig
+		targetCount     int
+		ctrlMdPath      string
+		memPageSize     uint64 // Reported by the engine when it is ready: 0 if it did not
 		disableHPs      bool
 		noSrvCfg        bool
 		nilReq          bool
@@ -1680,6 +1684,125 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				SysMemInfo: control.MockPBSysMemInfo(),
 			},
 		},
+		"ram class scm and nvme with all roles in cfg; usage requested; engine not ready": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassRam.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmRamdiskSize(64),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr).
+					WithBdevDeviceRoles(storage.BdevRoleAll),
+			},
+			targetCount: 5,
+			ctrlMdPath:  "/var/daos/control_meta",
+			memPageSize: 0,
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
+					{Total: 64 * humanize.GiByte, Avail: 64 * humanize.GiByte},
+				},
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesErr: errors.New("scm discover failed"),
+			},
+			req: &ctlpb.StorageScanReq{
+				Scm: &ctlpb.ScanScmReq{
+					Usage: true,
+				},
+			},
+			enginesNotReady: true,
+			// An engine which is not ready did not report its page size yet: it has no
+			// usable space and must not make the scan fail.
+			expResp: &ctlpb.StorageScanResp{
+				Scm: &ctlpb.ScanScmResp{
+					Namespaces: proto.ScmNamespaces{
+						func() *ctlpb.ScmNamespace {
+							ns := proto.MockScmNamespaceRamdisk(0)
+							ns.Mount.Rank = uint32(ranklist.NilRank)
+							return ns
+						}(),
+					},
+					State: new(ctlpb.ResponseState),
+				},
+				SysMemInfo: control.MockPBSysMemInfo(),
+			},
+		},
+		"ram class scm and nvme with all roles in cfg; usage requested; engine ready without page size": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassRam.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmRamdiskSize(64),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr).
+					WithBdevDeviceRoles(storage.BdevRoleAll),
+			},
+			targetCount: 5,
+			ctrlMdPath:  "/var/daos/control_meta",
+			memPageSize: 0,
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
+					{Total: 64 * humanize.GiByte, Avail: 64 * humanize.GiByte},
+				},
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesErr: errors.New("scm discover failed"),
+			},
+			req: &ctlpb.StorageScanReq{
+				Scm: &ctlpb.ScanScmReq{
+					Usage: true,
+				},
+			},
+			expErr: errors.New("adjust SCM usable size: engine 0 did not report the page size"),
+		},
+		"ram class scm and nvme with all roles in cfg; usage requested; engine ready with page size": {
+			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassRam.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmRamdiskSize(64),
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(ctrlr.PciAddr).
+					WithBdevDeviceRoles(storage.BdevRoleAll),
+			},
+			targetCount: 5,
+			ctrlMdPath:  "/var/daos/control_meta",
+			memPageSize: 16 * humanize.MiByte,
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
+					{Total: 64 * humanize.GiByte, Avail: 64 * humanize.GiByte},
+				},
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesErr: errors.New("scm discover failed"),
+			},
+			req: &ctlpb.StorageScanReq{
+				Scm: &ctlpb.ScanScmReq{
+					Usage: true,
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Scm: &ctlpb.ScanScmResp{
+					Namespaces: proto.ScmNamespaces{
+						func() *ctlpb.ScmNamespace {
+							ns := proto.MockScmNamespaceRamdisk(0)
+							ns.Size = 64 * humanize.GiByte
+							ns.Mount.TotalBytes = 64 * humanize.GiByte
+							ns.Mount.AvailBytes = 64 * humanize.GiByte
+							// 63 GiB once the RDB is removed, aligned down to
+							// 806 pages of 16 MiB for each of the 5 targets
+							ns.Mount.UsableBytes = 806 * 5 * 16 * humanize.MiByte
+							return ns
+						}(),
+					},
+					State: new(ctlpb.ResponseState),
+				},
+				SysMemInfo: control.MockPBSysMemInfo(),
+			},
+		},
 		"dcpm class scm in cfg; usage requested": {
 			tierCfgs: storage.TierConfigs{
 				storage.NewTierConfig().
@@ -1785,15 +1908,24 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			engineCfg := engine.MockConfig().WithStorage(tc.tierCfgs...)
+			if tc.targetCount > 0 {
+				engineCfg.WithTargetCount(tc.targetCount)
+			}
+			if tc.ctrlMdPath != "" {
+				engineCfg.WithStorageControlMetadataPath(tc.ctrlMdPath)
+			}
 			engineCfgs := []*engine.Config{engineCfg}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...).
 				WithDisableHugepages(tc.disableHPs)
 
 			var cs *ControlService
 			if tc.enginesNotReady {
-				cs = mockControlService(t, log, sCfg, nil, tc.smbc, nil, true)
+				cs = mockControlService(t, log, sCfg, nil, tc.smbc, tc.smsc, true)
 			} else {
-				cs = mockControlService(t, log, sCfg, nil, tc.smbc, nil)
+				cs = mockControlService(t, log, sCfg, nil, tc.smbc, tc.smsc)
+			}
+			for _, ei := range cs.harness.Instances() {
+				ei.(*EngineInstance).setMemPageSize(tc.memPageSize)
 			}
 
 			scanBdevs = func(_ context.Context, c *ControlService, _ *ctlpb.ScanNvmeReq, _ []*ctlpb.ScmNamespace) (*ctlpb.ScanNvmeResp, error) {
@@ -4329,21 +4461,29 @@ func TestServer_getRdbSize(t *testing.T) {
 }
 
 func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
+	// Page size of the memory files of the VOS targets of an engine with the metadata on SSD.
+	const mdOnSsdPageSize uint64 = 16 * humanize.MiByte
+
 	type EngineConfig struct {
 		mdCap       string
 		ctrlMdPath  string
 		mountPoints []string
+		targetCount int
+		memPageSize uint64 // Reported by the engine when it is ready
+		notStarted  bool   // The engine is not started, so not ready
 	}
 
 	type dataInput struct {
-		configs  []*EngineConfig
-		response *ctlpb.ScanScmResp
+		configs     []*EngineConfig
+		response    *ctlpb.ScanScmResp
+		noInstances bool
 	}
 
 	type expectedOutput struct {
 		availableBytes []uint64
 		usableBytes    []uint64
 		message        string
+		err            error
 	}
 
 	for name, tc := range map[string]struct {
@@ -4501,6 +4641,8 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 						mdCap:       "DAOS_MD_CAP=1024",
 						ctrlMdPath:  "/mnt",
 						mountPoints: []string{"/mnt", "/opt"},
+						targetCount: 1,
+						memPageSize: mdOnSsdPageSize,
 					},
 				},
 				response: &ctlpb.ScanScmResp{
@@ -4528,9 +4670,363 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 					uint64(32) * humanize.GiByte,
 				},
 				usableBytes: []uint64{
-					uint64(64)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes - mdFsScmBytes,
-					uint64(32)*humanize.GiByte - 1024*humanize.MiByte - mdFsScmBytes,
+					uint64(64)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes,
+					uint64(32)*humanize.GiByte - 1024*humanize.MiByte,
 				},
+			},
+		},
+		// room      = 64 GiB (avail bytes) - 1 GiB (RDB) - 16 MiB (control plane metadata)
+		//             - 1 MiB (file system metadata) = 16510720 pages of 4 KiB (memPageSize)
+		// left over = 16510720 pages % 3 targets = 1 page
+		// usable    = room: a PMem engine is not aligned, the page left over is not removed
+		"PMem with 3 targets filling the room": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 3,
+						memPageSize: 4 * humanize.KiByte,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				availableBytes: []uint64{uint64(64) * humanize.GiByte},
+				usableBytes: []uint64{
+					uint64(64)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes - mdFsScmBytes,
+				},
+			},
+		},
+		// room       = 64 GiB (avail bytes) - 1 GiB (RDB) = 4032 pages of 16 MiB (mdOnSsdPageSize)
+		// per target = 4032 pages / 5 targets = 806 pages
+		// left over  = 4032 pages % 5 targets = 2 pages
+		// usable     = 806 pages * 5 targets = 4030 pages
+		"MD-on-SSD with 5 targets not filling the room": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 5,
+						memPageSize: mdOnSsdPageSize,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				availableBytes: []uint64{uint64(64) * humanize.GiByte},
+				usableBytes:    []uint64{806 * 5 * mdOnSsdPageSize},
+			},
+		},
+		// room       = 64 GiB (avail bytes) - 1 GiB (RDB) = 4032 pages of 16 MiB (mdOnSsdPageSize)
+		// per target = 4032 pages / 3 targets = 1344 pages
+		// left over  = 4032 pages % 3 targets = 0 page
+		// usable     = 1344 pages * 3 targets = 4032 pages
+		"MD-on-SSD with 3 targets filling the room": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 3,
+						memPageSize: mdOnSsdPageSize,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				availableBytes: []uint64{uint64(64) * humanize.GiByte},
+				usableBytes:    []uint64{4032 * mdOnSsdPageSize},
+			},
+		},
+		// room       = 64 GiB (avail bytes) - 1 GiB (RDB) - 16 MiB (control plane metadata)
+		//            = 4031 pages of 16 MiB (mdOnSsdPageSize)
+		// per target = 4031 pages / 4 targets = 1007 pages
+		// left over  = 4031 pages % 4 targets = 3 pages
+		// usable     = 1007 pages * 4 targets = 4028 pages
+		"MD-on-SSD not filling the room with 4 targets and the control metadata on the RAM disk": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/mnt",
+						mountPoints: []string{"/mnt"},
+						targetCount: 4,
+						memPageSize: mdOnSsdPageSize,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				availableBytes: []uint64{uint64(64) * humanize.GiByte},
+				usableBytes:    []uint64{1007 * 4 * mdOnSsdPageSize},
+			},
+		},
+		// Engine 0:
+		// - room       = 64 GiB (avail bytes) - 1 GiB (RDB) = 4032 pages of 16 MiB (mdOnSsdPageSize)
+		// - per target = 4032 pages / 5 targets = 806 pages
+		// - left over  = 4032 pages % 5 targets = 2 pages
+		// - usable     = 806 pages * 5 targets = 4030 pages
+		// Engine 1:
+		// - room       = 64 GiB (avail bytes) - 1 GiB (RDB) = 1008 pages of 64 MiB (4 * mdOnSsdPageSize)
+		// - per target = 1008 pages / 5 targets = 201 pages
+		// - left over  = 1008 pages % 5 targets = 3 pages
+		// - usable     = 201 pages * 5 targets = 1005 pages
+		"MD-on-SSD with two engines of different page sizes not filling the room": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 5,
+						memPageSize: mdOnSsdPageSize,
+					},
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos1"},
+						targetCount: 5,
+						memPageSize: 4 * mdOnSsdPageSize,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos1",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				availableBytes: []uint64{
+					uint64(64) * humanize.GiByte,
+					uint64(64) * humanize.GiByte,
+				},
+				usableBytes: []uint64{
+					806 * 5 * mdOnSsdPageSize,
+					201 * 5 * 4 * mdOnSsdPageSize,
+				},
+			},
+		},
+		"MD-on-SSD engine not ready: no usable size": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 3,
+						memPageSize: mdOnSsdPageSize,
+						notStarted:  true,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				availableBytes: []uint64{uint64(64) * humanize.GiByte},
+				usableBytes:    []uint64{0},
+				message:        "Engine 0 is not ready",
+			},
+		},
+		// Engine 0 is not ready: the page size it kept from its last run is not used.
+		// Engine 1:
+		// - room       = 64 GiB (avail bytes) - 1 GiB (RDB) = 4032 pages of 16 MiB (mdOnSsdPageSize)
+		// - per target = 4032 pages / 5 targets = 806 pages
+		// - usable     = 806 pages * 5 targets = 4030 pages
+		"MD-on-SSD with one engine not ready: only the other one is aligned": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 5,
+						memPageSize: mdOnSsdPageSize,
+						notStarted:  true,
+					},
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos1"},
+						targetCount: 5,
+						memPageSize: mdOnSsdPageSize,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos1",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				availableBytes: []uint64{
+					uint64(64) * humanize.GiByte,
+					uint64(64) * humanize.GiByte,
+				},
+				usableBytes: []uint64{
+					0,
+					806 * 5 * mdOnSsdPageSize,
+				},
+				message: "Engine 0 is not ready",
+			},
+		},
+		"MD-on-SSD engine which did not report its page size": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 3,
+						memPageSize: 0,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				err: errors.New("engine 0 did not report the page size"),
+			},
+		},
+		"MD-on-SSD engine without target": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						memPageSize: mdOnSsdPageSize,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+			},
+			output: expectedOutput{
+				err: errors.New("engine 0: invalid target count 0"),
+			},
+		},
+		"MD-on-SSD engine without instance": {
+			input: dataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						ctrlMdPath:  "/var/daos/control_meta",
+						mountPoints: []string{"/mnt/daos0"},
+						targetCount: 3,
+						memPageSize: mdOnSsdPageSize,
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassRam.String(),
+							},
+						},
+					},
+				},
+				noInstances: true,
+			},
+			output: expectedOutput{
+				err: errors.New("no instance of engine 0"),
 			},
 		},
 	} {
@@ -4542,6 +5038,9 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 			for _, cfg := range tc.input.configs {
 				engineCfg := engine.MockConfig()
 				engineCfg.WithEnvVars(cfg.mdCap)
+				if cfg.targetCount > 0 {
+					engineCfg.WithTargetCount(cfg.targetCount)
+				}
 
 				var storagesCfg []*storage.TierConfig
 				for _, mountPoint := range cfg.mountPoints {
@@ -4564,9 +5063,24 @@ func TestServer_CtlSvc_adjustScmSize(t *testing.T) {
 				enginesCfg = append(enginesCfg, engineCfg)
 			}
 			serverCfg := config.DefaultServer().WithEngines(enginesCfg...)
-			cs := mockControlService(t, log, serverCfg, nil, nil, nil)
+			notStarted := make([]bool, len(tc.input.configs))
+			for idx, cfg := range tc.input.configs {
+				notStarted[idx] = cfg.notStarted
+			}
+			cs := mockControlService(t, log, serverCfg, nil, nil, nil, notStarted...)
 
-			cs.adjustScmSize(tc.input.response)
+			if tc.input.noInstances {
+				cs.harness.instances = nil
+			}
+			for idx, ei := range cs.harness.Instances() {
+				ei.(*EngineInstance).setMemPageSize(tc.input.configs[idx].memPageSize)
+			}
+
+			err := cs.adjustScmSize(tc.input.response)
+			test.CmpErr(t, tc.output.err, err)
+			if tc.output.err != nil {
+				return
+			}
 
 			for index, namespace := range tc.input.response.Namespaces {
 				test.AssertEqual(t, tc.output.availableBytes[index], namespace.GetMount().GetAvailBytes(),

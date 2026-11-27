@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2022 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,6 +62,23 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 {
 	*rank = (d_rank_t)mock_self_rank;
 	return 0;
+}
+
+/* The page size of the memory files of the VOS pools depends on the umem backend */
+#define MOCK_MEM_PAGE_SIZE_BMEM_V2 (1UL << 24)
+#define MOCK_MEM_PAGE_SIZE_PMEM    (1UL << 12)
+
+static int mock_md_backend = DAOS_MD_BMEM_V2;
+int
+umempobj_get_backend_type(void)
+{
+	return mock_md_backend;
+}
+
+size_t
+umempobj_pgsz(int backend)
+{
+	return backend == DAOS_MD_PMEM ? MOCK_MEM_PAGE_SIZE_PMEM : MOCK_MEM_PAGE_SIZE_BMEM_V2;
 }
 
 struct dss_module_info	*mock_dmi;
@@ -127,6 +144,7 @@ drpc_client_test_setup(void **state)
 	mock_close_setup();
 
 	crt_self_uri_get_return = 0;
+	mock_md_backend         = DAOS_MD_BMEM_V2;
 	mock_dmi = NULL;
 
 	return drpc_init();
@@ -212,7 +230,7 @@ unpack_sendmsg_drpc_call(void)
 }
 
 static void
-verify_notify_ready_message(void)
+verify_notify_ready_message(size_t exp_mem_page_size)
 {
 	Drpc__Call          *call;
 	Srv__NotifyReadyReq *req;
@@ -230,6 +248,7 @@ verify_notify_ready_message(void)
 	assert_string_equal(req->drpclistenersock, drpc_listener_socket_path);
 	assert_int_equal(req->instanceidx, dss_instance_idx);
 	assert_int_equal(req->ntgts, dss_tgt_nr);
+	assert_int_equal(req->mem_page_size, exp_mem_page_size);
 
 	/* Cleanup */
 	srv__notify_ready_req__free_unpacked(req, NULL);
@@ -248,7 +267,19 @@ test_drpc_verify_notify_ready(void **state)
 
 	/* Message was sent */
 	assert_non_null(sendmsg_msg_ptr);
-	verify_notify_ready_message();
+	verify_notify_ready_message(MOCK_MEM_PAGE_SIZE_BMEM_V2);
+}
+
+static void
+test_drpc_verify_notify_ready_pmem(void **state)
+{
+	mock_md_backend = DAOS_MD_PMEM;
+	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
+
+	assert_rc_equal(drpc_notify_ready(false), 0);
+
+	assert_non_null(sendmsg_msg_ptr);
+	verify_notify_ready_message(MOCK_MEM_PAGE_SIZE_PMEM);
 }
 
 static void
@@ -451,17 +482,18 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		UTEST(test_drpc_call_sockfile_chmod_fails),
-		UTEST(test_drpc_call_connect_fails),
-		UTEST(test_drpc_call_sendmsg_fails),
-		UTEST(test_drpc_verify_notify_ready),
-		UTEST(test_drpc_verify_notify_pool_svc_update),
-		UTEST(test_drpc_verify_notify_pool_svc_update_noreps),
-		UTEST(test_drpc_verify_notify_pool_svc_update_nopool),
-		UTEST(test_drpc_verify_cluster_event),
-		UTEST(test_drpc_verify_cluster_event_min_viable),
-		UTEST(test_drpc_verify_cluster_event_emptymsg),
-		UTEST(test_drpc_verify_cluster_event_nomsg),
+	    UTEST(test_drpc_call_sockfile_chmod_fails),
+	    UTEST(test_drpc_call_connect_fails),
+	    UTEST(test_drpc_call_sendmsg_fails),
+	    UTEST(test_drpc_verify_notify_ready),
+	    UTEST(test_drpc_verify_notify_ready_pmem),
+	    UTEST(test_drpc_verify_notify_pool_svc_update),
+	    UTEST(test_drpc_verify_notify_pool_svc_update_noreps),
+	    UTEST(test_drpc_verify_notify_pool_svc_update_nopool),
+	    UTEST(test_drpc_verify_cluster_event),
+	    UTEST(test_drpc_verify_cluster_event_min_viable),
+	    UTEST(test_drpc_verify_cluster_event_emptymsg),
+	    UTEST(test_drpc_verify_cluster_event_nomsg),
 	};
 
 	return cmocka_run_group_tests_name("engine_drpc_client", tests, test_suite_init,

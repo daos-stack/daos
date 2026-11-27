@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,7 @@
 #include <daos_types.h>
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
+#include <daos/mem.h>
 #include "srv.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
@@ -180,6 +181,8 @@ drpc_notify_ready(bool check_mode)
 	req.instanceidx = dss_instance_idx;
 	req.ntgts = dss_tgt_nr;
 	req.check_mode = check_mode;
+	/* The control plane needs the alignment of the VOS files to size the pools */
+	req.mem_page_size = umempobj_pgsz(umempobj_get_backend_type());
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
