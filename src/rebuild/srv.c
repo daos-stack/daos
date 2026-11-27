@@ -3149,7 +3149,13 @@ rebuild_tgt_status_check_ult(void *arg)
 			iv.riv_ver = rpt->rt_rebuild_ver;
 			iv.riv_rebuild_gen = rpt->rt_rebuild_gen;
 			iv.riv_leader_term = rpt->rt_leader_term;
-			iv.riv_dtx_resyc_version = rpt->rt_pool->sp_dtx_resync_version;
+			/*
+			 * Report the DTX resync version only after EC aggregation is paused on
+			 * all local targets, so the global DTX resync version computed by the
+			 * leader also works as the global EC aggregation pause barrier.
+			 */
+			iv.riv_dtx_resyc_version =
+			    rpt->rt_ec_paused ? rpt->rt_pool->sp_dtx_resync_version : 0;
 			/* Cart does not support failure recovery yet, let's
 			 * send the status to root for now. FIXME
 			 */

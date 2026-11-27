@@ -1223,8 +1223,6 @@ rebuild_scanner(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
-
 	/* There maybe orphan DTX entries after DTX resync, let's cleanup before rebuild scan. */
 	rc = dtx_cleanup_orphan(rpt->rt_pool_uuid, rpt->rt_pool->sp_dtx_resync_version);
 	if (rc != 0)
@@ -1311,6 +1309,23 @@ rebuild_discard_wait_stop(void *arg)
 	return rpt->rt_abort || rpt->rt_finishing || rpt->rt_global_done;
 }
 
+static int
+rebuild_ec_agg_pause(void *data)
+{
+	struct rebuild_tgt_pool_tracker *rpt = data;
+	struct ds_pool_child            *child;
+	int                              rc;
+
+	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	if (child == NULL)
+		return -DER_NONEXIST;
+
+	/* -DER_TIMEDOUT fails this rebuild, which is retried after fail reclaim */
+	rc = ds_cont_child_wait_ec_agg_pause(child, rebuild_wait_ec_pause);
+	ds_pool_child_put(child);
+	return rc;
+}
+
 /**
  * Wait for pool map and setup global status, then spawn scanners for all
  * service xsteams
@@ -1322,20 +1337,33 @@ rebuild_scan_leader(void *data)
 	struct rebuild_pool_tls         *tls;
 	int                              rc;
 
-	if (rpt->rt_pool->sp_gl_dtx_resync_version >= rpt->rt_rebuild_ver) {
-		D_DEBUG(DB_REBUILD, DF_RB " sp_gl_dtx_resync_version %d exceed rt_rebuild_ver %d.",
-			DP_RB_RPT(rpt), rpt->rt_pool->sp_gl_dtx_resync_version,
-			rpt->rt_rebuild_ver);
-		if (rpt->rt_global_dtx_resync_version < rpt->rt_pool->sp_gl_dtx_resync_version)
-			rpt->rt_global_dtx_resync_version = rpt->rt_pool->sp_gl_dtx_resync_version;
-		goto do_scan;
-	} else {
-		D_DEBUG(DB_REBUILD, DF_RB " check resync %u/%u < %u\n", DP_RB_RPT(rpt),
-			rpt->rt_pool->sp_dtx_resync_version, rpt->rt_global_dtx_resync_version,
-			rpt->rt_rebuild_ver);
+	/*
+	 * Pause EC aggregation locally. The DTX resync version is reported to the leader only
+	 * after rt_ec_paused is set, so the global DTX resync wait below is also the global
+	 * EC aggregation pause barrier.
+	 */
+	rc = ds_pool_thread_collective(rpt->rt_pool_uuid,
+				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       rebuild_ec_agg_pause, rpt, 0);
+	if (rc) {
+		DL_ERROR(rc, DF_RB " failed to pause EC aggregation", DP_RB_RPT(rpt));
+		D_GOTO(out, rc);
 	}
 
-	/* Wait for dtx resync to finish */
+	/* Test only: delay reporting local EC pause to hold the global barrier */
+	while (daos_fail_check(DAOS_REBUILD_EC_PAUSE_HANG) && !rpt->rt_abort && !rpt->rt_finishing)
+		dss_sleep(1000);
+	rpt->rt_ec_paused = 1;
+
+	D_DEBUG(DB_REBUILD, DF_RB " check resync %u/%u < %u\n", DP_RB_RPT(rpt),
+		rpt->rt_pool->sp_dtx_resync_version, rpt->rt_global_dtx_resync_version,
+		rpt->rt_rebuild_ver);
+
+	/*
+	 * Wait for dtx resync to finish and EC aggregation to be paused on all engines. Do not
+	 * skip it based on a previous rebuild's result, which does not cover the EC aggregation
+	 * pause of this rebuild.
+	 */
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 		if (!rpt->rt_abort && !rpt->rt_finishing) {
 			ABT_mutex_lock(rpt->rt_lock);
@@ -1351,13 +1379,6 @@ rebuild_scan_leader(void *data)
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
 	}
-	if (rpt->rt_pool->sp_gl_dtx_resync_version < rpt->rt_global_dtx_resync_version) {
-		rpt->rt_pool->sp_gl_dtx_resync_version = rpt->rt_global_dtx_resync_version;
-		D_INFO(DF_RB " update sp_gl_dtx_resync_version to %d", DP_RB_RPT(rpt),
-		       rpt->rt_pool->sp_gl_dtx_resync_version);
-	}
-
-do_scan:
 	/*
 	 * Reintegration pre-discard runs independently of the rebuild task and can outlive
 	 * an admin stop. The stopped reintegration targets stay UP and FAIL_RECLAIM scans

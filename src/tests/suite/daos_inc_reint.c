@@ -13,7 +13,7 @@
 #define D_LOGFAC DD_FAC(tests)
 
 #include <unistd.h>
-#include <sys/wait.h>
+#include <pthread.h>
 
 #include "daos_test.h"
 #include <daos_prop.h>
@@ -229,14 +229,37 @@ inc_reint3(void **state)
 	D_FREE(conts);
 }
 
+struct ir_race_arg {
+	test_arg_t       *arg;
+	struct test_cont *cont;
+	bool              create;
+};
+
+static void *
+ir_race_thread(void *data)
+{
+	struct ir_race_arg *ra = data;
+
+	/* Wait for ir_rank_reint() to be started firstly in the main thread. */
+	sleep(3);
+
+	if (ra->create)
+		ir_cont_create(ra->arg, ra->cont);
+	else
+		ir_cont_destroy(ra->arg, ra->cont);
+
+	return NULL;
+}
+
 static void
 ir_race(test_arg_t *arg, bool create)
 {
-	struct test_pool *pool     = &arg->pool;
-	struct test_cont  conts[4] = {0};
-	pid_t             pid;
-	int               rc;
-	int               i;
+	struct test_pool  *pool     = &arg->pool;
+	struct test_cont   conts[4] = {0};
+	struct ir_race_arg ra;
+	pthread_t          tid;
+	int                rc;
+	int                i;
 
 	for (i = 0; i < 3; i++)
 		ir_cont_create(arg, &conts[i]);
@@ -246,40 +269,22 @@ ir_race(test_arg_t *arg, bool create)
 	rc = ir_rank_restart(arg, 1, DAOS_POOL_REINT_SLOW | DAOS_FAIL_ALWAYS);
 	assert_rc_equal(rc, 0);
 
-	pid = fork();
-	assert_true(pid >= 0);
+	/*
+	 * Use a thread instead of fork() for the racing container operation, a forked child
+	 * may fail to send RPC with some providers (e.g. UCX) and hang.
+	 */
+	ra.arg    = arg;
+	ra.cont   = create ? &conts[3] : &conts[1];
+	ra.create = create;
+	rc        = pthread_create(&tid, NULL, ir_race_thread, &ra);
+	assert_rc_equal(rc, 0);
 
-	if (pid == 0) {
-		/* Wait for ir_rank_reint can be run firstly on parent. */
-		sleep(3);
+	/* Incremental reintegration will internally repeat to handle the race. */
+	rc = ir_rank_reint(arg, 1, false);
+	assert_rc_equal(rc, 0);
 
-		if (!create)
-			daos_fail_loc_set(DAOS_CONT_DESTROY_AFTER_FORK | DAOS_FAIL_ALWAYS);
-
-		rc = daos_reinit();
-		assert_rc_equal(rc, 0);
-
-		if (create)
-			ir_cont_create(arg, &conts[3]);
-		else
-			ir_cont_destroy(arg, &conts[1]);
-
-		/* Do NOT exit immediately, otherwise, the pipeline for parent may be broken. */
-		sleep(15);
-		print_message("Child process complete and exit\n");
-
-		if (!create)
-			daos_fail_loc_reset();
-
-		daos_fini();
-		exit(0);
-	} else {
-		/* Incremental reintegration will internally repeat to handle the race. */
-		rc = ir_rank_reint(arg, 1, false);
-		assert_rc_equal(rc, 0);
-		waitpid(pid, &rc, 0);
-		print_message("Parent process wait child %d, got %d\n", pid, rc);
-	}
+	rc = pthread_join(tid, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	assert_rc_equal(rc, 0);

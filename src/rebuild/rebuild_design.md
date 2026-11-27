@@ -572,7 +572,7 @@ Each rebuild operation transitions through the following states, tracked in `rgt
 
 The scan ULT runs on each participating target, on the system XS (XS 0) for each pool child.
 
-1. **EC aggregation pause.** Before beginning VOS iteration, the scanner calls `ds_cont_child_wait_ec_agg_pause()` to ensure EC aggregation is paused. See §13 for the aggregation fence contract. **RB-03:** The timeout on this call is currently swallowed (returns `void`); see §18.
+1. **EC aggregation pause.** Before the scan collective, `rebuild_scan_leader` runs `ds_cont_child_wait_ec_agg_pause()` on every local target, and sets `rt_ec_paused`. The engine reports its `riv_dtx_resyc_version` as 0 until `rt_ec_paused` is set, so the global DTX resync wait (§8) also acts as the global EC aggregation pause barrier: no engine starts VOS iteration before every participating engine has paused EC aggregation. The wait is not skipped based on a previous rebuild's global DTX resync result for this reason. See §13 for the aggregation fence contract. **RB-03 (fixed):** a local pause timeout returns `-DER_TIMEDOUT` and fails the rebuild, which is then retried; see §18.
 
 2. **DTX orphan cleanup.** Calls `dtx_cleanup_orphan(pool_uuid, sp_dtx_resync_version)` to resolve any uncommitted distributed transactions that survived the DTX resync phase. See §8 for DTX coordination.
 
@@ -800,7 +800,7 @@ A target may finish its own scan early and have zero in-flight migrations — bu
 
 Distributed Transaction (DTX) resync ensures that any uncommitted in-flight transactions are resolved before rebuild migrates their data. The protocol is:
 
-1. Each target's status-check ULT reports its current `sp_dtx_resync_version` in `riv_dtx_resyc_version`.
+1. Each target's status-check ULT reports its current `sp_dtx_resync_version` in `riv_dtx_resyc_version`, or 0 until EC aggregation is paused on all its local targets (`rt_ec_paused`).
 2. The leader computes the global minimum across all participating ranks (excluding ranks with version skip sentinel `UINT32_MAX`), stored in `rgt_dtx_resync_version`.
 3. The leader broadcasts the global minimum via `riv_global_dtx_resyc_version` on each IV notification.
 4. On receipt, each target updates `rpt->rt_global_dtx_resync_version` and, if it now equals or exceeds the local `rt_rebuild_ver`, signals `rt_global_dtx_wait_cond` to wake the scan ULT that may be blocked waiting for DTX sync.
@@ -1060,7 +1060,7 @@ On **every** participating engine (not only the leader), the following ULTs run 
 
 | ULT function | XStream | Count | Creation | Responsibility |
 |---|---|---|---|---|
-| `rebuild_scanner` | Each VOS-XS[i] | 1 per active rebuild | `ds_pool_thread_collective` inside `rebuild_scan_leader` | **VOS iterator.** Pauses EC aggregation (`ds_cont_child_wait_ec_agg_pause`), cleans up orphan DTX entries, creates the per-TLS `rebuild_tree_hdl`, and then calls `vos_iterate` to enumerate all containers, objects, dkeys, and recxs in the local VOS pool. For each object that needs migrating to a remote target, inserts the OID into `rebuild_tree_hdl`. For objects that can be migrated locally, calls `rebuild_object_local` directly. |
+| `rebuild_scanner` | Each VOS-XS[i] | 1 per active rebuild | `ds_pool_thread_collective` inside `rebuild_scan_leader` | **VOS iterator.** Runs after the global EC aggregation pause barrier, cleans up orphan DTX entries, creates the per-TLS `rebuild_tree_hdl`, and then calls `vos_iterate` to enumerate all containers, objects, dkeys, and recxs in the local VOS pool. For each object that needs migrating to a remote target, inserts the OID into `rebuild_tree_hdl`. For objects that can be migrated locally, calls `rebuild_object_local` directly. |
 | `rebuild_objects_send_ult` | Same VOS-XS[i] as its `rebuild_scanner` | 1 per scanner (not created for `RB_OP_RECLAIM` / `RB_OP_FAIL_RECLAIM`) | `rebuild_scanner` via `dss_ult_create(..., DSS_XS_SELF, ...)` | **RPC dispatcher.** Runs concurrently with the scanner on the same VOS-XS. Continuously drains `rebuild_tree_hdl` by iterating containers and objects, batching up to `REBUILD_SEND_LIMIT` OIDs per call, and invoking `ds_object_migrate_send` to dispatch migration RPCs to destination engines. Exits when `rebuild_pool_scan_done == 1` and the tree is empty. |
 | `rebuild_obj_ult` | VOS-XS[tgt_index] of the destination target | 1 per object (local migration only) | `rebuild_object_local` via `dss_ult_create(..., DSS_XS_VOS, tgt_index, ...)` | **Local object mover.** Used only when the source and destination are on the same engine (intra-engine shard rebalance). Calls `ds_migrate_object` inline, inserting the object into the destination target's `migrate_pool_tls` tree. |
 
@@ -1312,7 +1312,7 @@ Silent early-exit causes objects to be dropped without any error reaching `riv_s
 
 ### INV-4: EC aggregation safety
 
-**EC aggregation must be paused for the duration of the scan phase. Timeout must abort, not proceed.** A rebuild that proceeds with live EC aggregation may produce persistently corrupt parity cells. **RB-03:** `ds_cont_child_wait_ec_agg_pause()` returns `void`; timeout swallowed.
+**EC aggregation must be paused for the duration of the scan phase. Timeout must abort, not proceed.** A rebuild that proceeds with live EC aggregation may produce persistently corrupt parity cells. **RB-03 (fixed):** `ds_cont_child_wait_ec_agg_pause()` returns `-DER_TIMEDOUT` on timeout and the rebuild fails and retries.
 
 ### INV-5: Aggregation fence lifecycle
 
@@ -1338,7 +1338,7 @@ EC rebuild has additional constraints beyond replica rebuild:
 
 3. **Scan ordering.** The scanner must enumerate full stripes before partial ones to avoid parity being rebuilt with stale data.
 
-4. **EC aggregation pause.** The scanner calls `ds_cont_child_wait_ec_agg_pause()` before beginning VOS iteration. This ensures EC aggregation is not running concurrently with the scan, which could compute parity over partially-migrated stripes. **RB-03:** Timeout not propagated.
+4. **EC aggregation pause.** `rebuild_scan_leader` pauses EC aggregation locally (`ds_cont_child_wait_ec_agg_pause()`) and waits for the global pause barrier (the global DTX resync version, which each engine reports only after its local pause) before beginning VOS iteration. This ensures EC aggregation is not running concurrently with the scan, which could compute parity over partially-migrated stripes. **RB-03 (fixed):** Timeout propagated as `-DER_TIMEDOUT`.
 
 5. **EC aggregation sleep during rebuild.** Even outside the scan phase, EC aggregation ULTs sleep for 18 seconds between rounds when `ds_pool_is_rebuilding()` returns true (`srv_target.c:543`), reducing interference. VOS aggregation continues normally but respects the `spc_rebuild_fence`.
 
@@ -1565,7 +1565,7 @@ Plus `MIGR_INF_DATA_HULK` for single very-large transfers (> 256 MB).
 |----|----------|-------------|
 | **RB-01** | **Critical** | Abort path sends `pull_done=1` without waiting for `dm_migrating=0`. Leader success branch doesn't check `rgt_abort`. Aborted rebuild treated as successful; reclaim scheduled on incomplete data. |
 | **RB-02** | **Critical** | 7 of 10+ `mpt_fini` check sites return `0` instead of error. Migration silently skipped; rebuild reports success with incomplete data. |
-| **RB-03** | **Critical** | EC aggregation pause timeout swallowed (`void` return). Scan proceeds with live aggregation. Parity computed over partially-migrated stripe: structurally valid corruption (passes CRC). |
+| **RB-03** | **Critical** | **Fixed:** EC aggregation pause timeout now returns `-DER_TIMEDOUT` and fails the rebuild for retry. Previously the scan proceeded with live aggregation, computing parity over partially-migrated stripes. |
 | **RB-04** | **High** | `obj_reclaim_ver` fallback in success branch of `rebuild_task_complete_schedule`. Return value from `ds_pool_tgt_finish_rebuild` not checked. Reclaim scheduled at wrong version boundary. |
 | **RB-05** | **Medium** | Leader-switch retry reuses `migrate_pool_tls` with `mpt_fini=1`. Generation not incremented when `version == dst_map_ver`. Poisoned TLS silently skips migration. |
 | **RB-06** | **Medium** | IV notification loss (LAZY SYNC). Leader retries every 2s (auto-recovery for transient loss). Prolonged delay only under persistent network failure. |
@@ -1601,7 +1601,7 @@ For reviewers familiar with earlier versions:
 |-------|----------|-------------|
 | RB-01 | G4 | Abort `pull_done` without draining |
 | RB-02 | I4 / C3 | `mpt_fini` returns 0 |
-| RB-03 | I10 | EC agg pause timeout swallowed |
+| RB-03 | I10 | EC agg pause timeout swallowed (fixed) |
 | RB-04 | I5 | `obj_reclaim_ver` fallback |
 | RB-05 | I3 | Leader-switch TLS reuse |
 | RB-06 | G3 | IV notification loss |
@@ -1664,7 +1664,7 @@ A correct implementation must pass tests covering the following scenarios:
 | Administrative stop during fail-reclaim | Integration | `src/tests/suite/daos_rebuild_interactive.c` |
 | Container destroy during rebuild | Integration | `src/tests/suite/daos_rebuild.c` (REBUILD6: `rebuild_destroy_container`) |
 | Rebuild of pool with 100+ snapshots (epoch ordering) | Integration | New test required |
-| Multi-pool simultaneous rebuild (inflight limit) | Integration | `src/tests/suite/daos_rebuild.c` |
+| Multi-pool simultaneous rebuild (in-flight limit) | Integration | `src/tests/suite/daos_rebuild.c` |
 | Maximum-inflight-RPC rebuild storm | Stress | New test required |
 | EC partial-stripe migration | Integration | `src/tests/suite/daos_rebuild_ec.c` |
 | Drain single target | Integration | `src/tests/suite/daos_drain_simple.c` |

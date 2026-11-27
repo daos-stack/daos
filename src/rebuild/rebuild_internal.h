@@ -86,6 +86,7 @@ struct rebuild_tgt_pool_tracker {
 	/* new layout version for upgrade rebuild */
 	uint32_t		rt_new_layout_ver;
 
+	/* clang-format off */
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
 				/* re-report #rebuilt cnt per master change */
@@ -93,7 +94,10 @@ struct rebuild_tgt_pool_tracker {
 				rt_finishing:1,
 				rt_scan_done:1,
 				rt_global_scan_done:1,
-				rt_global_done:1;
+				rt_global_done:1,
+				/* EC aggregation paused on all local targets */
+				rt_ec_paused:1;
+	/* clang-format on */
 };
 
 struct rebuild_server_status {
