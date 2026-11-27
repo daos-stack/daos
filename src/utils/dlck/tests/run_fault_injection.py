@@ -166,9 +166,9 @@ class DlckRunner:
         """Return True if an NVMe device is specified."""
         return self._nvme is not None
 
-    def run(self, config):
+    def run(self, config, env={}):
         """Run dlck with the fault config; return the exit code and stdout."""
-        env = dict(os.environ, D_FI_CONFIG=str(config))
+        env = dict(os.environ, D_FI_CONFIG=str(config), **env)
         cmd = ["sudo", "-E", str(self._dlck), "--file", self._file_arg,
                "--storage", self._storage, "--targets", "1"]
         if self._nvme is not None:
@@ -297,6 +297,25 @@ class FaultInjectionTest:
         return yaml.safe_dump({"fault_config": [{"id": int(fault_id)}]}, sort_keys=False)
 
     @staticmethod
+    def _env(name):
+        """Return the environment variables for the given fault."""
+        pool_faults = ["ENGINE", "POOL", "CONT_TREE"]
+        cont_faults = ["CONT", "OBJ_ILOG", "DAE", "DBD"]
+        env_check_pool_only = {
+            "DLCK_CHECK_NO_CONTAINERS": "1",
+            "DLCK_CHECK_NO_OBJECTS": "1",
+        }
+        env_check_cont_only = {
+            "DLCK_CHECK_NO_POOLS": "1",
+            "DLCK_CHECK_NO_OBJECTS": "1",
+        }
+        if any(fault in name for fault in pool_faults):
+            return env_check_pool_only
+        elif any(fault in name for fault in cont_faults):
+            return env_check_cont_only
+        return {}
+
+    @staticmethod
     def _collect_logs(log_dir, dest):
         """Copy dlck's log directory to dest and remove the original."""
         subprocess.run(["sudo", "cp", "-r", log_dir, str(dest)], check=True)
@@ -339,13 +358,14 @@ class FaultInjectionTest:
         if skip_code is not None:
             return skip_code
 
-        # generate result directory and config for the fault
+        # generate result directory, config, and env for the fault
         result_dir = Path(tempfile.mkdtemp(prefix=f"{name}_"))
         config = result_dir / "fault_injection_dlck.yaml"
         config.write_text(self._make_config(fault_id))
+        env = self._env(name)
 
         # run dlck with the generated config and capture output
-        rc, output, errors = self._runner.run(config)
+        rc, output, errors = self._runner.run(config, env)
         (result_dir / "output.txt").write_text(output)
 
         # collect logs if dlck produced any
