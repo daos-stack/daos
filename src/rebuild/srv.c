@@ -235,18 +235,6 @@ is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt)
 
 }
 
-/* scan_done covers engines that are skipped or failed before reporting ec_paused */
-static bool
-is_rebuild_global_ec_paused(struct rebuild_global_pool_tracker *rgt)
-{
-	int i;
-
-	for (i = 0; i < rgt->rgt_servers_number; i++)
-		if (!rgt->rgt_servers[i].ec_paused && !rgt->rgt_servers[i].scan_done)
-			return false;
-	return true;
-}
-
 /* determine if "most" engines are done with their current rebuild phase (scan or pull) */
 static bool
 is_rebuild_phase_mostly_done(int engines_done_ct, int engines_total_ct)
@@ -266,7 +254,6 @@ is_rebuild_phase_mostly_done(int engines_done_ct, int engines_total_ct)
 
 #define SCAN_DONE	0x1
 #define PULL_DONE	0x2
-#define EC_PAUSED       0x4
 
 static void
 servers_sop_swap(void *array, int a, int b)
@@ -340,10 +327,6 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		D_DEBUG(DB_REBUILD, DF_RB " rank %d, update dtx_resync_version from %d to %d",
 			DP_RB_RGT(rgt), rank, status->dtx_resync_version, resync_ver);
 	status->dtx_resync_version = resync_ver;
-	if ((flags & EC_PAUSED) && !status->ec_paused) {
-		D_DEBUG(DB_REBUILD, DF_RB " rank %d is ec_paused", DP_RB_RGT(rgt), rank);
-		status->ec_paused = 1;
-	}
 	if ((flags & SCAN_DONE) && !status->scan_done) {
 		D_DEBUG(DB_REBUILD, DF_RB " rank %d is scan_done", DP_RB_RGT(rgt), rank);
 		status->scan_done = 1;
@@ -540,23 +523,20 @@ int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
 {
-	unsigned int ec_flag = iv->riv_ec_paused ? EC_PAUSED : 0;
-
 	rebuild_leader_set_update_time(rgt, iv->riv_rank);
 
-	D_DEBUG(DB_REBUILD,
-		DF_RB ": iv rank %d scan_done %d pull_done %d ec_paused %d resync dtx %u\n",
+	D_DEBUG(DB_REBUILD, DF_RB ": iv rank %d scan_done %d pull_done %d resync dtx %u\n",
 		DP_RB_RGT(rgt), iv->riv_rank, iv->riv_scan_done, iv->riv_pull_done,
-		iv->riv_ec_paused, iv->riv_dtx_resyc_version);
+		iv->riv_dtx_resyc_version);
 
 	if (!iv->riv_scan_done) {
-		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, ec_flag);
+		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version, 0);
 		return 0;
 	}
 
 	if (!is_rebuild_global_scan_done(rgt)) {
 		rebuild_leader_set_status(rgt, iv->riv_rank, iv->riv_dtx_resyc_version,
-					  SCAN_DONE | ec_flag);
+					  SCAN_DONE);
 		D_DEBUG(DB_REBUILD, DF_RB ": rank %d scan done\n", DP_RB_RGT(rgt), iv->riv_rank);
 		/* If global scan is not done, then you can not trust
 		 * pull status. But if the rebuild on that target is
@@ -946,7 +926,6 @@ rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_
 	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
 	iv.riv_global_scan_done = is_rebuild_global_scan_done(rgt);
-	iv.riv_global_ec_paused     = is_rebuild_global_ec_paused(rgt);
 	iv.riv_global_done	= rgt->rgt_abort || is_rebuild_global_done(rgt);
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_rebuild_gen	= rgt->rgt_rebuild_gen;
@@ -1574,9 +1553,6 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 
 	if (rpt->rt_global_dtx_wait_cond)
 		ABT_cond_free(&rpt->rt_global_dtx_wait_cond);
-
-	if (rpt->rt_global_ec_wait_cond)
-		ABT_cond_free(&rpt->rt_global_ec_wait_cond);
 
 	D_FREE(rpt);
 }
@@ -3056,7 +3032,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
-	ABT_cond_signal(rpt->rt_global_ec_wait_cond);
 	D_ASSERT(rpt->rt_refcount > 0);
 	rpt->rt_finishing = 1;
 	/* Wait until all ult/tasks finish and release the rpt.
@@ -3174,8 +3149,13 @@ rebuild_tgt_status_check_ult(void *arg)
 			iv.riv_ver = rpt->rt_rebuild_ver;
 			iv.riv_rebuild_gen = rpt->rt_rebuild_gen;
 			iv.riv_leader_term = rpt->rt_leader_term;
-			iv.riv_dtx_resyc_version = rpt->rt_pool->sp_dtx_resync_version;
-			iv.riv_ec_paused         = rpt->rt_ec_paused;
+			/*
+			 * Report the DTX resync version only after EC aggregation is paused on
+			 * all local targets, so the global DTX resync version computed by the
+			 * leader also works as the global EC aggregation pause barrier.
+			 */
+			iv.riv_dtx_resyc_version =
+			    rpt->rt_ec_paused ? rpt->rt_pool->sp_dtx_resync_version : 0;
 			/* Cart does not support failure recovery yet, let's
 			 * send the status to root for now. FIXME
 			 */
@@ -3314,10 +3294,6 @@ rpt_create(struct ds_pool *pool, uint32_t master_rank, uint32_t pm_ver,
 		D_GOTO(free, rc = dss_abterr2der(rc));
 
 	rc = ABT_cond_create(&rpt->rt_global_dtx_wait_cond);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(free, rc = dss_abterr2der(rc));
-
-	rc = ABT_cond_create(&rpt->rt_global_ec_wait_cond);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(free, rc = dss_abterr2der(rc));
 

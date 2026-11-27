@@ -572,7 +572,7 @@ Each rebuild operation transitions through the following states, tracked in `rgt
 
 The scan ULT runs on each participating target, on the system XS (XS 0) for each pool child.
 
-1. **EC aggregation pause.** Before the scan collective, `rebuild_scan_leader` runs `ds_cont_child_wait_ec_agg_pause()` on every local target, sets `rt_ec_paused` (reported to the leader as `riv_ec_paused`), then waits for `riv_global_ec_paused` from the leader (set once every engine is paused or scan-done) before any VOS iteration starts. See §13 for the aggregation fence contract. **RB-03 (fixed):** a local pause timeout returns `-DER_TIMEDOUT` and fails the rebuild, which is then retried; see §18.
+1. **EC aggregation pause.** Before the scan collective, `rebuild_scan_leader` runs `ds_cont_child_wait_ec_agg_pause()` on every local target, and sets `rt_ec_paused`. The engine reports its `riv_dtx_resyc_version` as 0 until `rt_ec_paused` is set, so the global DTX resync wait (§8) also acts as the global EC aggregation pause barrier: no engine starts VOS iteration before every participating engine has paused EC aggregation. The `sp_gl_dtx_resync_version` shortcut is not used for this reason. See §13 for the aggregation fence contract. **RB-03 (fixed):** a local pause timeout returns `-DER_TIMEDOUT` and fails the rebuild, which is then retried; see §18.
 
 2. **DTX orphan cleanup.** Calls `dtx_cleanup_orphan(pool_uuid, sp_dtx_resync_version)` to resolve any uncommitted distributed transactions that survived the DTX resync phase. See §8 for DTX coordination.
 
@@ -800,7 +800,7 @@ A target may finish its own scan early and have zero in-flight migrations — bu
 
 Distributed Transaction (DTX) resync ensures that any uncommitted in-flight transactions are resolved before rebuild migrates their data. The protocol is:
 
-1. Each target's status-check ULT reports its current `sp_dtx_resync_version` in `riv_dtx_resyc_version`.
+1. Each target's status-check ULT reports its current `sp_dtx_resync_version` in `riv_dtx_resyc_version`, or 0 until EC aggregation is paused on all its local targets (`rt_ec_paused`).
 2. The leader computes the global minimum across all participating ranks (excluding ranks with version skip sentinel `UINT32_MAX`), stored in `rgt_dtx_resync_version`.
 3. The leader broadcasts the global minimum via `riv_global_dtx_resyc_version` on each IV notification.
 4. On receipt, each target updates `rpt->rt_global_dtx_resync_version` and, if it now equals or exceeds the local `rt_rebuild_ver`, signals `rt_global_dtx_wait_cond` to wake the scan ULT that may be blocked waiting for DTX sync.
@@ -1338,7 +1338,7 @@ EC rebuild has additional constraints beyond replica rebuild:
 
 3. **Scan ordering.** The scanner must enumerate full stripes before partial ones to avoid parity being rebuilt with stale data.
 
-4. **EC aggregation pause.** `rebuild_scan_leader` pauses EC aggregation locally (`ds_cont_child_wait_ec_agg_pause()`) and waits for the global pause barrier (`riv_ec_paused` / `riv_global_ec_paused` via rebuild IV) before beginning VOS iteration. This ensures EC aggregation is not running concurrently with the scan, which could compute parity over partially-migrated stripes. EC aggregation update RPCs (`ds_obj_ec_agg_handler` / `ds_obj_ec_rep_handler`) are rejected with `-DER_OP_CANCELED` while `ds_pool_is_rebuilding()`, so a delayed request cannot land after the barrier. **RB-03 (fixed):** Timeout propagated as `-DER_TIMEDOUT`.
+4. **EC aggregation pause.** `rebuild_scan_leader` pauses EC aggregation locally (`ds_cont_child_wait_ec_agg_pause()`) and waits for the global pause barrier (the global DTX resync version, which each engine reports only after its local pause) before beginning VOS iteration. This ensures EC aggregation is not running concurrently with the scan, which could compute parity over partially-migrated stripes. EC aggregation update RPCs (`ds_obj_ec_agg_handler` / `ds_obj_ec_rep_handler`) are rejected with `-DER_OP_CANCELED` while `ds_pool_is_rebuilding()`, so a delayed request cannot land after the barrier. **RB-03 (fixed):** Timeout propagated as `-DER_TIMEDOUT`.
 
 5. **EC aggregation sleep during rebuild.** Even outside the scan phase, EC aggregation ULTs sleep for 18 seconds between rounds when `ds_pool_is_rebuilding()` returns true (`srv_target.c:543`), reducing interference. VOS aggregation continues normally but respects the `spc_rebuild_fence`.
 

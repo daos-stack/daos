@@ -1326,20 +1326,6 @@ rebuild_ec_agg_pause(void *data)
 	return rc;
 }
 
-/* Wait until EC aggregation is paused on all engines, reported through rebuild IV. */
-static int
-rebuild_wait_global_ec_pause(struct rebuild_tgt_pool_tracker *rpt)
-{
-	ABT_mutex_lock(rpt->rt_lock);
-	while (!rpt->rt_global_ec_paused && !rpt->rt_abort && !rpt->rt_finishing) {
-		D_INFO(DF_RB " wait for global EC aggregation pause\n", DP_RB_RPT(rpt));
-		ABT_cond_wait(rpt->rt_global_ec_wait_cond, rpt->rt_lock);
-	}
-	ABT_mutex_unlock(rpt->rt_lock);
-
-	return rpt->rt_global_ec_paused ? 0 : -DER_SHUTDOWN;
-}
-
 /**
  * Wait for pool map and setup global status, then spawn scanners for all
  * service xsteams
@@ -1351,7 +1337,11 @@ rebuild_scan_leader(void *data)
 	struct rebuild_pool_tls         *tls;
 	int                              rc;
 
-	/* Pause EC aggregation locally, rt_ec_paused is reported to the leader through IV */
+	/*
+	 * Pause EC aggregation locally. The DTX resync version is reported to the leader only
+	 * after rt_ec_paused is set, so the global DTX resync wait below is also the global
+	 * EC aggregation pause barrier.
+	 */
 	rc = ds_pool_thread_collective(rpt->rt_pool_uuid,
 				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
 				       rebuild_ec_agg_pause, rpt, 0);
@@ -1365,20 +1355,15 @@ rebuild_scan_leader(void *data)
 		dss_sleep(1000);
 	rpt->rt_ec_paused = 1;
 
-	if (rpt->rt_pool->sp_gl_dtx_resync_version >= rpt->rt_rebuild_ver) {
-		D_DEBUG(DB_REBUILD, DF_RB " sp_gl_dtx_resync_version %d exceed rt_rebuild_ver %d.",
-			DP_RB_RPT(rpt), rpt->rt_pool->sp_gl_dtx_resync_version,
-			rpt->rt_rebuild_ver);
-		if (rpt->rt_global_dtx_resync_version < rpt->rt_pool->sp_gl_dtx_resync_version)
-			rpt->rt_global_dtx_resync_version = rpt->rt_pool->sp_gl_dtx_resync_version;
-		goto do_scan;
-	} else {
-		D_DEBUG(DB_REBUILD, DF_RB " check resync %u/%u < %u\n", DP_RB_RPT(rpt),
-			rpt->rt_pool->sp_dtx_resync_version, rpt->rt_global_dtx_resync_version,
-			rpt->rt_rebuild_ver);
-	}
+	D_DEBUG(DB_REBUILD, DF_RB " check resync %u/%u < %u\n", DP_RB_RPT(rpt),
+		rpt->rt_pool->sp_dtx_resync_version, rpt->rt_global_dtx_resync_version,
+		rpt->rt_rebuild_ver);
 
-	/* Wait for dtx resync to finish */
+	/*
+	 * Wait for dtx resync to finish and EC aggregation to be paused on all engines. Do not
+	 * skip it even if sp_gl_dtx_resync_version >= rt_rebuild_ver, which does not cover the
+	 * EC aggregation pause of this rebuild.
+	 */
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 		if (!rpt->rt_abort && !rpt->rt_finishing) {
 			ABT_mutex_lock(rpt->rt_lock);
@@ -1400,7 +1385,6 @@ rebuild_scan_leader(void *data)
 		       rpt->rt_pool->sp_gl_dtx_resync_version);
 	}
 
-do_scan:
 	/*
 	 * Reintegration pre-discard runs independently of the rebuild task and can outlive
 	 * an admin stop. The stopped reintegration targets stay UP and FAIL_RECLAIM scans
@@ -1420,12 +1404,6 @@ do_scan:
 			D_INFO(DF_RB " reintegration discard finished after %u seconds, "
 				     "start fail reclaim scan\n",
 			       DP_RB_RPT(rpt), wait_secs);
-	}
-
-	rc = rebuild_wait_global_ec_pause(rpt);
-	if (rc) {
-		DL_INFO(rc, DF_RB ": shutdown rebuild", DP_RB_RPT(rpt));
-		D_GOTO(out, rc);
 	}
 
 	D_INFO(DF_RB " scan collective begin\n", DP_RB_RPT(rpt));

@@ -83,7 +83,6 @@ struct rebuild_tgt_pool_tracker {
 	uint32_t		rt_global_dtx_resync_version;
 
 	ABT_cond		rt_global_dtx_wait_cond;
-	ABT_cond                 rt_global_ec_wait_cond;
 	/* new layout version for upgrade rebuild */
 	uint32_t		rt_new_layout_ver;
 
@@ -97,9 +96,7 @@ struct rebuild_tgt_pool_tracker {
 				rt_global_scan_done:1,
 				rt_global_done:1,
 				/* EC aggregation paused on all local targets */
-				rt_ec_paused:1,
-				/* EC aggregation paused on all engines in this rebuild */
-				rt_global_ec_paused:1;
+				rt_ec_paused:1;
 	/* clang-format on */
 };
 
@@ -107,11 +104,8 @@ struct rebuild_server_status {
 	d_rank_t	rank;
 	double          last_update;
 	uint32_t	dtx_resync_version;
-	/* clang-format off */
 	uint32_t	scan_done:1,
-			pull_done:1,
-			ec_paused:1;
-	/* clang-format on */
+			pull_done:1;
 };
 
 /* Track the rebuild status globally */
@@ -334,15 +328,11 @@ struct rebuild_iv {
 	uint32_t        riv_master_rank;
 	uint32_t        riv_ver;
 	uint32_t        riv_rebuild_gen;
-	/* clang-format off */
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
 			riv_pull_done:1,
-			riv_sync:1,
-			riv_ec_paused:1,
-			riv_global_ec_paused:1;
-	/* clang-format on */
+			riv_sync:1;
 	int32_t  riv_status;
 	uint32_t riv_bukid; /* bucket ID */
 };
