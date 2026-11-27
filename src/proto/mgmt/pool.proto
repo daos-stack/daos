@@ -147,6 +147,54 @@ message PoolReintResp {
 	int32 status = 1; // DAOS error code
 }
 
+// PoolDiscardReq starts an admin-initiated discard of DOWN/DOWNOUT ranks, a
+// preparation step before their data-sync reintegration. Asynchronous on the
+// involved ranks; poll the progress with PoolDiscardQuery.
+message PoolDiscardReq {
+	string sys = 1; // DAOS system identifier
+	string id = 2; // uuid or label of the pool
+	repeated uint32 ranks = 3; // ranks to discard
+	repeated uint32 target_idx = 4; // target indexes within each rank; empty = all
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	uint32 quiesce_sec = 6; // seconds to quiesce after the discard (NVMe GC settling)
+}
+
+// PoolDiscardResp returns the acceptance state of the discard request.
+message PoolDiscardResp {
+	int32 status = 1; // DAOS error code
+}
+
+// PoolDiscardQueryReq requests the per-rank progress of an admin-initiated
+// discard.
+message PoolDiscardQueryReq {
+	string sys = 1; // DAOS system identifier
+	string id = 2; // uuid or label of the pool
+	repeated uint32 ranks = 3; // ranks to query
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+}
+
+// PoolDiscardQueryResp returns the per-rank discard progress.
+message PoolDiscardQueryResp {
+	message RankState {
+		// Phase of the local discard flow of one rank. A completed
+		// discard parks in DONE or FAILED until the engine restarts
+		// (back to NEVER) or a new discard starts over.
+		enum Phase {
+			NEVER = 0; // no discard since the engine started
+			DISCARDING = 1; // VOS discard in progress
+			QUIESCING = 2; // discard done, waiting for NVMe GC to settle
+			DONE = 3; // last discard succeeded; done_age_sec is valid
+			FAILED = 4; // last discard failed; status is valid
+		}
+		uint32 rank = 1;
+		Phase phase = 2;
+		uint64 done_age_sec = 3; // seconds since completion; only valid when phase = DONE
+		int32 status = 4; // DAOS error code; only valid when phase = FAILED
+	}
+	int32 status = 1; // DAOS error code
+	repeated RankState states = 2;
+}
+
 // ListPoolsReq represents a request to list pools on a given DAOS system.
 message ListPoolsReq {
 	string sys = 1; // DAOS system identifier

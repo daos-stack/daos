@@ -91,6 +91,8 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/PoolExclude":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDrain":                {ComponentAdmin, ComponentServer},
 		"/mgmt.MgmtSvc/PoolReintegrate":          {ComponentAdmin, ComponentServer},
+		"/mgmt.MgmtSvc/PoolDiscard":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDiscardQuery":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolEvict":                {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/PoolExtend":               {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},

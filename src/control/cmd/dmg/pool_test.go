@@ -865,6 +865,43 @@ func TestDmg_PoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Discard ranks with default quiesce",
+			"pool discard 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0,2",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDiscardReq{
+					ID:         "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:      []ranklist.Rank{0, 2},
+					TargetIdx:  []uint32{},
+					QuiesceSec: 180,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Discard ranks with target idx and no quiesce",
+			"pool discard 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 1 --target-idx 1,2 --quiesce-sec 0",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDiscardReq{
+					ID:         "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks:      []ranklist.Rank{1},
+					TargetIdx:  []uint32{1, 2},
+					QuiesceSec: 0,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query the discard progress of ranks",
+			"pool query-discard 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks 0,1",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDiscardQueryReq{
+					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Ranks: []ranklist.Rank{0, 1},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Destroy pool with force",
 			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
