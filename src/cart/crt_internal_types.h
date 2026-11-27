@@ -469,6 +469,7 @@ struct crt_bulk {
 	hg_bulk_t       hg_bulk_hdl; /** mercury bulk handle */
 	crt_context_t   crt_ctx;     /** context on which bulk is to be created  */
 	crt_bulk_perm_t bulk_perm;   /** bulk permissions */
+	d_mem_dev_t     mem_dev;     /** memory device of the buffers, host by default */
 	ATOMIC uint32_t refcount;    /** reference count for this struct */
 	bool            bound;       /** whether crt_bulk_bind() was used on it */
 	bool            deferred;    /** whether handle allocation was deferred */

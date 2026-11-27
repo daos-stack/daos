@@ -1,5 +1,6 @@
 /*
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  * (C) Copyright 2026 Google LLC
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -88,6 +89,24 @@ extern "C" {
 struct d_uuid {
 	uuid_t		uuid;
 };
+
+/** Memory type of a buffer, for transports that can register device (e.g. GPU) memory */
+typedef enum {
+	D_MEM_TYPE_HOST = 0, /**< System/host memory (default) */
+	D_MEM_TYPE_CUDA = 1, /**< NVIDIA CUDA device memory */
+	D_MEM_TYPE_ROCM = 2, /**< AMD ROCm device memory */
+	D_MEM_TYPE_ZE   = 3, /**< Intel Level Zero device memory */
+} d_mem_type_t;
+
+/**
+ * Memory device: where the buffers of a d_sg_list_t live. Local only, never encoded in an RPC.
+ */
+typedef struct {
+	/** memory type of all buffers */
+	d_mem_type_t md_type;
+	/** device ordinal as seen by the calling process, 0 for host memory */
+	uint64_t     md_device_id;
+} d_mem_dev_t;
 
 /** iovec for memory buffer */
 typedef struct {
