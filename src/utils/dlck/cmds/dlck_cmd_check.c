@@ -216,12 +216,10 @@ pool_process(struct xstream_arg *xa, struct dlck_file *file, struct checker *ck)
 	checker_fi_entry(exp_fail_locs, &fi_reenable);
 	rc = vos_pool_open_metrics(path, file->po_uuid, DLCK_POOL_OPEN_FLAGS, NULL, ck, &poh);
 	checker_fi_exit(fi_reenable);
+	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 	/** vos_pool_open_metrics() is fully instrumented, so rc is already accounted for in the
 	 * checker's status. */
 	dlck_status_set(&xa->status, &ck->ck_status);
-
-report:
-	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 	if (rc == DER_SUCCESS) {
 		conts_process(xa, poh, ck);
 		(void)vos_pool_close(poh);
@@ -229,6 +227,10 @@ report:
 	if (path != NULL) {
 		D_FREE(path);
 	}
+	return;
+
+report:
+	POOL_REPORT_RESULT(main_ck, xa->xs->tgt_id, file->po_uuid, rc, ck->ck_status.warnings_num);
 }
 
 /**

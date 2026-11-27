@@ -18,3 +18,4 @@ Check pool:
 -- Tree class... ok.
 -- Tree features... error: Unsupported features 1/3
 - error: Garbage collector's tree: DER_PROTO(-1014): 'Incompatible protocol'
+error: Check pool: DER_PROTO(-1014): 'Incompatible protocol'

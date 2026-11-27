@@ -10,3 +10,4 @@ Check pool:
 - Containers tree...
 -- Tree class... error: Unregistered class id 14
 - error: Containers tree: DER_NONEXIST(-1005): 'The specified entity does not exist'
+error: Check pool: DER_NONEXIST(-1005): 'The specified entity does not exist'

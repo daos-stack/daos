@@ -7,3 +7,4 @@ Check pool:
 - Magic... ok.
 - Version... ok.
 - UUID... error: mismatch (requested={{UUID}}, received={{UUID}})
+error: Check pool: DER_ID_MISMATCH(-2035): 'ID mismatch'

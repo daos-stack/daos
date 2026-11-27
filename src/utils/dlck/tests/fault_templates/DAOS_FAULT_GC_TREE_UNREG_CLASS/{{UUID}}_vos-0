@@ -17,3 +17,4 @@ Check pool:
 - Garbage collector's tree...
 -- Tree class... error: Unregistered class id 28
 - error: Garbage collector's tree: DER_NONEXIST(-1005): 'The specified entity does not exist'
+error: Check pool: DER_NONEXIST(-1005): 'The specified entity does not exist'

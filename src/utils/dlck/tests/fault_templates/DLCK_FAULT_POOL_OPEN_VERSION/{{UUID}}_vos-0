@@ -6,3 +6,4 @@ Check pool:
 - Open the pool: ok.
 - Magic... ok.
 - Version... error: unsupported (0x1c)
+error: Check pool: DER_DF_INCOMPT(-2023): 'Incompatible durable format version'

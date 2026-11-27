@@ -17,3 +17,4 @@ Check pool:
 - Garbage collector's tree...
 -- Tree class... error: Invalid class id: 28
 - error: Garbage collector's tree: DER_INVAL(-1003): 'Invalid parameters'
+error: Check pool: DER_INVAL(-1003): 'Invalid parameters'

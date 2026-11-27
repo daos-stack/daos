@@ -1889,11 +1889,10 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 out:
 	rc = pool_open_post(&ph, pool_df, flags, metrics, pool, ck, rc);
+	checker_print_indent_dec(ck);
+	CK_PRINTFL_RC(ck, rc, "Check pool");
 	if (rc == 0) {
 		*poh = vos_pool2hdl(pool);
-
-		checker_print_indent_dec(ck);
-		CK_PRINTFL_RC(ck, rc, "Check pool");
 	}
 
 	/* Close this local handle, if it hasn't been consumed nor already

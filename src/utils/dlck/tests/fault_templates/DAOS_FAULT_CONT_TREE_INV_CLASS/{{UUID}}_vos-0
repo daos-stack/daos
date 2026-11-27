@@ -10,3 +10,4 @@ Check pool:
 - Containers tree...
 -- Tree class... error: Invalid class id: 14
 - error: Containers tree: DER_INVAL(-1003): 'Invalid parameters'
+error: Check pool: DER_INVAL(-1003): 'Invalid parameters'

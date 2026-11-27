@@ -5,3 +5,4 @@ Check pool:
 - NVMe devices (if applicable)... ok.
 - Open the pool: ok.
 - Magic... error: invalid (0x5ca1ab1e)
+error: Check pool: DER_DF_INVAL(-2022): 'Unsupported durable format'

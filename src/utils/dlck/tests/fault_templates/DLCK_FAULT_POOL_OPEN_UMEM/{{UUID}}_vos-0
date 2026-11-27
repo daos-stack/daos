@@ -4,3 +4,4 @@ Check pool:
 	uuid: {{UUID}}
 - NVMe devices (if applicable)... ok.
 - error: Open the pool: DER_INVAL(-1003): 'Invalid parameters'
+error: Check pool: DER_INVAL(-1003): 'Invalid parameters'

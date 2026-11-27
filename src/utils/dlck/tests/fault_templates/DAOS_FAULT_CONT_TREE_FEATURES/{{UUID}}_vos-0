@@ -11,3 +11,4 @@ Check pool:
 -- Tree class... ok.
 -- Tree features... error: Unsupported features 0/0
 - error: Containers tree: DER_PROTO(-1014): 'Incompatible protocol'
+error: Check pool: DER_PROTO(-1014): 'Incompatible protocol'
