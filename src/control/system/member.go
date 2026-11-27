@@ -1,6 +1,6 @@
 //
 // (C) Copyright 2019-2023 Intel Corporation.
-// (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+// (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -171,6 +172,12 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 			MemberStateUnresponsive: true,
 		},
 	}[ms][to]
+}
+
+// StartsOnBoot reports whether an engine in this state starts again when
+// its daos_server restarts.
+func (ms MemberState) StartsOnBoot() bool {
+	return ms != MemberStateAdminExcluded
 }
 
 // MemberStates2Mask returns a state bitmask and a flag indicating whether to include the "Unknown"
@@ -411,17 +418,35 @@ func (mrs MemberResults) Errors() error {
 	if err != nil {
 		return err
 	}
-
-	for _, mr := range mrs {
-		if mr.Errored {
-			rs.Add(mr.Rank)
-		}
+	hs, err := hostlist.CreateSet("")
+	if err != nil {
+		return err
 	}
 
+	for _, mr := range mrs {
+		if !mr.Errored {
+			continue
+		}
+		if mr.Rank == ranklist.NilRank {
+			if _, err := hs.Insert(mr.Addr); err != nil {
+				return err
+			}
+			continue
+		}
+		rs.Add(mr.Rank)
+	}
+
+	var msgs []string
 	if rs.Count() > 0 {
-		return errors.Errorf("failed %s %s",
-			english.PluralWord(rs.Count(), "rank", "ranks"),
-			rs.String())
+		msgs = append(msgs, fmt.Sprintf("failed %s %s",
+			english.PluralWord(rs.Count(), "rank", "ranks"), rs))
+	}
+	if hs.Count() > 0 {
+		msgs = append(msgs, fmt.Sprintf("failed %s %s",
+			english.PluralWord(hs.Count(), "host", "hosts"), hs))
+	}
+	if len(msgs) > 0 {
+		return errors.New(strings.Join(msgs, "; "))
 	}
 
 	return nil

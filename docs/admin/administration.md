@@ -1030,6 +1030,38 @@ specified on the command line:
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
+### Engine Startup
+
+After the first `dmg storage format`, engines wait for
+`dmg system initialize` (or `dmg system extend` for hosts added later). When
+`daos_server` restarts, it restarts the engines whose ranks are members of the
+system, including ranks that were stopped with `dmg system stop`. A rank
+excluded with `dmg system exclude` is not restarted.
+
+- Initialize a System:
+
+```bash
+$ dmg system initialize -l ${storage_nodes} [--timeout=<duration>]
+```
+
+Starts the engines on the listed hosts (or the hosts in the dmg configuration
+file) and waits for them to join. With `--timeout`, hosts whose engines had
+not joined when it expired are named in the output and the command may be
+rerun once they are fixed; without it, the command waits until interrupted.
+A host that has not been formatted is reported as an error
+(`N engines awaiting format`) and the other hosts proceed.
+
+- Extend a System:
+
+```bash
+$ dmg system extend -l ${new_storage_nodes} [--timeout=<duration>]
+```
+
+The same operation for hosts added to a system that already has pools.
+
+`dmg storage format --replace` starts the engine it formats, so the rank it
+replaces rejoins without a further command.
+
 ### Engine Auto-Restart
 
 DAOS automatically restarts engines that self-terminate after being excluded from
@@ -1462,7 +1494,8 @@ stopped by running `dmg system stop` (if necessary with the `--force` flag).
 The erase operation will destroy any pools that may still exist, and will
 unconfigure the storage. It will not stop the daos\_server process, so
 the `dmg` command can still be used. For example, the system can be
-formatted again by running `dmg storage format`.
+formatted again by running `dmg storage format`, followed by
+`dmg system initialize` to start the engines.
 
 !!! note
     Note that `dmg system erase` does not currently reset the SCM.
@@ -1557,19 +1590,20 @@ To add a new server to an existing DAOS system, one should install:
 
 The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then start the daos\_server via systemd and format the new server via
-dmg as follows:
+Then start the daos\_server via systemd, format the new server and start its
+engines via dmg as follows:
 
 ```
 $ dmg storage format -l ${new_storage_node}
+$ dmg system extend -l ${new_storage_node}
 ```
 
 `new_storage_node` should be replaced with the hostname or the IP address of the
 new storage node (comma separated list or range of hosts for multiple nodes)
 to be added.
 
-Upon completion of the format operation, the new storage nodes will join
-the system (this can be checked with `dmg system query -v`).
+`dmg system extend` returns once the new storage nodes have joined the system
+(this can be checked with `dmg system query -v`).
 
 !!! note
     New pools created after the extension will automatically use the newly added

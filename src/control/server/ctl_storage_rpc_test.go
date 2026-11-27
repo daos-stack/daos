@@ -1958,6 +1958,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		expErr           error
 		reformat         bool // indicates setting of reformat parameter
 		replace          bool // indicates setting of replace parameter
+		expStartReady    bool // instances are released from the start hold
 	}{
 		"nil request": {
 			nilReq: true,
@@ -2119,12 +2120,13 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			},
 		},
 		"nvme and dcpm; replace set": {
-			sMounts: []string{"/mnt/daos"},
-			sClass:  storage.ClassDcpm,
-			sDevs:   []string{"dev/pmem0"},
-			bClass:  storage.ClassNvme,
-			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
-			replace: true,
+			sMounts:       []string{"/mnt/daos"},
+			sClass:        storage.ClassDcpm,
+			sDevs:         []string{"dev/pmem0"},
+			bClass:        storage.ClassNvme,
+			bDevs:         [][]string{{mockNvmeController0.PciAddr}},
+			replace:       true,
+			expStartReady: true,
 			bmbcs: []*bdev.MockBackendConfig{
 				{
 					ScanRes: &storage.BdevScanResponse{
@@ -2457,7 +2459,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				{mockNvmeController0.PciAddr},
 				{mockNvmeController1.PciAddr},
 			},
-			replace: true,
+			replace:       true,
+			expStartReady: true,
 			// One for each engine.
 			bmbcs: []*bdev.MockBackendConfig{
 				{
@@ -2649,6 +2652,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 				ei := NewEngineInstance(log, esp, nil, runner, nil)
 				ei.ready.Store(tc.instancesStarted)
+				ei.holdStart(func() {}) // every format is followed by a hold
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
@@ -2776,6 +2780,14 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
 						tc.expResp.Mrets, resp.Mrets)
 				}
+			}
+			for _, ei := range instances {
+				released := false
+				select {
+				case released = <-ei.(*EngineInstance).startReady:
+				default:
+				}
+				test.AssertEqual(t, tc.expStartReady, released, "start hold released")
 			}
 		})
 	}

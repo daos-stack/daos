@@ -216,6 +216,7 @@ while [[ $line != *started\ on\ rank\ 0* ]] && [ "$SECONDS" -lt "$deadline" ]; d
     stdout+=("$line")
     if [[ $line == SCM\ format\ required\ on\ instance\ * ]]; then
         dmg storage format -l "$HOSTNAME" --force
+        dmg system initialize -l "$HOSTNAME" --timeout=2m
         if ! dmg system query -v; then
             sleep 5
             dmg system query -v || true

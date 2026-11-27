@@ -21,7 +21,8 @@ for more detailed explanations about each step.
 8. Use `dmg config generate` to generate the config file that contains PMEM and NVMe.
 9. Define the certificate files in the server config.
 10. Start server with the generated config file.
-11. Check that the server is waiting for SCM format. Call `dmg storage format`.
+11. Check that the server is waiting for SCM format. Call `dmg storage format`, then
+`dmg system initialize`.
 12. Create a small pool; E.g., ~500MB.
 13. Define the certificate files in the agent config.
 14. Start agent.
@@ -49,8 +50,8 @@ E.g., `mgmt_svc_replicas`, `class`.
 NVMe.
 9. Distribute the config file to `/etc/daos` of all hosts.
 10. Start server on all the hosts.
-11. Check that the server is waiting for SCM format. Call `dmg storage format` against all
-server hosts.
+11. Check that the server is waiting for SCM format. Call `dmg storage format` and then
+`dmg system initialize` against all server hosts.
 12. Check that the servers are running on all the hosts with `dmg system query
 --verbose`.
 13. Create a small pool; E.g., ~500MB.

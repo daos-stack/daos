@@ -665,8 +665,13 @@ class DaosServerManager(SubprocessManager):
             self.manager.assign_hosts(orig_hosts)
             self.manager.job.update_pattern(orig_pattern, orig_count)
 
-    def start(self):
-        """Start the server through the job manager."""
+    def start(self, extend=False):
+        """Start the server through the job manager.
+
+        Args:
+            extend (bool, optional): whether these hosts join a system that is already
+                initialized. Defaults to False.
+        """
         # Prepare the servers
         self.prepare()
 
@@ -680,6 +685,15 @@ class DaosServerManager(SubprocessManager):
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         self.storage_format()
+
+        # Start the engines and wait for them to join
+        timeout = f"{self.manager.job.pattern_timeout.value}s"
+        if extend:
+            self.log.info("<SERVER> Extending the system to hosts: <%s>", self.dmg.hostlist)
+            self.dmg.system_extend(hosts=self._hosts, timeout=timeout)
+        else:
+            self.log.info("<SERVER> Initializing hosts: <%s>", self.dmg.hostlist)
+            self.dmg.system_initialize(hosts=self._hosts, timeout=timeout)
 
         # Wait for all the engines to start
         self.detect_engine_start()

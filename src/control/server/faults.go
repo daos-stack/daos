@@ -211,6 +211,22 @@ func FaultRankAdminExcluded(ranks ranklist.RankList) *fault.Fault {
 	)
 }
 
+func FaultSystemInitialized(numPools int) *fault.Fault {
+	return serverFault(
+		code.ServerSystemInitialized,
+		fmt.Sprintf("system already initialized (%s)", english.Plural(numPools, "pool", "")),
+		"use dmg system extend to add hosts to an initialized system",
+	)
+}
+
+func FaultSystemNotInitialized() *fault.Fault {
+	return serverFault(
+		code.ServerSystemNotInitialized,
+		"system has no members",
+		"use dmg system initialize to start a new system",
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",

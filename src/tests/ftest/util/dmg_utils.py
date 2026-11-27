@@ -1390,6 +1390,44 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("system", "set-prop"), properties=properties)
 
+    def system_initialize(self, hosts=None, timeout=None):
+        """Start the engines on the formatted hosts and wait for them to join.
+
+        Args:
+            hosts (NodeSet, optional): hosts whose engines to start. Defaults to None, which
+                uses the dmg host list.
+            timeout (str, optional): time to wait for the engines to join, e.g. "2m".
+                Defaults to None, which waits until the engines join.
+
+        Raises:
+            CommandFailure: if the dmg system initialize command fails.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        """
+        return self._get_result(("system", "initialize"), host_list=hosts, timeout=timeout)
+
+    def system_extend(self, hosts=None, timeout=None):
+        """Start the engines on newly formatted hosts and wait for them to join.
+
+        Args:
+            hosts (NodeSet, optional): hosts whose engines to start. Defaults to None, which
+                uses the dmg host list.
+            timeout (str, optional): time to wait for the engines to join, e.g. "2m".
+                Defaults to None, which waits until the engines join.
+
+        Raises:
+            CommandFailure: if the dmg system extend command fails.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        """
+        return self._get_result(("system", "extend"), host_list=hosts, timeout=timeout)
+
     def system_start(self, ranks=None, ignore_admin_excluded=False):
         """Start the system.
 

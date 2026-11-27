@@ -140,6 +140,9 @@ class DmgSystemReformatTest(TestWithServers):
                 count += 1
                 time.sleep(10)
 
+        self.log.info("Perform dmg system initialize on all system ranks:")
+        dmg.system_initialize()
+
         # Check that engine starts up again on every host, not just the last one, since
         # a multi-replica MS configuration spans more than one host.
         self.log.info("<SERVER> Waiting for the engines to start")

@@ -15,6 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/events"
@@ -55,6 +56,65 @@ func (ei *EngineInstance) format(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+var errStartAborted = errors.New("engine start aborted")
+
+// awaitStart blocks a held engine start until NotifyStartReady() releases it
+// or abortStart() sends it back to format.
+func (ei *EngineInstance) awaitStart(ctx context.Context) error {
+	if !ei.waitStart.Load() {
+		return nil
+	}
+
+	released := func(start bool) error {
+		if !start {
+			return errStartAborted
+		}
+		ei.waitStart.SetFalse()
+		return nil
+	}
+
+	// A format with --replace releases the engine before it gets here.
+	select {
+	case start := <-ei.startReady:
+		return released(start)
+	default:
+	}
+
+	ei.log.Infof("%s instance %d awaiting start", build.DataPlaneName, ei.Index())
+	ei.onAwaitStart()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case start := <-ei.startReady:
+		return released(start)
+	}
+}
+
+// NotifyStartReady releases a held engine start, allowing it to proceed.
+func (ei *EngineInstance) NotifyStartReady() {
+	ei.Lock()
+	defer ei.Unlock()
+
+	// A parked abort wins; see abortStart.
+	select {
+	case ei.startReady <- true:
+	default:
+	}
+}
+
+// abortStart sends a held engine back to format.
+func (ei *EngineInstance) abortStart() {
+	ei.Lock()
+	defer ei.Unlock()
+
+	// Drain any previous release so that the next awaitStart() will block.
+	select {
+	case <-ei.startReady:
+	default:
+	}
+	ei.startReady <- false
 }
 
 func (ei *EngineInstance) initIncarnationFromSuperblock() error {
@@ -166,8 +226,15 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 		ei.log.Debugf("instance %d: no rank (%s)", engineIdx, err)
 	}
 
+	// Only a requested stop reports a clean exit as stopped.
+	if exitErr == nil && !ei.stopRequested.Load() {
+		exitErr = errors.New("exited without a stop request")
+	}
+	// Don't overwrite an existing error, as we want to return the actual error to the admin.
 	ei.Lock()
-	ei._lastErr = exitErr
+	if ei._lastErr == nil {
+		ei._lastErr = exitErr
+	}
 	ei.Unlock()
 
 	details := []string{fmt.Sprintf("instance %d", engineIdx)}
@@ -209,20 +276,30 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 		}
 	}()
 
-	// Reinitialize the storageReady channel (and its closed-guard) for this engine start
-	// attempt. The channel may have been closed by a previous format operation and immediately
-	// returning when reading from closed channel would bypass the format wait in
-	// awaitStorageReady(). Giving each attempt its own channel object also ensures that a stray
-	// NotifyStorageReady() call left over from a previous, already-abandoned attempt (e.g. one
-	// that exited via ctx.Done() in awaitStorageReady()) can only ever signal that old channel.
-	ei.Lock()
-	ei.storageReady = make(chan struct{})
-	ei._storageReadyClosed = false
-	ei.Unlock()
+	for {
+		// Reinitialize the storageReady channel (and its closed-guard) for this engine start
+		// attempt. The channel may have been closed by a previous format operation and immediately
+		// returning when reading from closed channel would bypass the format wait in
+		// awaitStorageReady(). Giving each attempt its own channel object also ensures that a stray
+		// NotifyStorageReady() call left over from a previous, already-abandoned attempt (e.g. one
+		// that exited via ctx.Done() in awaitStorageReady()) can only ever signal that old channel.
+		ei.Lock()
+		ei.storageReady = make(chan struct{})
+		ei._storageReadyClosed = false
+		ei.Unlock()
 
-	if err = ei.format(ctx); err != nil {
+		if err = ei.format(ctx); err != nil {
+			return
+		}
+		if err = ei.awaitStart(ctx); err != errStartAborted {
+			break
+		}
+	}
+	if err != nil {
 		return
 	}
+
+	ei.stopRequested.SetFalse()
 
 	// A ready notification still queued here came from an engine that has since exited.
 	select {
@@ -252,6 +329,9 @@ func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.Ru
 // requestStart makes a request to (re-)start the engine, and blocks
 // until the request is received.
 func (ei *EngineInstance) requestStart(ctx context.Context) {
+	ei.Lock()
+	ei._lastErr = nil
+	ei.Unlock()
 	select {
 	case <-ctx.Done():
 	case ei.startRequested <- true:
@@ -309,6 +389,7 @@ func (ei *EngineInstance) Run(ctx context.Context) {
 
 // Stop sends signal to stop EngineInstance runner (nonblocking).
 func (ei *EngineInstance) Stop(signal os.Signal) error {
+	ei.stopRequested.SetTrue()
 	ei.runner.Signal(signal)
 	return nil
 }

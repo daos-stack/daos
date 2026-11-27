@@ -535,6 +535,8 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 
 			hn, _ := os.Hostname()
 			engine.OnAwaitFormat(createPublishFormatRequiredFunc(tly1.fakePublish, hn))
+			engine.holdStart(func() {})
+			engine.waitStart.SetFalse() // as after a previous start
 
 			ctx, cancel := context.WithTimeout(test.Context(t), time.Millisecond*100)
 			defer cancel()
@@ -542,8 +544,10 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			gotErr := engine.awaitStorageReady(ctx)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil || tc.expNoWait == true {
+				test.AssertFalse(t, engine.isAwaitingStart(), "hold re-armed without a format")
 				return
 			}
+			test.AssertTrue(t, engine.isAwaitingStart(), "hold not re-armed by the format requirement")
 
 			select {
 			case <-tly1.finished:

@@ -86,6 +86,7 @@ class DaosPrivHelperTest(TestWithServers):
         result = self.server_managers[0].storage_format()
         if result is None:
             self.fail("Failed to format storage")
+        self.server_managers[0].dmg.system_initialize()
 
         # Verify format success when all the daos_engine start.
         # Use dmg to detect server start.

@@ -255,6 +255,7 @@ file system and to create a DAOS pool using all the available storage.
 ```bash
 docker compose --file utils/docker/examples/docker-compose.admin.yml run --rm daos_admin
 dmg storage format
+dmg system initialize
 dmg system query --verbose
 dmg pool create --size=100% --user=<DAOS_CLIENT_UID> --group=<DAOS_CLIENT_GID> <POOL NAME>
 dmg pool query <POOL NAME>
@@ -277,6 +278,7 @@ filesystem and to create a DAOS pool using all the available storage.
 bash utils/docker/examples/deploy-docker_stack.sh utils/docker/examples/docker-stack.admin.yml
 docker exec -ti <DAOS ADMIN DOCKER CONTAINER ID> bash
 dmg storage format
+dmg system initialize
 dmg system query --verbose
 dmg pool create --size=100% --user=<DAOS_CLIENT_UID> --group=<DAOS_CLIENT_GID> <POOL NAME>
 dmg pool query <POOL NAME>

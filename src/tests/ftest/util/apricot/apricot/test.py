@@ -1324,12 +1324,13 @@ class TestWithServers(TestWithoutServers):
 
         return status
 
-    def _start_manager_list(self, name, manager_list):
+    def _start_manager_list(self, name, manager_list, **kwargs):
         """Start each manager in the specified list.
 
         Args:
             name (str): manager name
             manager_list (list): list of SubprocessManager objects to start
+            kwargs (dict): arguments for each manager's start method
         """
         # We probably want to do this parallel if end up with multiple managers
         for manager in manager_list:
@@ -1337,7 +1338,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting %s: group=%s, hosts=%s, config=%s",
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
-            manager.start()
+            manager.start(**kwargs)
 
     def _list_server_manager_info(self):
         """Display information about the running servers."""
@@ -1854,4 +1855,4 @@ class TestWithServers(TestWithoutServers):
             self.hostfile_servers_slots,
             mgmt_svc_replicas
         )
-        self._start_manager_list("server", [self.server_managers[-1]])
+        self._start_manager_list("server", [self.server_managers[-1]], extend=True)
