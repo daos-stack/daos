@@ -8,6 +8,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <stdint.h>
 #include <string.h>
 
 #include "ut_mem_mock.h"
