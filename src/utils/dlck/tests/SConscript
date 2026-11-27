@@ -131,7 +131,6 @@ def build_dlck_engine_ut(henv):
         'ut_dlck_xstream_mock.c',
         'ut_mem_mock.c',
         '../dlck_engine.c',
-        '../dlck_engine_internal.c',
     ]
     henv.d_test_program('dlck_engine_ut', srcs, LIBS=libs)
 
@@ -156,7 +155,6 @@ def build_dlck_test_helper(henv):
         '../dlck_args_parse.c',
         '../dlck_engine.c',
         '../dlck_engine_exec_all.c',
-        '../dlck_engine_internal.c',
         '../dlck_xstream.c',
         '../dlck_pool.c',
         '../dlck_tls.c',
