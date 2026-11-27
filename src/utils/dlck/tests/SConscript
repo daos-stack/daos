@@ -136,38 +136,6 @@ def build_dlck_engine_ut(henv):
     henv.d_test_program('dlck_engine_ut', srcs, LIBS=libs)
 
 
-def build_dlck_xstream_ut(henv):
-    """Build dlck_xstream_ut"""
-    henv.Append(OBJPREFIX="dlck_xstream_ut_")
-    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
-    henv.AppendUnique(CPPDEFINES=['DLCK_XSTREAM_UNIT_TEST'])
-    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc', '-Wl,--wrap=d_free',
-                                 '-Wl,--wrap=ABT_xstream_create',
-                                 '-Wl,--wrap=ABT_xstream_get_main_pools',
-                                 '-Wl,--wrap=ABT_xstream_free', '-Wl,--wrap=ABT_thread_join',
-                                 '-Wl,--wrap=ABT_thread_free', '-Wl,--wrap=ABT_thread_yield',
-                                 '-Wl,--wrap=ABT_pool_is_empty',
-                                 '-Wl,--wrap=ABT_eventual_create',
-                                 '-Wl,--wrap=ABT_eventual_free', '-Wl,--wrap=ABT_eventual_set',
-                                 '-Wl,--wrap=ABT_eventual_test',
-                                 '-Wl,--wrap=bio_nvme_configured', '-Wl,--wrap=bio_nvme_poll',
-                                 '-Wl,--wrap=bio_xsctxt_alloc', '-Wl,--wrap=bio_xsctxt_free',
-                                 '-Wl,--wrap=dss_tls_init', '-Wl,--wrap=dss_tls_fini',
-                                 '-Wl,--wrap=dss_tls_get'])
-    henv.require('argobots', 'cmocka')
-
-    libs = ['gurt', 'daos_common_pmem', 'cmocka', 'uuid', 'abt', 'pthread']
-    srcs = [
-        'dlck_xstream_ut.c',
-        'ut_abt_mock.c',
-        'ut_dlck_abt_mock.c',
-        'ut_dlck_daos_mock.c',
-        'ut_mem_mock.c',
-        '../dlck_xstream.c',
-    ]
-    henv.d_test_program('dlck_xstream_ut', srcs, LIBS=libs)
-
-
 def build_dlck_test_helper(henv):
     """Build dlck_test_helper"""
     henv.Append(OBJPREFIX="dlck_ut_helper_")
@@ -200,6 +168,38 @@ def build_dlck_test_helper(henv):
         '../../../mgmt/mgmt_common.c',
     ]
     henv.d_test_program('dlck_test_helper', srcs, LIBS=libs)
+
+
+def build_dlck_xstream_ut(henv):
+    """Build dlck_xstream_ut"""
+    henv.Append(OBJPREFIX="dlck_xstream_ut_")
+    henv.Append(CPPPATH=[Dir('../../../').srcnode()])
+    henv.AppendUnique(CPPDEFINES=['DLCK_XSTREAM_UNIT_TEST'])
+    henv.AppendUnique(LINKFLAGS=['-Wl,--wrap=d_calloc', '-Wl,--wrap=d_free',
+                                 '-Wl,--wrap=ABT_xstream_create',
+                                 '-Wl,--wrap=ABT_xstream_get_main_pools',
+                                 '-Wl,--wrap=ABT_xstream_free', '-Wl,--wrap=ABT_thread_join',
+                                 '-Wl,--wrap=ABT_thread_free', '-Wl,--wrap=ABT_thread_yield',
+                                 '-Wl,--wrap=ABT_pool_is_empty',
+                                 '-Wl,--wrap=ABT_eventual_create',
+                                 '-Wl,--wrap=ABT_eventual_free', '-Wl,--wrap=ABT_eventual_set',
+                                 '-Wl,--wrap=ABT_eventual_test',
+                                 '-Wl,--wrap=bio_nvme_configured', '-Wl,--wrap=bio_nvme_poll',
+                                 '-Wl,--wrap=bio_xsctxt_alloc', '-Wl,--wrap=bio_xsctxt_free',
+                                 '-Wl,--wrap=dss_tls_init', '-Wl,--wrap=dss_tls_fini',
+                                 '-Wl,--wrap=dss_tls_get'])
+    henv.require('argobots', 'cmocka')
+
+    libs = ['gurt', 'daos_common_pmem', 'cmocka', 'uuid', 'abt', 'pthread']
+    srcs = [
+        'dlck_xstream_ut.c',
+        'ut_abt_mock.c',
+        'ut_dlck_abt_mock.c',
+        'ut_dlck_daos_mock.c',
+        'ut_mem_mock.c',
+        '../dlck_xstream.c',
+    ]
+    henv.d_test_program('dlck_xstream_ut', srcs, LIBS=libs)
 
 
 def scons():

@@ -171,9 +171,9 @@ dlck_xstream_init_ult(void *arg)
 int
 dlck_xstream_init(struct dlck_xstream *xs)
 {
-	ABT_thread      init_ult;
-	int             rc;
-	int             rc_abt;
+	ABT_thread init_ult;
+	int        rc;
+	int        rc_abt;
 
 	rc = dlck_ult_create(xs->pool, dlck_xstream_init_ult, xs, &init_ult);
 	if (rc != DER_SUCCESS) {
@@ -244,9 +244,9 @@ dlck_xstream_fini_ult(void *arg)
 void
 dlck_xstream_stop_all_no_error(struct dlck_xstream *xss, unsigned targets)
 {
-	ABT_thread      fini_ult;
-	int             rc;
-	int             rc_abt;
+	ABT_thread fini_ult;
+	int        rc;
+	int        rc_abt;
 
 	for (unsigned i = 0; i <= targets; ++i) {
 		rc = dlck_ult_create(xss[i].pool, dlck_xstream_fini_ult, &xss[i], &fini_ult);
@@ -265,10 +265,10 @@ dlck_xstream_stop_all_no_error(struct dlck_xstream *xss, unsigned targets)
 int
 dlck_xstream_stop(struct dlck_xstream *xs)
 {
-	ABT_thread      fini_ult;
-	ABT_bool        is_empty;
-	int             rc;
-	int             rc_abt;
+	ABT_thread fini_ult;
+	ABT_bool   is_empty;
+	int        rc;
+	int        rc_abt;
 
 	rc = dlck_ult_create(xs->pool, dlck_xstream_fini_ult, xs, &fini_ult);
 	if (rc != DER_SUCCESS) {

@@ -10,16 +10,16 @@
 #include "dlck_engine.h"
 
 struct dlck_exec {
-	arg_alloc_fn_t   arg_alloc_fn;
-	void            *arg_alloc_fn_arg;
-	arg_free_fn_t    arg_free_fn;
-	void            *arg_free_fn_arg;
-	dlck_ult_func    exec_one;
-	struct checker  *ck;
-	unsigned         targets;
-	ABT_thread      *ults;
-	void           **ult_args;
-	bool             join_fail;
+	arg_alloc_fn_t  arg_alloc_fn;
+	void           *arg_alloc_fn_arg;
+	arg_free_fn_t   arg_free_fn;
+	void           *arg_free_fn_arg;
+	dlck_ult_func   exec_one;
+	struct checker *ck;
+	unsigned        targets;
+	ABT_thread     *ults;
+	void          **ult_args;
+	bool            join_fail;
 };
 
 /**
