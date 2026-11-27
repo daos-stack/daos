@@ -137,6 +137,7 @@ const (
 	ClientFormatRunningSystem
 	ClientRpcTimeout
 	ClientConfigVMDImbalance
+	ClientConnectionNetUnreachable
 )
 
 // server fault codes

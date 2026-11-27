@@ -946,6 +946,12 @@ func TestControl_checkFormatReq(t *testing.T) {
 				MockMSResponse("replica", system.ErrUninitialized, nil),
 			},
 		},
+		"replica network unreachable": {
+			reqHosts: []string{"replica"},
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", FaultConnectionNetUnreachable("replica"), nil),
+			},
+		},
 		"system query fails": {
 			reqHosts: []string{"replica"},
 			responses: []*UnaryResponse{

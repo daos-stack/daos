@@ -1672,6 +1672,7 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 		"system unavailable":   system.ErrRaftUnavail,
 		"connection closed":    FaultConnectionClosed(""),
 		"connection refused":   FaultConnectionRefused(""),
+		"network unreachable":  FaultConnectionNetUnreachable(""),
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -1693,6 +1694,28 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 			if diff := cmp.Diff(expResp, gotResp, defResCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SystemJoin_NonRetryableErrors(t *testing.T) {
+	for name, testErr := range map[string]error{
+		"connection bad host": FaultConnectionBadHost("badhost"),
+		"connection no route": FaultConnectionNoRoute("10.0.0.1"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", testErr, nil),
+					MockMSResponse("", nil, &mgmtpb.JoinResp{Rank: 42}),
+				},
+			})
+
+			_, gotErr := SystemJoin(test.Context(t), client, &SystemJoinReq{})
+			test.CmpErr(t, testErr, gotErr)
 		})
 	}
 }
@@ -2101,6 +2124,7 @@ func TestControl_SystemSelfHealEval_RetryableErrors(t *testing.T) {
 		"leader step-up":         system.ErrLeaderStepUpInProgress,
 		"connection closed":      FaultConnectionClosed(""),
 		"connection refused":     FaultConnectionRefused(""),
+		"network unreachable":    FaultConnectionNetUnreachable(""),
 		"not leader":             &system.ErrNotLeader{LeaderHint: "host1", Replicas: []string{"host2"}},
 		"not replica":            &system.ErrNotReplica{Replicas: []string{"host1", "host2"}},
 		"data plane not started": &fault.Fault{Code: code.ServerDataPlaneNotStarted},
