@@ -20,7 +20,7 @@ from os.path import join
 
 from .base import NLTestFail, NLTestIlZeroCall, get_inc_id, set_active_test, umount
 from .client import DaosCont, DaosPool, ValgrindHelper, run_daos_cmd
-from .config import get_base_env
+from .config import get_base_env, il_preload
 from .logging_utils import log_test
 
 
@@ -119,6 +119,7 @@ class DFuse():
             cmd = []
 
         cmd.extend(self.valgrind.get_cmd_prefix())
+        self.valgrind.add_memcheck_env(my_env)
 
         cmd.extend([dfuse_bin, '--mountpoint', self.dir, '--foreground'])
 
@@ -227,8 +228,10 @@ class DFuse():
         try:
             ret = self._sp.wait(timeout=20)
             print(f'rc from dfuse {ret}')
-            if ret == 42:
-                self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
+            if self.valgrind.found_errors(ret):
+                self.conf.wf.add_test_case(str(self),
+                                           failure=f'{self.conf.memcheck_tool} errors',
+                                           output=ret)
                 self.conf.valgrind_errors = True
             elif ret != 0:
                 fatal_errors = True
@@ -282,7 +285,7 @@ class DFuse():
         with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
             log_name = log_file.name
         my_env['D_LOG_FILE'] = log_name
-        my_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
+        my_env['LD_PRELOAD'] = il_preload(self.conf, 'libioil.so')
         my_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         my_env['D_IL_REPORT'] = '2'
         if self.conf.args.client_debug:
