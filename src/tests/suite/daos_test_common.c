@@ -706,7 +706,7 @@ int test_make_dirs(char *dir, mode_t mode)
 d_rank_t ranks_to_kill[MAX_KILLS];
 
 bool
-test_runable(test_arg_t *arg, unsigned int required_nodes)
+test_runnable(test_arg_t *arg, unsigned int required_nodes)
 {
 	int	i;
 	int	runable = 1;
