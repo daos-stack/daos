@@ -5286,7 +5286,7 @@ pool_list_cont_handler(crt_rpc_t *rpc, int handler_version)
 	}
 
 	/* Call container service to get the list */
-	rc = ds_cont_list(in->plci_op.pi_uuid, true /* include_destroying */, &cont_buf, &ncont);
+	rc = ds_cont_list(in->plci_op.pi_uuid, false /* include_destroying */, &cont_buf, &ncont);
 	if (rc != 0) {
 		D_GOTO(out_svc, rc);
 	} else if ((ncont_in > 0) && (ncont > ncont_in)) {

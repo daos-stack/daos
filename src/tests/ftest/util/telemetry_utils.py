@@ -166,6 +166,7 @@ class TelemetryUtils():
         "engine_pool_vos_cache_page_miss",
         "engine_pool_vos_cache_page_ne"]
     ENGINE_POOL_SVC_METRICS = [
+        "engine_pool_svc_cont_destroyer_tasks",
         "engine_pool_svc_degraded_ranks",
         "engine_pool_svc_disabled_targets",
         "engine_pool_svc_draining_targets",
