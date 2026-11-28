@@ -140,6 +140,29 @@ test_d_errstr(void **state)
 }
 
 void
+test_d_errno_conversion(void **state)
+{
+	int err;
+	int der;
+
+	for (err = 1; err < 256; err++) {
+		der = d_errno2der(err);
+		if (der == -DER_MISC || err == EACCES || err == EDQUOT)
+			continue;
+		assert_int_equal(d_der2errno(der), err);
+	}
+
+	assert_int_equal(d_der2errno(-DER_NO_HDL), EBADF);
+	assert_int_equal(d_der2errno(-DER_NOSYS), ENOSYS);
+	assert_int_equal(d_der2errno(0), 0);
+	assert_int_equal(d_der2errno(DER_INVAL), EINVAL);
+	assert_int_equal(d_der2errno(-DER_MISC), EIO);
+	assert_int_equal(d_errno2der(0), 0);
+	assert_int_equal(d_errno2der(EHOSTUNREACH), -DER_UNREACH);
+	assert_int_equal(d_errno2der(EALREADY), -DER_ALREADY);
+}
+
+void
 test_d_errdesc(void **state)
 {
 	const char *value;
@@ -2867,6 +2890,7 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_time),
 	    cmocka_unit_test(test_d_errstr),
 	    cmocka_unit_test(test_d_errdesc),
+	    cmocka_unit_test(test_d_errno_conversion),
 	    cmocka_unit_test(test_gurt_list),
 	    cmocka_unit_test(test_gurt_hlist),
 	    cmocka_unit_test(test_binheap),

@@ -11,6 +11,8 @@
 #ifndef __DAOS_ERRNO_H__
 #define __DAOS_ERRNO_H__
 
+#include <errno.h>
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -265,6 +267,74 @@ d_errstr(int errnum);
  */
 const char *
 d_errdesc(int errnum);
+
+/** Convert a system errno to the closest DER_* error code.
+ *
+ * \param[in]	err	System error code
+ *
+ * \return	Corresponding negative DER_* error code, or -DER_MISC if there is none
+ */
+static inline int
+d_errno2der(int err)
+{
+	switch (err) {
+	case 0:
+		return 0;
+	case EPERM:
+	case EACCES:
+		return -DER_NO_PERM;
+	case ENOMEM:
+		return -DER_NOMEM;
+	case EDQUOT:
+	case ENOSPC:
+		return -DER_NOSPACE;
+	case EEXIST:
+		return -DER_EXIST;
+	case ENOENT:
+		return -DER_NONEXIST;
+	case ECANCELED:
+		return -DER_CANCELED;
+	case EBUSY:
+		return -DER_BUSY;
+	case EOVERFLOW:
+		return -DER_OVERFLOW;
+	case EBADF:
+		return -DER_NO_HDL;
+	case ENOSYS:
+		return -DER_NOSYS;
+	case ETIMEDOUT:
+		return -DER_TIMEDOUT;
+	case EWOULDBLOCK:
+		return -DER_AGAIN;
+	case EPROTO:
+		return -DER_PROTO;
+	case EINVAL:
+		return -DER_INVAL;
+	case ENOTDIR:
+		return -DER_NOTDIR;
+	case EIO:
+		return -DER_IO;
+	case EINPROGRESS:
+		return -DER_INPROGRESS;
+	case ENOTSUP:
+		return -DER_NOTSUPPORTED;
+	case EHOSTUNREACH:
+		return -DER_UNREACH;
+	case EALREADY:
+		return -DER_ALREADY;
+	default:
+		return -DER_MISC;
+	}
+}
+
+/** Convert a DER_* error code to the closest system errno.
+ *
+ * \param[in]	err	Negative DER_* error code
+ *
+ * \return	Corresponding system errno, EIO if there is none, or EINVAL if \a err is positive
+ */
+int
+d_der2errno(int err);
 
 /** @}
  */

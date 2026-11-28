@@ -589,35 +589,7 @@ daos_errno2der(int err)
 		return -DER_UNKNOWN;
 	}
 
-	switch (err) {
-	case 0:			return -DER_SUCCESS;
-	case EPERM:
-	case EACCES:		return -DER_NO_PERM;
-	case ENOMEM:		return -DER_NOMEM;
-	case EDQUOT:
-	case ENOSPC:		return -DER_NOSPACE;
-	case EEXIST:		return -DER_EXIST;
-	case ENOENT:		return -DER_NONEXIST;
-	case ECANCELED:		return -DER_CANCELED;
-	case EBUSY:		return -DER_BUSY;
-	case EOVERFLOW:		return -DER_OVERFLOW;
-	case EBADF:		return -DER_NO_HDL;
-	case ENOSYS:		return -DER_NOSYS;
-	case ETIMEDOUT:		return -DER_TIMEDOUT;
-	case EWOULDBLOCK:	return -DER_AGAIN;
-	case EPROTO:		return -DER_PROTO;
-	case EINVAL:		return -DER_INVAL;
-	case ENOTDIR:		return -DER_NOTDIR;
-	case EIO:		return -DER_IO;
-	case EINPROGRESS:
-		return -DER_INPROGRESS;
-	case ENOTSUP:
-		return -DER_NOTSUPPORTED;
-	case EFAULT:
-	case ENXIO:
-	case ENODEV:
-	default:		return -DER_MISC;
-	}
+	return d_errno2der(err);
 }
 
 /**
@@ -631,53 +603,11 @@ daos_errno2der(int err)
 static inline int
 daos_der2errno(int err)
 {
-	if (err > 0) {
+	if (err > 0)
 		D_ERROR("error > 0 (%d)\n", err);
-		return EINVAL;
-	}
 
-	switch (err) {
-	case -DER_SUCCESS:	return 0;
-	case -DER_NO_PERM:
-	case -DER_EP_RO:
-	case -DER_EP_OLD:
-	case -DER_CONT_DESTROYING:
-		return EPERM;
-	case -DER_ENOENT:
-	case -DER_NONEXIST:	return ENOENT;
-	case -DER_INVAL:
-	case -DER_NOTYPE:
-	case -DER_NOSCHEMA:
-	case -DER_NOLOCAL:
-	case -DER_NO_HDL:
-	case -DER_IO_INVAL:	return EINVAL;
-	case -DER_KEY2BIG:
-	case -DER_REC2BIG:	return E2BIG;
-	case -DER_EXIST:	return EEXIST;
-	case -DER_UNREACH:	return EHOSTUNREACH;
-	case -DER_NOSPACE:	return ENOSPC;
-	case -DER_ALREADY:	return EALREADY;
-	case -DER_DOS:
-	case -DER_NOMEM:	return ENOMEM;
-	case -DER_TIMEDOUT:	return ETIMEDOUT;
-	case -DER_BUSY:
-	case -DER_EQ_BUSY:	return EBUSY;
-	case -DER_AGAIN:	return EAGAIN;
-	case -DER_PROTO:	return EPROTO;
-	case -DER_IO:		return EIO;
-	case -DER_CANCELED:	return ECANCELED;
-	case -DER_OVERFLOW:	return EOVERFLOW;
-	case -DER_BADPATH:
-	case -DER_NOTDIR:	return ENOTDIR;
-	case -DER_STALE:	return ESTALE;
-	case -DER_TX_RESTART:	return ERESTART;
-	case -DER_INPROGRESS:
-		return EINPROGRESS;
-	case -DER_NOTSUPPORTED:
-		return ENOTSUP;
-	default:		return EIO;
-	}
-};
+	return d_der2errno(err);
+}
 
 static inline bool
 daos_crt_network_error(int err)

@@ -664,32 +664,6 @@ void d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_c
 #define D_SWAP32S(x)	do { *(x) = D_SWAP32(*(x)); } while (0)
 #define D_SWAP64S(x)	do { *(x) = D_SWAP64(*(x)); } while (0)
 
-/**
- * convert system errno to DER_* variaent
- *
- * \param[in] err	System error code
- *
- * \return		Corresponding DER_* error code
- */
-static inline int
-d_errno2der(int err)
-{
-	switch (err) {
-	case 0:		return 0;
-	case EPERM:
-	case EACCES:	return -DER_NO_PERM;
-	case ENOMEM:	return -DER_NOMEM;
-	case EDQUOT:
-	case ENOSPC:	return -DER_NOSPACE;
-	case EEXIST:	return -DER_EXIST;
-	case ENOENT:	return -DER_NONEXIST;
-	case ECANCELED:	return -DER_CANCELED;
-	case EBUSY:	return -DER_BUSY;
-	default:	return -DER_MISC;
-	}
-	return 0;
-}
-
 #ifndef NSEC_PER_SEC
 #define NSEC_PER_SEC  1000000000
 #endif
