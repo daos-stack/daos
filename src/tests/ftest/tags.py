@@ -9,7 +9,7 @@ import ast
 import os
 import re
 import sys
-from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
+from argparse import ArgumentParser, ArgumentTypeError
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
@@ -571,66 +571,69 @@ def __arg_type_tags(val):
 
 def main():
     """main function execution"""
-    description = '\n'.join([
-        'Commands',
-        '  lint - lint ftest avocado tags',
-        '  list - list ftest avocado tags associated with test files',
-        '  dump - dump the file/class/method/tag structure for test files',
-        '  unit - run self unit tests'
-    ])
+    parser = ArgumentParser(prog='tags')
+    subparsers = parser.add_subparsers(
+        title='options for the tags command',
+        dest='command',
+        required=True)
 
-    parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description=description)
-    parser.add_argument(
-        "command",
-        choices=("lint", "dump", "unit"),
-        help="command to run")
-    parser.add_argument(
-        "-v", "--verbose",
-        action='store_true',
-        help="print verbose output for some commands")
-    parser.add_argument(
+    # Parser for the "dump" command and its optional arguments
+    dump_parser = subparsers.add_parser(
+        'dump',
+        help='dump the file/class/method/tag structure for test files')
+    dump_parser.add_argument(
         "--paths",
         nargs="+",
         default=[],
         help="file paths")
-    parser.add_argument(
+    dump_parser.add_argument(
         "--tags",
         nargs="+",
         type=__arg_type_tags,
-        help="tags")
+        help="tags used to filter which files to display")
+
+    # Parser for the "lint" command and its optional arguments
+    lint_parser = subparsers.add_parser(
+        'lint',
+        help='lint ftest avocado tags')
+    lint_parser.add_argument(
+        "--paths",
+        nargs="+",
+        default=[],
+        help="file paths")
+    lint_parser.add_argument(
+        "-v", "--verbose",
+        action='store_true',
+        help="print verbose output for some commands")
+
+    # Parser for the "unit" command and its optional arguments
+    unit_parser = subparsers.add_parser(
+        'unit',
+        help='run self unit tests')
+    unit_parser.add_argument(
+        "-v", "--verbose",
+        action='store_true',
+        help="print verbose output")
+
     args = parser.parse_args()
-    args.paths = list(map(os.path.realpath, args.paths))
+    if hasattr(args, "paths"):
+        args.paths = list(map(os.path.realpath, args.paths))
 
-    # Check for incompatible arguments
-    rc = 0
-    if args.command == "lint" and args.tags:
-        print("--tags not supported with lint")
-        rc = 1
-    if args.command == "list" and args.tags:
-        print("--tags not supported with list")
-        rc = 1
-    if args.command == "unit" and args.tags:
-        print("--tags not supported with unit")
-        rc = 1
-    if args.command == "unit" and args.paths:
-        print("--paths not supported with unit")
-        rc = 1
-    if rc != 0:
-        return rc
-
-    if args.command == "lint":
+    if args.command == "dump":
+        rc = run_dump(args.paths, args.tags)
+    elif args.command == "lint":
         try:
             run_linter(args.paths, args.verbose)
             rc = 0
         except LintFailure as err:
             print(err)
             rc = 1
-    elif args.command == "dump":
-        rc = run_dump(args.paths, args.tags)
     elif args.command == "unit":
         test_tag_set()
         test_tags_util(args.verbose)
         rc = 0
+    else:
+        raise ValueError(f"Unhandled command option: {args.command}")
 
     return rc
 
