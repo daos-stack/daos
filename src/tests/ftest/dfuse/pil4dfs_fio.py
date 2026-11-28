@@ -181,7 +181,7 @@ class Pil4dfsFio(TestFio):
             Check bandwidth consistency of FIO DFS ioengine and the PIL4DFS interception library
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=cb,hw,medium
         :avocado: tags=dfs,dfuse,pil4dfs,fio
         :avocado: tags=Pil4dfsFio,test_pil4dfs_vs_dfs
         """
