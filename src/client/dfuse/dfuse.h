@@ -547,6 +547,9 @@ struct dfuse_cont {
 	/** Container handle */
 	daos_handle_t           dfs_coh;
 
+	/** Epoch of the snapshot mounted, or 0 if this is not a snapshot mount */
+	daos_epoch_t            dfc_snap_epoch;
+
 	/** Hash table reference count */
 	ATOMIC uint32_t         dfs_ref;
 

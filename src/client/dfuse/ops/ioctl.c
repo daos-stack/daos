@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,6 +40,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_dfp->dfp_uuid);
 	uuid_copy(il_reply.fir_cont, oh->doh_ie->ie_dfs->dfc_uuid);
+	il_reply.fir_snap_epoch = oh->doh_ie->ie_dfs->dfc_snap_epoch;
 
 	if (oh->doh_ie->ie_dfs->dfc_attr_timeout > 0)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;

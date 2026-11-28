@@ -825,6 +825,16 @@ dfs_mount_snap(daos_handle_t poh, daos_handle_t coh, int flags, daos_epoch_t epo
 }
 
 int
+dfs_get_snap_epoch(dfs_t *dfs, daos_epoch_t *epoch)
+{
+	if (dfs == NULL || !dfs->mounted || epoch == NULL)
+		return EINVAL;
+
+	*epoch = (dfs->th_epoch == DAOS_EPOCH_MAX) ? 0 : dfs->th_epoch;
+	return 0;
+}
+
+int
 dfs_umount(dfs_t *dfs)
 {
 	if (dfs == NULL || !dfs->mounted)

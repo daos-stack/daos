@@ -740,16 +740,28 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 	}
 
 	uuid_unparse(il_reply->fir_cont, uuid_str);
-	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW, &cont->ioc_coh, NULL, NULL);
-	if (rc == -DER_NO_PERM) {
+	if (il_reply->fir_snap_epoch != 0) {
+		/* dfuse mounted a snapshot: open the container read-only and mount the same epoch */
 		dfs_flags = O_RDONLY;
 		rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RO, &cont->ioc_coh, NULL,
 				    NULL);
+	} else {
+		rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW, &cont->ioc_coh, NULL,
+				    NULL);
+		if (rc == -DER_NO_PERM) {
+			dfs_flags = O_RDONLY;
+			rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RO, &cont->ioc_coh,
+					    NULL, NULL);
+		}
 	}
 	if (rc)
 		return false;
 
-	rc = dfs_mount(pool->iop_poh, cont->ioc_coh, dfs_flags, &cont->ioc_dfs);
+	if (il_reply->fir_snap_epoch != 0)
+		rc = dfs_mount_snap(pool->iop_poh, cont->ioc_coh, O_RDONLY, il_reply->fir_snap_epoch,
+				    NULL, &cont->ioc_dfs);
+	else
+		rc = dfs_mount(pool->iop_poh, cont->ioc_coh, dfs_flags, &cont->ioc_dfs);
 	if (rc)
 		return false;
 
@@ -902,6 +914,10 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 			if (uuid_compare(cont->ioc_uuid, il_reply.fir_cont) != 0)
 				continue;
 
+			/* The live container and its snapshots share a uuid but not the data */
+			if (cont->ioc_snap_epoch != il_reply.fir_snap_epoch)
+				continue;
+
 			D_GOTO(get_file, rc = 0);
 		}
 		D_GOTO(open_cont, rc = 0);
@@ -927,6 +943,7 @@ open_cont:
 
 	cont->ioc_pool = pool;
 	uuid_copy(cont->ioc_uuid, il_reply.fir_cont);
+	cont->ioc_snap_epoch = il_reply.fir_snap_epoch;
 	d_list_add(&cont->ioc_containers, &pool->iop_container_head);
 
 	if (pool_alloc)
