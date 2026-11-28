@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
  * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,11 +24,47 @@
 /* The minimal memory size we need to allocate to hold trampolines. */
 #define MIN_MEM_SIZE           (0x1000)
 
+#if defined(__aarch64__)
+/**
+ * A direct B/BL reaches +-128 MiB. Patches (bounce stubs and trampolines) must stay within that
+ * range of the functions they hook. Leave some margin.
+ */
+#define HOOK_BLOCK_MAX_DIST    (0x7000000)
+
+/**
+ * The bounce stub:
+ * ldr x16, #8       load the address of the new function from the literal below
+ * br  x16
+ * .quad <new func>  8 bytes
+ */
+#define BOUNCE_CODE_LEN        (16)
+#define BOUNCE_BUF_LEN         (16)
+
+/* The relative offset of new function address in bouncing code. */
+#define OFFSET_NEW_FUNC_ADDR   (8)
+
+/* One instruction (4 bytes) of the original function is overwritten with a B to the bounce stub. */
+#define JMP_INSTRCTION_LEN     (4)
+
+/* The max length of the region of the original function we may modify: a BTI landing pad can
+ * precede the instruction we replace.
+ */
+#define PATCH_SPAN_LEN         (8)
+
+/* The max length of bytes to hold the relocated instruction and the branches back. */
+#define MAX_TRAMPOLINE_LEN     (32)
+
+/* The number of bytes of the original code we save to be able to uninstall a hook. */
+#define ORG_CODE_LEN           (4)
+#else
 /**
  * The max range of a signed integer can represent is 0x7FFFFFFF. We decrease it
  * a little bit to be safer.
  */
 #define NULL_RIP_VAR_OFFSET    (0x7FF00000)
+
+/* The max distance between a function to hook and the memory holding its patches. */
+#define HOOK_BLOCK_MAX_DIST    NULL_RIP_VAR_OFFSET
 
 /**
  * The length of instructions to jmp to a new function is 14 bytes.
@@ -35,6 +72,7 @@
  * 8 bytes for the address of new function.
  */
 #define BOUNCE_CODE_LEN        (14)
+#define BOUNCE_BUF_LEN         (BOUNCE_CODE_LEN + 2)
 
 /**
  * The relative offset of new function address in bouncing code. It is after
@@ -51,12 +89,19 @@
 /* The length of jmp instruction we use. */
 #define JMP_INSTRCTION_LEN     (5)
 
+/* The max length of the region of the original function we may modify. */
+#define PATCH_SPAN_LEN         (JMP_INSTRCTION_LEN)
+
+/* The number of bytes of the original code we save to be able to uninstall a hook. */
+#define ORG_CODE_LEN           (12)
+
 /**
  * The max length of bytes to hold the instruments to call original function.
  * 1) saved instruction
  * 2) jump to resuming address
  */
 #define MAX_TRAMPOLINE_LEN     ((MAX_INSN_LEN) + (JMP_INSTRCTION_LEN))
+#endif
 
 struct module_patch_info_t {
 	char			*module_name;
@@ -76,9 +121,9 @@ struct trampoline_t {
 	/* save the original function entry code and jump instrument */
 	unsigned char	trampoline[MAX_TRAMPOLINE_LEN];
 	/* the code can jmp to my hook function. +3 for padding */
-	unsigned char	bounce[BOUNCE_CODE_LEN + 2];
-	/* to save 5 bytes of the entry instruction of original function */
-	char		org_code[12];
+	unsigned char	bounce[BOUNCE_BUF_LEN];
+	/* to save the bytes of the entry instruction(s) of original function we overwrite */
+	char		org_code[ORG_CODE_LEN];
 	/* the address of original function */
 	void		*addr_org_func;
 	/* the number of bytes copied of the entry instructions of the original function. */
@@ -87,7 +132,17 @@ struct trampoline_t {
 	/* the offset of rip addressed variable. Relative address has to be corrected */
 	/* when copied into trampoline from original address.                         */
 	int		offset_rIP_var;
-};
+#if defined(__aarch64__)
+	/* the offset from the function entry of the instruction that was overwritten. It is 4 when */
+	/* the first instruction is a BTI landing pad, which must stay in place.                    */
+	int		patch_off;
+#endif
+}
+#if defined(__aarch64__)
+/* The 64-bit address in the bounce stub should be naturally aligned. */
+__attribute__((aligned(8)))
+#endif
+;
 
 struct patch_block_t {
 	void	*patch_addr;
