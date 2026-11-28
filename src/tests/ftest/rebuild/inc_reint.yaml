@@ -60,4 +60,4 @@ daos_tests:
   daos_test:
     test_daos_inc_reint_cont_recov: Y
   args:
-    test_daos_inc_reint_cont_recov: -s3
+    test_daos_inc_reint_cont_recov: -s3 -u0-2
