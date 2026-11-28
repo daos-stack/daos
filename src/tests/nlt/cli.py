@@ -9,7 +9,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import argparse
+import faulthandler
 import resource
+import signal
 import sys
 import traceback
 
@@ -17,6 +19,7 @@ from .fault_injection import server_fi
 from .posix_tests import PosixTests
 from .reporting import WarningsFactory
 from .runner import printable_test_list, run
+from .watchdog import exit_now
 
 
 def _positive_int(value):
@@ -36,6 +39,10 @@ def main():
     Test names can either be 'pure' or include suffices that encode a particular caching
     regimen (e.g., read_caching_off).
     """
+    # SIGUSR1 dumps every thread's Python stack.  sys.__stderr__ because NLT's stderr
+    # wrapper lacks the fileno() that faulthandler requires.
+    faulthandler.register(signal.SIGUSR1, file=sys.__stderr__, all_threads=True)
+
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
@@ -51,7 +58,7 @@ def main():
     parser.add_argument('--repeat', type=_positive_int, default=1,
                         help='Repeat the test execution N times (soak/stability testing)')
     parser.add_argument('--failfast', action='store_true',
-                        help='With --repeat, stop after the first failing iteration')
+                        help='Stop after the first failing --repeat iteration or stalled re-run')
     parser.add_argument('--system-ram-reserved', type=int, default=None, help='GiB reserved RAM')
     parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
     parser.add_argument('--summary', default=None,
@@ -142,4 +149,5 @@ Tests are:
 
     if fatal_errors.errors:
         print("Significant errors encountered")
-        sys.exit(1)
+        exit_now(1)
+    exit_now(0)
