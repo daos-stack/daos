@@ -147,6 +147,8 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	int                     err = 0;
 	int                     rc;
 	struct heap_zone_limits hzl;
+	struct dav_heap_mb_limits         mb_limits;
+	struct umem_cache_dav_constraints dav_c;
 	uint64_t                alloc_size, max_zones = 0;
 
 	heap_zinfo_get_size(&alloc_size, &max_zones);
@@ -234,9 +236,13 @@ dav_obj_open_internal(int fd, int flags, size_t scm_sz, const char *path, struct
 	heap_set_root_ptrs(hdl->do_heap, &hdl->do_root_offsetp, &hdl->do_root_sizep);
 	heap_set_stats_ptr(hdl->do_heap, &hdl->do_stats->persistent);
 
-	rc = umem_cache_alloc(store, ZONE_MAX_SIZE, hzl.nzones_heap, hzl.nzones_cache,
-			      heap_get_max_nemb(hdl->do_heap), 4096, mmap_base, is_zone_evictable,
-			      dav_uc_callback, hdl);
+	dav_get_heap_mb_limits_v2(hdl, &mb_limits);
+	dav_c.max_ne_pages                 = mb_limits.dhml_nemb_max;
+	dav_c.soemb_active_pages           = mb_limits.dhml_soe_rsrv;
+	dav_c.soemb_tier_reservation_pages = mb_limits.dhml_soe_rsrv ? SOEMB_REPLACE_RSRV : 0;
+
+	rc = umem_cache_alloc(store, ZONE_MAX_SIZE, hzl.nzones_heap, hzl.nzones_cache, &dav_c, 4096,
+			      mmap_base, is_zone_evictable, dav_uc_callback, hdl);
 	if (rc != 0) {
 		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
 		err = daos_der2errno(rc);

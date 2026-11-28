@@ -27,6 +27,11 @@
 #define BIT_IS_CLR(a, i)           (!((a) & (1ULL << (i))))
 #define HEAP_ARENA_PER_THREAD      (0)
 
+/* Extra cache page kept free so a demoted SOEMB can be replaced without
+ * stealing zone0's non-evictable page.
+ */
+#define SOEMB_REPLACE_RSRV         1
+
 struct mbrt;
 
 int
@@ -38,8 +43,6 @@ void
 heap_cleanup(struct palloc_heap *heap);
 int
 heap_check(void *heap_start, uint64_t heap_size);
-int
-heap_get_max_nemb(struct palloc_heap *heap);
 void
 heap_get_mb_limits_v2(struct palloc_heap *heap, uint32_t *nemb_max, uint32_t *emb_max,
 		      uint32_t *soe_rsrv);

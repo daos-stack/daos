@@ -97,10 +97,6 @@ struct mbrt_qbs {
 };
 
 #define SOEMB_ACTIVE_CNT 3
-/* Extra cache page kept free so a demoted SOEMB can be replaced without
- * stealing zone0's non-evictable page.
- */
-#define SOEMB_REPLACE_RSRV 1
 
 struct soemb_slot {
 	struct mbrt            *mb;
@@ -2058,7 +2054,7 @@ heap_zone_load(struct palloc_heap *heap, uint32_t zid)
 	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
 			 ? ZONE_MAX_SIZE
 			 : (store->stor_size - rg.cr_off);
-	rc         = umem_cache_load(store, &rg, 1, 0);
+	rc         = umem_cache_load(store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 	if (rc) {
 		D_ERROR("Failed to load pages to umem cache");
 		return daos_der2errno(rc);
@@ -2213,12 +2209,6 @@ heap_get_nemb_pct()
 	return nemb_pct;
 }
 
-int
-heap_get_max_nemb(struct palloc_heap *heap)
-{
-	return heap->rt->nzones_ne;
-}
-
 void
 heap_get_mb_limits_v2(struct palloc_heap *heap, uint32_t *nemb_max, uint32_t *emb_max,
 		      uint32_t *soe_rsrv)
@@ -2343,7 +2333,8 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 
 	memset(z, 0, rg.cr_size);
 
-	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, 0, &pin_handle);
+	/* Mapped above without a yield: this only adds a reference and never waits */
+	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, UMEM_RSRV_TIER_NORSRV, &pin_handle);
 	if (rc) {
 		errno = daos_der2errno(rc);
 		goto error;
@@ -2518,7 +2509,7 @@ heap_soemb_active_set(struct palloc_heap *heap)
 		pin        = NULL;
 
 		mb->is_soe_mb = true;
-		rc            = umem_cache_pin(store, &rg, 1, false, &pin);
+		rc            = umem_cache_pin(store, &rg, 1, UMEM_RSRV_TIER_NORSRV, &pin);
 		if (rc) {
 			mb->is_soe_mb = false;
 			mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);
@@ -2587,8 +2578,23 @@ heap_update_mbrt_zinfo(struct palloc_heap *heap)
 	heap->rt->zones_exhausted_ne = nemb_cnt;
 	heap->rt->zones_exhausted_e  = emb_cnt;
 
-	D_ASSERT(heap->rt->nzones_e >= heap->rt->zones_exhausted_e);
-	D_ASSERT(heap->rt->nzones_ne >= heap->rt->zones_exhausted_ne);
+	/*
+	 * Handle zone count mismatches gracefully, whether caused by pools created by
+	 * older releases or by other inconsistencies.
+	 */
+	if (heap->rt->zones_exhausted_e > heap->rt->nzones_e) {
+		D_ERROR("Evictable zones in use (%u) exceed the limit (%u)\n",
+			heap->rt->zones_exhausted_e, heap->rt->nzones_e);
+		return ENOSPC;
+	}
+	if (heap->rt->zones_exhausted_ne > heap->rt->nzones_ne) {
+		D_ERROR("Non-evictable zones in use (%u) exceed the limit (%u) after reserving %u "
+			"zones for spill-over evictable buckets\n",
+			heap->rt->zones_exhausted_ne, heap->rt->nzones_ne,
+			heap->rt->nzones_soe_rsrv ? heap->rt->nzones_soe_rsrv + SOEMB_REPLACE_RSRV
+						  : 0);
+		return ENOSPC;
+	}
 	return 0;
 }
 
