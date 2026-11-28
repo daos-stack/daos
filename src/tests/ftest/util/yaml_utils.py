@@ -14,8 +14,10 @@ from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 try:
     from util.data_utils import dict_extract_values, list_flatten, list_unique
+    from util.host_utils import get_local_host
 except (ImportError, ModuleNotFoundError):
     from data_utils import dict_extract_values, list_flatten, list_unique
+    from host_utils import get_local_host
 
 
 class YamlException(BaseException):
@@ -128,6 +130,7 @@ class YamlUpdater():
             clients (NodeSet): set of hosts to use as clients in the test yaml
             storage (str): updated storage information to apply to the test yaml
             timeout (int): multiplier to apply to any timeouts specified in the test yaml
+            override (bool): whether to override the test yaml values with user-specified values
             verbose (int): verbosity level
         """
         self.log = logger
@@ -219,6 +222,16 @@ class YamlUpdater():
             if key == "test_clients" and not replacement:
                 replacement = replacement_data["test_servers"]
 
+            # localhost is preferred as a client over a server,
+            # so put localhost last for servers and first for clients.
+            # It will only be used as a server if it is the last available node.
+            if key == "test_servers":
+                replacement.sort(key=lambda x: x == str(get_local_host()))
+                self.log.debug("replacing test_servers with sorted list: %s", replacement)
+            if key == "test_clients":
+                replacement.sort(key=lambda x: x != str(get_local_host()))
+                self.log.debug("replacing test_clients with sorted list: %s", replacement)
+
             if key not in placeholder_data:
                 if self._verbose > 1:
                     self.log.debug("  - No '%s' placeholder specified in the test yaml", key)
@@ -234,7 +247,7 @@ class YamlUpdater():
             # Replace test yaml keys that were:
             #   - found in the test yaml
             #   - have a user-specified replacement
-            if key.startswith("test_"):
+            if key in ("test_servers", "test_clients"):
                 # The entire server/client test yaml list entry is replaced by a new test yaml list
                 # entry, e.g.
                 #   '  test_servers: server-[1-2]' --> '  test_servers: wolf-[10-11]'
@@ -260,14 +273,14 @@ class YamlUpdater():
 
         return replacements
 
-    def _get_host_replacement(self, replacements, placeholder_data, key, replacement, node_mapping):
+    def _get_host_replacement(self, replacements, placeholder_data, key, available, node_mapping):
         """Replace the server or client placeholders.
 
         Args:
             replacements (dict): dictionary in which to add replacements for test yaml entries
             placeholder_data (dict): test yaml values requesting replacements
-            key (str): test yaml entry key
-            replacement (list): available values to use as replacements for the test yaml entries
+            key (str): test yaml entry key. E.g. test_servers or test_clients
+            available (list): available values to use as replacements for the test yaml entries
             node_mapping (dict): dictionary of nodes and their replacement values
 
         Raises:
@@ -279,55 +292,62 @@ class YamlUpdater():
 
         for placeholder in placeholder_data[key]:
             replacement_nodes = NodeSet()
+            quantity = None
+            placeholder_nodeset = None
             try:
+                quantity = int(placeholder)
+            except ValueError:
+                pass
+            try:
+                placeholder_nodeset = NodeSet(placeholder)
+            except TypeError:
+                pass
+
+            if quantity is not None:
                 # Replace integer placeholders with the number of nodes from the user provided list
                 # equal to the quantity requested by the test yaml
-                quantity = int(placeholder)
                 if self._override and self._clients:
                     # When individual lists of server and client nodes are provided with the
                     # override flag set use the full list of nodes specified by the
                     # test_server/test_client arguments
-                    quantity = len(replacement)
+                    quantity = len(available)
                 elif self._override:
                     self.log.warning(
                         "Warning: In order to override the node quantity a "
                         "'--test_clients' argument must be specified: %s: %s",
                         key, placeholder)
+                if len(available) < quantity:
+                    message = f"Not enough '{key}' placeholder replacements specified"
+                    self.log.error("  - %s; required: %s", message, quantity)
+                    raise YamlException(message)
                 for _ in range(quantity):
-                    try:
-                        replacement_nodes.add(replacement.pop(0))
-                    except IndexError as error:
-                        # Not enough nodes provided for the replacement
-                        message = f"Not enough '{key}' placeholder replacements specified"
-                        self.log.error("  - %s; required: %s", message, quantity)
-                        raise YamlException(message) from error
+                    replacement_nodes.add(available.pop(0))
 
-            except ValueError:
-                try:
-                    # Replace clush-style placeholders with nodes from the user provided list using
-                    # a mapping so that values used more than once yield the same replacement
-                    for node in NodeSet(placeholder):
-                        if node not in node_mapping:
-                            try:
-                                node_mapping[node] = replacement.pop(0)
-                            except IndexError as error:
-                                # Not enough nodes provided for the replacement
-                                if not self._override:
-                                    message = f"Not enough '{key}' placeholder replacements remain"
-                                    self.log.error(
-                                        "  - %s; required: %s", message, NodeSet(placeholder))
-                                    raise YamlException(message) from error
-                                break
-                            self.log.debug(
-                                "  - %s replacement node mapping: %s -> %s",
-                                key, node, node_mapping[node])
-                        replacement_nodes.add(node_mapping[node])
+            elif placeholder_nodeset is not None:
+                # Replace clush-style placeholders with nodes from the user provided list using
+                # a mapping so that values used more than once yield the same replacement
+                for node in placeholder_nodeset:
+                    if node not in node_mapping:
+                        try:
+                            node_mapping[node] = available.pop(0)
+                        except IndexError as error:
+                            # Not enough nodes provided for the replacement
+                            if not self._override:
+                                message = f"Not enough '{key}' placeholder replacements remain"
+                                self.log.error(
+                                    "  - %s; required: %s", message, NodeSet(placeholder))
+                                raise YamlException(message) from error
+                            break
+                        self.log.debug(
+                            "  - %s replacement node mapping: %s -> %s",
+                            key, node, node_mapping[node])
+                    replacement_nodes.add(node_mapping[node])
 
-                except TypeError as error:
-                    # Unsupported format
-                    message = f"Unsupported placeholder format: {placeholder}"
-                    self.log.error(message)
-                    raise YamlException(message) from error
+            else:
+                # Unsupported format
+                message = f"Unsupported placeholder format: {placeholder}"
+                self.log.error(message)
+                raise YamlException(message)
 
             hosts_key = r":\s+".join([key, str(placeholder)])
             hosts_key = hosts_key.replace("[", r"\[")
