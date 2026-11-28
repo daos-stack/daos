@@ -359,7 +359,8 @@ class Launch():
         try:
             group.update_test_yaml(
                 logger, args.scm_size, args.scm_mount, args.extra_yaml,
-                args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
+                args.timeout_multiplier, args.override, args.verbose, args.include_localhost,
+                args.shared_server_client)
         except (RunException, YamlException) as e:
             message = f"Error modifying the test yaml files: {e}"
             status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -568,6 +569,10 @@ def main():
         "-i", "--include_localhost",
         action="store_true",
         help="include the local host when cleaning and archiving")
+    parser.add_argument(
+        "-ssc", "--shared_server_client",
+        action="store_true",
+        help="potentially use the same nodes for both servers and clients")
     parser.add_argument(
         "-ins", "--insecure_mode",
         action="store_true",
