@@ -84,7 +84,7 @@ struct dc_tx {
 	uint32_t                 tx_fixed_epoch : 1,                      /** epoch is specified. */
 	    tx_retry : 1, /** Retry the commit RPC. */ tx_set_resend : 1, /** Set 'resend' flag. */
 	    tx_for_convert : 1, tx_has_cond : 1, tx_renew : 1, tx_closed : 1, tx_reintegrating : 1,
-	    tx_maybe_starve : 1;
+	    tx_maybe_starve : 1, tx_fi_stale_pm : 1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
 	/** The rank for the server on which the TX leader resides. */
@@ -680,6 +680,18 @@ dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti)
 	return 0;
 }
 
+/* Fault injection: one stale pool map for a converted conditional TX after its first map check. */
+static inline bool
+dc_tx_fi_convert_stale_pm(struct dc_tx *tx)
+{
+	if (!tx->tx_for_convert || !tx->tx_has_cond || tx->tx_pm_ver == 0 || tx->tx_fi_stale_pm ||
+	    !DAOS_FAIL_CHECK(DAOS_FAIL_TX_CONVERT_STALE_PM))
+		return false;
+
+	tx->tx_fi_stale_pm = 1;
+	return true;
+}
+
 /*
  * Check the Pool Map Version: if the (client known) latest pool map version
  * is newer than the TX known pool map version, then it is possible that the
@@ -710,8 +722,8 @@ dc_tx_check_pmv_internal(daos_handle_t th, struct dc_tx **ptx)
 
 	pm_ver = dc_pool_get_version(tx->tx_pool);
 
-	if (tx->tx_pm_ver != pm_ver ||
-	    DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
+	if (tx->tx_pm_ver != pm_ver || DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM) ||
+	    dc_tx_fi_convert_stale_pm(tx)) {
 		/* For external non-snap TX, restart it if pool map is stale. */
 		if (tx->tx_pm_ver != 0 && !tx->tx_fixed_epoch) {
 			tx->tx_status = TX_FAILED;
@@ -3302,6 +3314,10 @@ dc_tx_per_akey_existence_parent_cb(tse_task_t *task, void *data)
 		D_MUTEX_UNLOCK(&tx->tx_lock);
 	}
 
+	/* dc_tx_convert_post() handles the restart; see dc_tx_convert_cb(). */
+	if (rc == -DER_TX_RESTART && tx->tx_for_convert)
+		task->dt_result = 0;
+
 	dc_tx_post(tx, obj, args->task, args->opc, rc, 0);
 	obj_decref(obj);
 
@@ -3362,6 +3378,10 @@ out:
 
 		D_FREE(args->tmp_iods);
 	}
+
+	/* dc_tx_convert_post() handles the restart; see dc_tx_convert_cb(). */
+	if (rc == -DER_TX_RESTART && tx->tx_for_convert)
+		task->dt_result = 0;
 
 	dc_tx_post(tx, obj, args->task, args->opc, rc, 0);
 	obj_decref(obj);
