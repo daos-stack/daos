@@ -660,6 +660,7 @@ daos_eq_create(daos_handle_t *eqh)
 		rc = dc_mgmt_get_iface(iface, sizeof(iface));
 		if (rc && rc != -DER_NONEXIST) {
 			D_ERROR("failed to get iface: " DF_RC "\n", DP_RC(rc));
+			daos_eq_putref(eqx);
 			return rc;
 		}
 
@@ -676,13 +677,19 @@ daos_eq_create(daos_handle_t *eqh)
 		eqx->eqx_ctx = daos_eq_ctx;
 	}
 
+	rc = tse_sched_init(&eqx->eqx_sched, NULL, eqx->eqx_ctx);
+	if (rc) {
+		D_ERROR("failed to init EQ scheduler: " DF_RC "\n", DP_RC(rc));
+		if (eqx->eqx_ctx != daos_eq_ctx)
+			crt_context_destroy(eqx->eqx_ctx, 1);
+		daos_eq_putref(eqx);
+		return rc;
+	}
+
 	daos_eq_insert(eqx);
 	daos_eq_handle(eqx, eqh);
-
-	rc = tse_sched_init(&eqx->eqx_sched, NULL, eqx->eqx_ctx);
-
 	daos_eq_putref(eqx);
-	return rc;
+	return 0;
 }
 
 struct eq_progress_arg {
