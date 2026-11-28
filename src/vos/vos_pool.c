@@ -1683,7 +1683,7 @@ pool_open_post(struct umem_pool **p_ph, struct vos_pool_df *pool_df, unsigned in
 	*p_ph = NULL;
 
 	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
-		pool->vp_feats |= VOS_POOL_FEAT_2_4;
+		pool->vp_feats |= (VOS_POOL_FEAT_2_4 | VOS_POOL_FEAT_2_2);
 	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_8)
