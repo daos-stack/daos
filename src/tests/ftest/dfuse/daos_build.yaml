@@ -9,6 +9,7 @@ timeout: 36000
 
 server_config:
   name: daos_server
+  disable_hugepages: true
   crt_timeout: 120
   engines_per_host: 1
   engines:

@@ -4,6 +4,7 @@ hosts:
 # JIRA-3132 tmp update timeout from 2400 to 4800
 timeout: 4800
 server_config:
+  disable_hugepages: true
   name: daos_server
   engines_per_host: 1
   engines:
