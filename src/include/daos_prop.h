@@ -38,7 +38,7 @@ enum daos_pool_props {
 	DAOS_PROP_PO_ACL,
 	/**
 	 * Reserve space ratio: amount of space to be reserved on each target
-	 * for rebuild purpose. default = 0%.
+	 * for rebuild purpose. default = 5%.
 	 */
 	DAOS_PROP_PO_SPACE_RB,
 	/**
