@@ -1840,6 +1840,22 @@ out:
 	return daos_errno2der(rc);
 }
 
+/* DAOS-19916: deliberate heap overflow to exercise the ASan based NLT, do not land. */
+static volatile int asan_probe_sink;
+
+static void __attribute__((noinline))
+asan_probe_heap_overflow(void)
+{
+	void *(*volatile alloc_fn)(size_t) = malloc;
+	volatile char *buf                 = alloc_fn(16);
+
+	if (buf == NULL)
+		return;
+	buf[16]         = 'x';
+	asan_probe_sink = buf[0];
+	free((void *)buf);
+}
+
 int
 fs_copy_hdlr(struct cmd_args_s *ap)
 {
@@ -1856,6 +1872,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct dm_args		*ca = NULL;
 	bool			is_posix_copy = true;
 	struct fs_copy_stats	*num = NULL;
+
+	asan_probe_heap_overflow();
 
 	D_ALLOC(ca, sizeof(struct dm_args));
 	if (ca == NULL)
