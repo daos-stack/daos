@@ -468,7 +468,25 @@ class EngineYamlParameters(YamlParameters):  # pylint: disable=too-many-instance
             "FI_OFI_RXM_USE_SRX=1"],
         "ofi+cxi": [
             "FI_OFI_RXM_USE_SRX=1",
-            "CRT_MRC_ENABLE=1"],
+            # Documented Slingshot engine settings (docs/admin/fabrics.md), except
+            # LD_LIBRARY_PATH, which is site specific (see DAOS_TEST_SYSTEMD_LIBRARY_PATH).
+            "D_MRECV_BUF=16",
+            "D_MRECV_BUF_COPY=4",
+            "FI_CXI_RDZV_THRESHOLD=20480",
+            "FI_CXI_OFLOW_BUF_SIZE=8388608",
+            "FI_CXI_REQ_BUF_MIN_POSTED=8",
+            "FI_CXI_REQ_BUF_SIZE=8388608",
+            "FI_CXI_RX_MATCH_MODE=hybrid",
+            "FI_CXI_OPTIMIZED_MRS=0",
+            "NA_OFI_SKIP_DOMAIN_OPS=1",
+            "SWIM_TRAFFIC_CLASS=low_latency",
+            # Candidate engine MR settings (DAOS-19698): libfabric MR cache on (kdreg2 monitor)
+            # and CXI MR match events on. Set explicitly so the result does not depend on
+            # whether mercury applies its CXI domain ops, which differs between mercury versions.
+            "CRT_MRC_ENABLE=1",
+            "FI_MR_CACHE_MONITOR=kdreg2",
+            "FI_CXI_MR_MATCH_EVENTS=1",
+            "FI_CXI_PROV_KEY_CACHE=0"],
     }
 
     def __init__(self, base_namespace, index, provider=None, max_storage_tiers=MAX_STORAGE_TIERS):
