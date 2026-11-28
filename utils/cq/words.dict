@@ -235,6 +235,8 @@ hugepage
 hugepages
 hwloc
 ib
+idmap
+idmapped
 idx
 iface
 indata

@@ -326,6 +326,7 @@ show_help(char *name)
 	    "	-o options		mount style options string\n"
 	    "\n"
 	    "	   --multi-user		Run dfuse in multi user mode\n"
+	    "	   --allow-idmap	Allow idmapped mounts, e.g. for user namespaces\n"
 	    "	   --read-only		Mount dfuse read-only\n"
 	    "      --dump-handles=file  Serialize and dump the pool, container, and dfs handles"
 	    "				to file using the local2global DAOS functionality\n"
@@ -479,6 +480,7 @@ main(int argc, char **argv)
 
 	struct option      long_options[] = {{"mountpoint", required_argument, 0, 'm'},
 					     {"multi-user", no_argument, 0, 'M'},
+					     {"allow-idmap", no_argument, 0, 'I'},
 					     {"path", required_argument, 0, 'P'},
 					     {"pool", required_argument, 0, 'p'},
 					     {"container", required_argument, 0, 'c'},
@@ -571,6 +573,9 @@ main(int argc, char **argv)
 		case 'M':
 			dfuse_info->di_multi_user = true;
 			break;
+		case 'I':
+			dfuse_info->di_allow_idmap = true;
+			break;
 		case 'P':
 			path = optarg;
 			break;
@@ -653,6 +658,9 @@ main(int argc, char **argv)
 		show_help(argv[0]);
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
+	/* With /dev/fd/N, libfuse uses a /dev/fuse descriptor that something else has mounted */
+	dfuse_info->di_fd_mount = check_fd_mountpoint(dfuse_info->di_mountpoint) >= 0;
+
 	if (dfuse_info->di_dump_handles && dfuse_info->di_read_handles) {
 		printf("Cannot dump and read handles file at the same time\n");
 		show_help(argv[0]);
