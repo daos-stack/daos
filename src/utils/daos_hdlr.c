@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2026 Gluesys Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1434,8 +1435,8 @@ dm_connect(struct cmd_args_s *ap,
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
-			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDONLY, DFS_SYS_NO_LOCK,
-					   &src_file_dfs->dfs_sys);
+			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDONLY | DFS_BALANCED,
+					   DFS_SYS_NO_LOCK, &src_file_dfs->dfs_sys);
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
@@ -1618,8 +1619,12 @@ dm_connect(struct cmd_args_s *ap,
 			fprintf(ap->outstream, "Successfully created container %s\n", ca->dst_cont);
 		}
 		if (is_posix_copy) {
-			rc = dfs_sys_mount(ca->dst_poh, ca->dst_coh, O_RDWR, DFS_SYS_NO_LOCK,
-					   &dst_file_dfs->dfs_sys);
+			int mflags = O_RDWR;
+
+			rc = fs_dfs_mount_flags(ca->dst_poh, ca->dst_coh, &mflags);
+			if (rc == 0)
+				rc = dfs_sys_mount(ca->dst_poh, ca->dst_coh, mflags,
+						   DFS_SYS_NO_LOCK, &dst_file_dfs->dfs_sys);
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "dfs_mount on destination failed");

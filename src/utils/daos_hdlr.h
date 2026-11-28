@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
  * (C) Copyright 2025 Google LLC
+ * (C) Copyright 2026 Gluesys Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -193,6 +194,8 @@ int
 fs_copy_hdlr(struct cmd_args_s *ap);
 int
 fs_dfs_hdlr(struct cmd_args_s *ap);
+int
+fs_dfs_mount_flags(daos_handle_t poh, daos_handle_t coh, int *flags);
 int
 fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs, mode_t *mode);
 int

@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2026 Gluesys Inc.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +27,34 @@
 
 #include "daos_hdlr.h"
 
+/*
+ * Add the consistency mode that the container was created with to the DFS mount flags. A container
+ * created in balanced mode can only be mounted with DFS_BALANCED, and a read-write mount of a
+ * relaxed-mode container with that flag would run its updates in transactions.
+ */
+int
+fs_dfs_mount_flags(daos_handle_t poh, daos_handle_t coh, int *flags)
+{
+	dfs_attr_t attr = {0};
+	dfs_t     *dfs;
+	int        rc;
+	int        rc2;
+
+	/** a read-only mount with DFS_BALANCED is accepted for both modes */
+	rc = dfs_mount(poh, coh, O_RDONLY | DFS_BALANCED, &dfs);
+	if (rc)
+		return rc;
+
+	rc  = dfs_query(dfs, &attr);
+	rc2 = dfs_umount(dfs);
+	if (rc == 0)
+		rc = rc2;
+	if (rc == 0 && (attr.da_mode & DFS_BALANCED))
+		*flags |= DFS_BALANCED;
+
+	return rc;
+}
+
 int
 fs_dfs_hdlr(struct cmd_args_s *ap)
 {
@@ -38,7 +67,9 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 
 	flags = O_RDWR;
 
-	rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
+	rc = fs_dfs_mount_flags(ap->pool, ap->cont, &flags);
+	if (rc == 0)
+		rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
 	if (rc) {
 		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
 			ap->cont_str, strerror(rc), rc);
@@ -155,7 +186,7 @@ out_umount:
 int
 fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs, mode_t *mode)
 {
-	int		 flags = O_RDONLY;
+	int              flags = O_RDONLY | DFS_BALANCED;
 	int		 rc;
 	int		 rc2;
 	dfs_t		*dfs;
@@ -212,9 +243,12 @@ fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry)
 	dfs_t		*dfs;
 	char            *name = NULL;
 	char            *dir_name = NULL;
+	int              flags    = O_RDWR;
 	int		rc, rc2;
 
-	rc = dfs_mount(ap->pool, ap->cont, O_RDWR, &dfs);
+	rc = fs_dfs_mount_flags(ap->pool, ap->cont, &flags);
+	if (rc == 0)
+		rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
 	if (rc) {
 		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
 			ap->cont_str, strerror(rc), rc);
@@ -315,13 +349,15 @@ fs_relink_root_hdlr(struct cmd_args_s *ap)
 int
 fs_chmod_hdlr(struct cmd_args_s *ap)
 {
-	const int  mflags = O_RDWR;
+	int        mflags = O_RDWR;
 	const int  sflags = DFS_SYS_NO_LOCK | DFS_SYS_NO_CACHE;
 	dfs_sys_t *dfs_sys;
 	int        rc  = 0;
 	int        rc2 = 0;
 
-	rc = dfs_sys_mount(ap->pool, ap->cont, mflags, sflags, &dfs_sys);
+	rc = fs_dfs_mount_flags(ap->pool, ap->cont, &mflags);
+	if (rc == 0)
+		rc = dfs_sys_mount(ap->pool, ap->cont, mflags, sflags, &dfs_sys);
 	if (rc) {
 		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n", ap->cont_str,
 			strerror(rc), rc);
