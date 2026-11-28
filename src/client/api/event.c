@@ -23,6 +23,7 @@
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
 static __thread bool		ev_thpriv_is_init;
+static __thread unsigned int    ev_thpriv_gen;
 
 /**
  * Global progress timeout for synchronous operation
@@ -37,6 +38,8 @@ static uint32_t ev_prog_timeout;
 static crt_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int eq_ref;
+/** bumped on each (re)initialization so stale thread-private events can be detected */
+static unsigned int             eq_gen;
 
 /*
  * Pointer to global scheduler for events not part of an EQ. Events initialized
@@ -91,6 +94,7 @@ daos_eq_lib_init(crt_init_options_t *crt_info)
 		D_GOTO(crt, rc);
 
 	eq_ref = 1;
+	eq_gen++;
 
 	d_getenv_uint32_t("D_POLL_TIMEOUT", &ev_prog_timeout);
 
@@ -1277,11 +1281,16 @@ daos_event_priv_get(daos_event_t **ev)
 
 	D_ASSERT(*ev == NULL);
 
-	if (!ev_thpriv_is_init) {
+	/**
+	 * daos_fini() resets only the caller's flag; other threads may hold an event from before a
+	 * re-init. No call may overlap fini/init (DAOS-19955), so the unlocked check is enough.
+	 */
+	if (!ev_thpriv_is_init || ev_thpriv_gen != eq_gen) {
 		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
 		if (rc)
 			return rc;
 		ev_thpriv_is_init = true;
+		ev_thpriv_gen     = eq_gen;
 	}
 
 	ev_status = atomic_load(&evx->evx_status);

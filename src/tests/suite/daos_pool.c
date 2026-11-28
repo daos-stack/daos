@@ -419,6 +419,80 @@ init_fini_conn(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+reinit_daos(test_arg_t *arg)
+{
+	int rc;
+
+	rc = daos_eq_destroy(arg->eq, 0);
+	assert_rc_equal(rc, 0);
+	rc = daos_fini();
+	assert_rc_equal(rc, 0);
+	rc = daos_init();
+	assert_rc_equal(rc, 0);
+	rc = daos_eq_create(&arg->eq);
+	assert_rc_equal(rc, 0);
+}
+
+struct reinit_worker_arg {
+	test_arg_t       *arg;
+	pthread_barrier_t barrier;
+	int               rc[2];
+};
+
+static int
+connect_disconnect(test_arg_t *arg)
+{
+	daos_handle_t poh;
+	int           rc;
+
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
+	if (rc)
+		return rc;
+	return daos_pool_disconnect(poh, NULL);
+}
+
+static void *
+reinit_worker(void *data)
+{
+	struct reinit_worker_arg *wa = data;
+
+	wa->rc[0] = connect_disconnect(wa->arg);
+	/* let the main thread run daos_fini()/daos_init(), then use the library again */
+	pthread_barrier_wait(&wa->barrier);
+	pthread_barrier_wait(&wa->barrier);
+	wa->rc[1] = connect_disconnect(wa->arg);
+	return NULL;
+}
+
+/** sync ops from a thread that outlives a daos_fini()/daos_init() cycle (DAOS-19955) */
+static void
+reinit_live_thread(void **state)
+{
+	test_arg_t              *arg = *state;
+	struct reinit_worker_arg wa  = {.arg = arg};
+	pthread_t                thread;
+	int                      rc;
+
+	par_barrier(PAR_COMM_WORLD);
+
+	rc = pthread_barrier_init(&wa.barrier, NULL, 2);
+	assert_int_equal(rc, 0);
+	rc = pthread_create(&thread, NULL, reinit_worker, &wa);
+	assert_int_equal(rc, 0);
+
+	pthread_barrier_wait(&wa.barrier);
+	reinit_daos(arg);
+	pthread_barrier_wait(&wa.barrier);
+
+	rc = pthread_join(thread, NULL);
+	assert_int_equal(rc, 0);
+	pthread_barrier_destroy(&wa.barrier);
+
+	assert_rc_equal(wa.rc[0], 0);
+	assert_rc_equal(wa.rc[1], 0);
+}
+
 static bool
 ace_has_permissions(struct daos_ace *ace, uint64_t perms)
 {
@@ -2416,6 +2490,8 @@ static const struct CMUnitTest pool_tests[] = {
     {"POOL19: pool filter containers (many)", filter_containers_test, setup_manycontainers,
      teardown_containers},
     {"POOL20: reconf interrupted by -DER_NOTLEADER", reconf_notleader_handling, NULL,
+     test_case_teardown},
+    {"POOL21: sync ops from a thread that outlives daos re-init", reinit_live_thread, NULL,
      test_case_teardown},
 };
 
