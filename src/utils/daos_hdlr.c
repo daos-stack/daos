@@ -1840,6 +1840,17 @@ out:
 	return daos_errno2der(rc);
 }
 
+/* DAOS-19916: deliberate heap leak to exercise the ASan based NLT, do not land. */
+static volatile int asan_probe_sink;
+
+static void __attribute__((noinline))
+asan_probe_leak(void)
+{
+	void *(*volatile alloc_fn)(size_t) = malloc;
+
+	asan_probe_sink = alloc_fn(128) != NULL;
+}
+
 int
 fs_copy_hdlr(struct cmd_args_s *ap)
 {
@@ -1856,6 +1867,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct dm_args		*ca = NULL;
 	bool			is_posix_copy = true;
 	struct fs_copy_stats	*num = NULL;
+
+	asan_probe_leak();
 
 	D_ALLOC(ca, sizeof(struct dm_args));
 	if (ca == NULL)
