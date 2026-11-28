@@ -1,6 +1,6 @@
 """
 (C) Copyright 2019-2024 Intel Corporation.
-(C) Copyright 2025 Hewlett Packard Enterprise Development LP
+(C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -694,7 +694,20 @@ class SoakTestBase(TestWithServers):
         enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
         test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")
-        single_test_pool = self.params.get("single_test_pool", test_param + "*", True)
+        single_test_pool = self.params.get(
+            "single_test_pool", test_param + "*",
+            self.params.get("single_test_pool", "/run/soak/*", True))
+        pool_mem_ratios = self.params.get(
+            "pool_mem_ratios", test_param + "*",
+            self.params.get("pool_mem_ratios", "/run/soak/*"))
+        if pool_mem_ratios is not None:
+            if (not isinstance(pool_mem_ratios, list) or not pool_mem_ratios
+                    or any(isinstance(ratio, bool) or not isinstance(ratio, int)
+                           or not 1 <= ratio <= 100 for ratio in pool_mem_ratios)):
+                raise SoakTestError(
+                    "pool_mem_ratios must be a nonempty list of integer percentages from 1 to 100")
+            if single_test_pool:
+                raise SoakTestError("pool_mem_ratios requires single_test_pool set to false")
         harassers = self.params.get(self.test_id, os.path.join(test_param, "harasserlist", "*"))
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
@@ -759,6 +772,11 @@ class SoakTestBase(TestWithServers):
             self.log.info(
                 "<<SOAK LOOP %s: time until done %s>>", self.loop,
                 ddhhmmss_format(self.end_time - time.time()))
+            mem_ratio = None
+            if pool_mem_ratios is not None:
+                mem_ratio = pool_mem_ratios[(self.loop - 1) % len(pool_mem_ratios)]
+                self.log.info("SOAK LOOP %s: creating job pool with --mem-ratio=%s",
+                              self.loop, mem_ratio)
             # Initialize harassers
             if run_harasser:
                 if not harasserlist:
@@ -772,9 +790,9 @@ class SoakTestBase(TestWithServers):
                 self.selected_host = self.random.choice(self.hostlist_servers)
                 ranks = self.server_managers[0].get_host_ranks(
                     self.hostlist_servers - NodeSet(self.selected_host))
-                add_pools(self, ["pool_jobs"], ranks)
+                add_pools(self, ["pool_jobs"], ranks, mem_ratio=mem_ratio)
             elif not single_test_pool:
-                add_pools(self, ["pool_jobs"])
+                add_pools(self, ["pool_jobs"], mem_ratio=mem_ratio)
             elif single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
                 raise SoakTestError(
                     "<<FAILED: EXTEND requires single_test_pool set to false in test yaml")
