@@ -119,6 +119,7 @@ chk
 chmod
 chown
 chowned
+classname
 clush
 cmd
 cmdline
@@ -164,6 +165,7 @@ deserializing
 dev
 dfs
 dfuse
+dicts
 dir
 dirname
 disambiguates

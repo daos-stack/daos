@@ -769,9 +769,9 @@ def get_args():
                         help='Run tests under UBSan (same suite exclusion as --asan)')
     parser.add_argument('--tsan', action='store_true',
                         help='Run only tests tagged tsan: True for ThreadSanitizer')
-    parser.add_argument('--test_filter', default=None,
+    parser.add_argument('--test-filter', '--test_filter', default=None,
                         help='Regular expression to select tests to run')
-    parser.add_argument('--suite_filter', default=None,
+    parser.add_argument('--suite-filter', '--suite_filter', default=None,
                         help='Regular expression to select suites to run')
     parser.add_argument('--no-fail-on-error', action='store_true',
                         help='Disable non-zero return code on failure')
@@ -847,7 +847,7 @@ def main():
     if args.list:
         # Pure listing mode: suites/tests above already reflect every
         # selection/skip/filter rule a real run would apply (--gha, --asan,
-        # --ubsan, --tsan, --sudo, --suite_filter, --test_filter), so this
+        # --ubsan, --tsan, --sudo, --suite-filter, --test-filter), so this
         # can't drift out of sync with what actually executes. No suite is
         # run and no side effects (AIO init, log dirs, etc.) occur.
         for suite in suites:
