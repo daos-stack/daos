@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2019-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -203,7 +204,7 @@ func (tc *TransportConfig) PreLoadCertData() error {
 
 	certificate, certPool, err := loadCertWithCustomCA(tc.CARootPath, tc.CertificatePath, tc.PrivateKeyPath, tc.maxKeyPerms)
 	if err != nil {
-		return err
+		return errors.Wrap(err, tc.CertificatePath)
 	}
 
 	tc.tlsKeypair = certificate
@@ -212,7 +213,7 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	// Pre-parse the Leaf Certificate
 	tc.tlsKeypair.Leaf, err = x509.ParseCertificate(tc.tlsKeypair.Certificate[0])
 	if err != nil {
-		return err
+		return errors.Wrap(err, tc.CertificatePath)
 	}
 
 	if _, err = tc.tlsKeypair.Leaf.Verify(x509.VerifyOptions{
@@ -222,7 +223,7 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	}); isInvalidCert(err) {
 		return FaultInvalidCertFile(tc.CertificatePath, err)
 	} else if err != nil {
-		return err
+		return errors.Wrap(err, tc.CertificatePath)
 	}
 
 	return nil
