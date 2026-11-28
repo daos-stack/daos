@@ -4,13 +4,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import time
 
 from ClusterShell.NodeSet import NodeSet
+from ddb_utils import DdbCommand
 from general_utils import check_file_exists, report_errors
 from ior_test_base import IorTestBase
-from recovery_utils import wait_for_check_complete
-from run_utils import run_remote
+from recovery_utils import clean_mounts, wait_for_check_complete
+from run_utils import command_as_user, run_remote
 
 
 class PoolMembershipTest(IorTestBase):
@@ -18,7 +20,6 @@ class PoolMembershipTest(IorTestBase):
 
     :avocado: recursive
     """
-
     def get_rank_to_free(self):
         """Get the free space for each engine rank.
 
@@ -226,50 +227,91 @@ class PoolMembershipTest(IorTestBase):
     def test_dangling_pool_map(self):
         """Test dangling pool map.
 
+        PMEM steps:
         1. Create a pool.
         2. Stop servers.
         3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
         4. Enable and start the checker.
-        5. Query the checker and verify that the issue was fixed. i.e., Current status is
-        COMPLETED.
+        5. Query the checker and verify that the issue was fixed. i.e., Current status is COMPLETED.
         6. Disable the checker and start server.
         7. Verify that the pool has one less target.
 
-        Jira ID: DAOS-11736
+        MD-on-SSD steps:
+        1. Create a pool.
+        2. Stop servers.
+        3. Load pool dir to /mnt/daos2 and daos3 for all servers.
+        4. Remove vos-0 from one of the ranks. e.g., /mnt/daos2/<pool_uuid>/vos-0
+        5. Enable and start the checker.
+        6. Query the checker and verify that the issue was fixed. i.e., Current status is COMPLETED.
+        7. Disable the checker and start server.
+        8. Verify that the pool has one less target.
+
+        PMEM Jira ID: DAOS-11736
+        MD-on-SSD Jira ID: DAOS-18398
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=recovery,cat_recov,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
+        hosts = self.hostlist_servers
+        md_on_ssd = self.server_managers[0].manager.job.using_control_metadata
+        tmpfs_mounts = ["/mnt/daos2", "/mnt/daos3"]
+
         self.log_step("Create a pool.")
-        pool = self.get_pool(connect=False)
+        pool = self.get_pool()
 
         self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
-        rank_0_host = NodeSet(self.server_managers[0].get_host(0))
-        vos_0_path = f"{self.server_managers[0].get_vos_paths(pool)[0]}/vos-0"
-        vos_0_result = check_file_exists(hosts=self.hostlist_servers, filename=vos_0_path)
-        if not vos_0_result[0]:
-            msg = ("MD-on-SSD cluster. Contents under mount point are removed by control plane "
-                   "after system stop.")
-            self.log.info(msg)
-            dmg_command.system_start()
-            # return results in PASS.
-            return
-        rm_cmd = f"sudo rm {vos_0_path}"
-        if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
-            self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
+        if md_on_ssd:
+            db_path_0 = os.path.join(self.log_dir, "control_metadata", "daos_control", "engine0")
+            db_path_1 = os.path.join(self.log_dir, "control_metadata", "daos_control", "engine1")
+
+            self.log_step("MD-on-SSD: Create a directory to load pool data under /mnt.")
+            # Make sure to clean the mounts even if the test hits an error.
+            self.register_cleanup(clean_mounts, test=self, tmpfs_mounts=tmpfs_mounts)
+            cleanup_errors = clean_mounts(self, tmpfs_mounts=tmpfs_mounts)
+            if cleanup_errors:
+                self.fail("\n".join(cleanup_errors))
+            command = f"mkdir -p {tmpfs_mounts[0]} {tmpfs_mounts[1]}"
+            command_root = command_as_user(command=command, user="root")
+            result = run_remote(log=self.log, hosts=self.hostlist_servers, command=command_root)
+            if not result.passed:
+                self.fail(f"{command} failed on {result.failed_hosts}!")
+
+            self.log_step(f"MD-on-SSD: Load pool dir to {tmpfs_mounts}.")
+            for host in hosts:
+                # We need to call ddb prov_mem for all servers, so use new DdbCommand object with
+                # each host.
+                ddb_command = DdbCommand(server_host=host, path=self.bin, vos_path='""')
+                result = ddb_command.prov_mem(db_path=db_path_0, tmpfs_mount=tmpfs_mounts[0])
+                if not result.passed:
+                    self.fail(f"prov_mem failed for {db_path_0} on {host}! result = {result}")
+                result = ddb_command.prov_mem(db_path=db_path_1, tmpfs_mount=tmpfs_mounts[1])
+                if not result.passed:
+                    self.fail(f"prov_mem failed for {db_path_1} on {host}! result = {result}")
+
+            self.log_step(f"MD-on-SSD: Remove vos-0 from {tmpfs_mounts[0]} at {hosts[0]}.")
+            ddb_command = DdbCommand(server_host=hosts[0], path=self.bin, vos_path=None)
+            # Make sure to use the same combination as used in the above prov_mem. In this case,
+            # tmpfs_mounts[0] and db_path_0.
+            vos_0_path = f"{tmpfs_mounts[0]}/{pool.uuid.lower()}/vos-0"
+            result = ddb_command.rm_pool(db_path=db_path_0, removing_path=vos_0_path)
+            if not result.passed:
+                self.fail(f"rm_pool failed for {vos_0_path} on {hosts[0]}! result = {result}")
+        else:
+            self.log_step("Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.")
+            rank_0_host = NodeSet(self.server_managers[0].get_host(0))
+            vos_0_path = f"{self.server_managers[0].get_vos_paths(pool)[0]}/vos-0"
+            rm_cmd = f"rm {vos_0_path}"
+            command_root = command_as_user(command=rm_cmd, user="root")
+            if not run_remote(log=self.log, hosts=rank_0_host, command=command_root).passed:
+                self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
 
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable(stop=False)
-
-        # If we call check start immediately after check enable, checker may not detect
-        # the fault. Developer is fixing this issue.
-        time.sleep(3)
 
         dmg_command.check_start()
 

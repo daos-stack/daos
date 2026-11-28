@@ -1,12 +1,40 @@
 """
   (C) Copyright 2024 Intel Corporation.
-  (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+  (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
 from exception_utils import CommandFailure
+from run_utils import command_as_user, run_remote
+
+
+def clean_mounts(test, tmpfs_mounts):
+    """Unmount and remove directories used for MD-on-SSD testing.
+
+    Args:
+        test (TestWithServers): Test instance providing logging and server hosts.
+        tmpfs_mounts (list): tmpfs mount points to clean.
+
+    Returns:
+        list: Errors detected during cleanup.
+    """
+    test.log.info("MD-on-SSD: Clean %s on %s", tmpfs_mounts, test.hostlist_servers)
+    commands = ["rc=0"]
+    for tmpfs_mount in tmpfs_mounts:
+        commands.append(
+            f"if mountpoint -q {tmpfs_mount}; then umount {tmpfs_mount} || rc=1; fi")
+        commands.append(
+            f"if mountpoint -q {tmpfs_mount}; then rc=1; "
+            f"else rm -rf {tmpfs_mount} || rc=1; fi")
+    commands.append("exit $rc")
+    command_str = "; ".join(commands)
+    command = command_as_user(command=f"sh -c '{command_str}'", user="root")
+    result = run_remote(log=test.log, hosts=test.hostlist_servers, command=command)
+    if not result.passed:
+        return [f"Failed to clean {tmpfs_mounts} on {result.failed_hosts}"]
+    return []
 
 
 def wait_for_check_query(dmg, status=None):
