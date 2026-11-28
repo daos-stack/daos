@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,7 @@ static struct argp_option args_common_options[] = {
     OPT_HEADER("Options:", GROUP_OPTIONS),
     /** entries below inherits the group number of the header entry */
     {"write_mode", KEY_COMMON_WRITE_MODE, 0, 0, "Make changes persistent."},
+    {"log_dir", KEY_COMMON_LOG_DIR, "PATH", 0, "Log directory. Default: " DLCK_DEFAULT_LOG_DIR},
     {"options", KEY_COMMON_OPTIONS, "OPTIONS", 0,
      "Set options. Options are comma-separated and may include arguments using the equals sign "
      "('='). Please see available options below."},
@@ -43,6 +44,7 @@ args_common_init(struct dlck_args_common *args)
 	/** set defaults */
 	args->write_mode = false; /** dry run */
 	args->verbose                      = false;
+	args->log_dir                      = DLCK_DEFAULT_LOG_DIR;
 	args->options.cko_non_zero_padding = CHECKER_EVENT_WARNING;
 }
 
@@ -94,6 +96,9 @@ args_common_parser(int key, char *arg, struct argp_state *state)
 		break;
 	case KEY_COMMON_VERBOSE:
 		args->verbose = true;
+		break;
+	case KEY_COMMON_LOG_DIR:
+		args->log_dir = arg;
 		break;
 	case KEY_COMMON_OPTIONS:
 		rc = args_common_options_parse(arg, &args->options, state);
