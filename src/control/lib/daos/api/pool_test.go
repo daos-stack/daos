@@ -183,6 +183,7 @@ func TestAPI_PoolConnect(t *testing.T) {
 				// These fields aren't populated in the PoolConnect() query.
 				cmpopts.IgnoreFields(daos.PoolInfo{},
 					"EnabledRanks", "DisabledRanks", "DeadRanks", "ServiceReplicas",
+					"SelfHealPolicy",
 				),
 			}
 			test.CmpAny(t, "PoolConnectResp", tc.expResp, gotResp, cmpOpts...)
@@ -997,6 +998,7 @@ func TestAPI_GetPoolList(t *testing.T) {
 				pi := copyPoolInfo(&daos_default_PoolInfo)
 				pi.EnabledRanks = nil
 				pi.DisabledRanks = nil
+				pi.SelfHealPolicy = ""
 
 				return []*daos.PoolInfo{pi}
 			}(),

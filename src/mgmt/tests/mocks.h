@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2019-2024 Intel Corporation.
- * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
+ * (C) Copyright 2025-2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -113,6 +113,8 @@ extern void                             *ds_mgmt_pool_query_info_ptr;
 extern d_rank_list_t                    *ds_mgmt_pool_query_enabled_ranks_out;
 extern d_rank_list_t                    *ds_mgmt_pool_query_disabled_ranks_out;
 extern d_rank_list_t                    *ds_mgmt_pool_query_dead_ranks_out;
+extern uint64_t                          ds_mgmt_pool_query_self_heal;
+extern uint32_t                          ds_mgmt_pool_query_prop_type;
 
 void mock_ds_mgmt_pool_query_setup(void);
 

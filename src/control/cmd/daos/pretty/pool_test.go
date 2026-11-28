@@ -27,6 +27,7 @@ func TestPretty_PrintPoolInfo(t *testing.T) {
 	backtickStr := "`" + "dmg pool upgrade" + "`"
 	for name, tc := range map[string]struct {
 		pi          *daos.PoolInfo
+		opts        []PrintConfigOption
 		expPrintStr string
 	}{
 		"empty response": {
@@ -524,10 +525,43 @@ Pool health info:
 - Data redundancy: degraded
 `, poolUUID.String()),
 		},
+		"self_heal disabled by pool policy": {
+			pi: &daos.PoolInfo{
+				UUID:           poolUUID,
+				TotalTargets:   8,
+				ActiveTargets:  8,
+				State:          daos.PoolServiceStateReady,
+				SelfHealPolicy: "none",
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- No rebuild status available.
+exclude disabled on pool due to [pool] policy
+rebuild disabled on pool due to [pool] policy
+`, poolUUID.String()),
+		},
+		"self_heal disabled by system policy": {
+			pi: &daos.PoolInfo{
+				UUID:           poolUUID,
+				TotalTargets:   8,
+				ActiveTargets:  8,
+				State:          daos.PoolServiceStateReady,
+				SelfHealPolicy: daos.DefaultPoolSelfHealStr,
+			},
+			opts: []PrintConfigOption{PrintWithSysSelfHealPolicy("none")},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=8, disabled=0, leader=0, version=0, state=Ready
+Pool health info:
+- No rebuild status available.
+exclude disabled on pool due to [system] policy
+rebuild disabled on pool due to [system] policy
+`, poolUUID.String()),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			if err := PrintPoolInfo(tc.pi, &bld); err != nil {
+			if err := PrintPoolInfo(tc.pi, &bld, tc.opts...); err != nil {
 				t.Fatal(err)
 			}
 
@@ -538,7 +572,7 @@ Pool health info:
 	}
 }
 
-func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
+func TestPretty_printPoolSelfHealDisable(t *testing.T) {
 	for name, tc := range map[string]struct {
 		poolSelfHeal string
 		sysSelfHeal  string
@@ -563,10 +597,14 @@ func TestPretty_PrintPoolSelfHealDisable(t *testing.T) {
 			sysSelfHeal:  "none",
 			expPrintStr:  "exclude disabled on pool due to [pool system] policies\nrebuild disabled on pool due to [pool system] policies\n",
 		},
+		"unknown system policy": {
+			poolSelfHeal: "none",
+			expPrintStr:  "exclude disabled on pool due to [pool] policy\nrebuild disabled on pool due to [pool] policy\n",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			PrintPoolSelfHealDisable(tc.poolSelfHeal, tc.sysSelfHeal, &bld)
+			printPoolSelfHealDisable(tc.poolSelfHeal, tc.sysSelfHeal, &bld)
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected print string (-want, +got):\n%s\n", diff)

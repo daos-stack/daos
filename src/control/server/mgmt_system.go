@@ -828,15 +828,9 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absenthosts: missHosts.String(),
 	}
 
-	// Retrieve system self-heal property. Assume default value where all flags are set if
-	// property isn't present.
-	resp.SysSelfHealPolicy = daos.DefaultSysSelfHealFlagsStr
-	if selfHeal, err := svc.getSysSelfHeal(); system.IsErrSystemAttrNotFound(err) {
-		svc.log.Debugf(err.Error())
-	} else if err != nil {
+	resp.SysSelfHealPolicy, err = svc.getSysSelfHeal()
+	if err != nil {
 		return nil, err
-	} else {
-		resp.SysSelfHealPolicy = selfHeal
 	}
 
 	if hitRanks.Count() == 0 {
@@ -1597,7 +1591,6 @@ func (svc *mgmtSvc) SystemSelfHealEval(ctx context.Context, pbReq *mgmtpb.System
 		return nil, err
 	}
 
-	// Retrieve system self-heal property. Assume a system property exists when running eval.
 	selfHeal, err := svc.getSysSelfHeal()
 	if err != nil {
 		return nil, err
