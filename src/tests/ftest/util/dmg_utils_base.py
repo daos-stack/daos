@@ -717,8 +717,18 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.ScanSubCommand()
             elif self.sub_command.value == "set":
                 self.sub_command_class = self.SetSubCommand()
+            elif self.sub_command.value == "nvme-rebind":
+                self.sub_command_class = self.NvmeRebindSubCommand()
             else:
                 self.sub_command_class = None
+
+        class NvmeRebindSubCommand(CommandWithParameters):
+            """Defines an object for the dmg storage nvme-rebind command."""
+
+            def __init__(self):
+                """Create a dmg storage nvme-rebind command object."""
+                super().__init__("/run/dmg/storage/nvme_rebind/*", "nvme-rebind")
+                self.pci_address = FormattedParameter("--pci-address {}", None)
 
         class ReplaceSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage replace sub command"""

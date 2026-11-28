@@ -364,6 +364,25 @@ class DmgCommand(DmgCommandBase):
             ("storage", "replace", "nvme"), host=host, old_uuid=old_uuid,
             new_uuid=new_uuid)
 
+    def storage_nvme_rebind(self, pci_address):
+        """Get the result of the 'dmg storage nvme-rebind' command.
+
+        Unbind an NVMe SSD from its kernel driver and rebind it to the userspace driver
+        on a single host. The target host must be set via the hostlist property before
+        calling this method.
+
+        Args:
+            pci_address (str): PCI address of the NVMe SSD to rebind.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage nvme-rebind command fails.
+
+        """
+        return self._get_json_result(("storage", "nvme-rebind"), pci_address=pci_address)
+
     def storage_scan_nvme_health(self):
         """Get the result of the 'dmg storage scan --nvme-health' command.
 

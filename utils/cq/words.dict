@@ -230,6 +230,7 @@ hostfile
 hostlist
 hostname
 hostnames
+hotplug
 https
 hugepage
 hugepages
@@ -398,6 +399,7 @@ readdir
 readlink
 realloc
 rebase
+rebind
 relink
 relinked
 recurse
@@ -405,6 +407,7 @@ redistributions
 refactor
 repo
 reproducibility
+rescan
 returncode
 rf
 rmdir
@@ -471,6 +474,7 @@ svc
 symlink
 symlinks
 sys
+sysfs
 syslog
 systemctl
 systemd
@@ -513,6 +517,7 @@ unlinking
 unmangle
 unmount
 unordered
+unplug
 unwritable
 uri
 url
