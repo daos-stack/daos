@@ -1,6 +1,6 @@
 """
-  (C) Copyright 2019-2024 Intel Corporation.
-  (C) Copyright 2026 Hewlett Packard Enterprise Development LP
+  Copyright 2019-2024 Intel Corporation.
+  Copyright 2025-2026 Hewlett Packard Enterprise Development LP
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -248,6 +248,92 @@ FAULTS = {
         'probability_y': '100',
         'interval': '1',
         'max_faults': '1'},
+    'DLCK_MOCK_ROOT': {
+        'id': '131328',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_GETGRNAM': {
+        'id': '131329',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_MOCK_NO_DAOS_SERVER_GROUP': {
+        'id': '131330',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_GETGROUPS': {
+        'id': '131331',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_MOCK_NOT_IN_DAOS_SERVER_GROUP': {
+        'id': '131332',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_CREATE_LOG_DIR': {
+        'id': '131333',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_CREATE_POOL_DIR': {
+        'id': '131334',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_START': {
+        'id': '131335',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_EXEC': {
+        'id': '131336',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_JOIN': {
+        'id': '131337',
+        'interval': '1',
+        'max_faults': '1'},
+    'DLCK_FAULT_ENGINE_STOP': {
+        'id': '131338',
+        'interval': '1',
+        'max_faults': '1'},
+    'DAOS_FAULT_POOL_NVME_HEALTH': {
+        'id': '131584',
+        'interval': '2',  # skip sys_db
+        'max_faults': '1'},
+    'DAOS_FAULT_POOL_OPEN_BIO': {
+        'id': '131585'},
+    'DAOS_FAULT_POOL_OPEN_UMEM': {
+        'id': '131586',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_POOL_OPEN_MAGIC': {
+        'id': '131587',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_POOL_OPEN_VERSION': {
+        'id': '131588',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_POOL_OPEN_UUID': {
+        'id': '131589',
+        'interval': '2'},  # skip sys_db
+    'DAOS_FAULT_POOL_EXT_PADDING': {
+        'id': '131593',
+        'interval': '1'},
+    'DAOS_FAULT_POOL_EXT_RESERVED': {
+        'id': '131594',
+        'interval': '1'},
+    'DAOS_FAULT_CONT_TREE_INV_CLASS': {
+        'id': '131595',
+        'max_faults': '1'},
+    'DAOS_FAULT_CONT_TREE_UNREG_CLASS': {
+        'id': '131596',
+        'max_faults': '1'},
+    'DAOS_FAULT_CONT_TREE_FEATURES': {
+        'id': '131597',
+        'max_faults': '1'},
+    'DAOS_FAULT_GC_TREE_INV_CLASS': {
+        'id': '131598',
+        'max_faults': '1'},
+    'DAOS_FAULT_GC_TREE_UNREG_CLASS': {
+        'id': '131599',
+        'max_faults': '1'},
+    'DAOS_FAULT_GC_TREE_FEATURES': {
+        'id': '131600',
+        'max_faults': '1'},
 }
 
 
@@ -267,6 +353,12 @@ class FaultInjection():
         self.fault_file = None
         self._test_dir = None
         self._fault_list = []
+
+    def get_faults_dict(self):
+        """Get the predefined fault dictionary.
+        Returns: dict: The fault dictionary
+        """
+        return FAULTS
 
     def write_fault_file(self, on_the_fly_fault=None):
         """Write out a fault injection config file.
