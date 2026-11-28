@@ -5639,6 +5639,18 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (rc != 0 || obj_auxi->result) {
 		if (task->dt_result == 0)
 			task->dt_result = rc ? rc : obj_auxi->result;
+		/* tse populates the first failed shard task's result to the parent task,
+		 * so a -DER_CSUM from one shard can mask a -DER_FETCH_AGAIN from another.
+		 * For an EC single value overwritten by a smaller one, a data shard that
+		 * still holds a cell of the old record can fail checksum verification when
+		 * its reply is handled before the size conflict is visible. The conflict
+		 * proves the request was laid out for the wrong record size, so fetch
+		 * again with the replied size instead of marking that healthy shard as
+		 * failed. The refetch still verifies every shard it reads.
+		 */
+		else if (obj_auxi->is_ec_obj && obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
+			 task->dt_result == -DER_CSUM && obj_auxi->result == -DER_FETCH_AGAIN)
+			task->dt_result = -DER_FETCH_AGAIN;
 	} else if (obj_req_is_ec_cond_fetch(obj_auxi) && task->dt_result == -DER_NONEXIST &&
 		   !obj_auxi->cond_fetch_split) {
 		/* EC cond_fetch/check_exist task created multiple shard tasks, tse will populate
