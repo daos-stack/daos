@@ -1,6 +1,7 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
  * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2025 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1185,4 +1186,212 @@ query_all_org_func_addr(void)
 			}
 		}
 	}
+}
+
+/*
+ * module_base_addr - Determine the full paths of one module in /proc/self/maps and base address
+ */
+static char *
+module_base_addr(const char *mod_name, char **lib_path)
+{
+	int      num_item;
+	int      path_offset   = 0, i;
+	char    *read_buff_map = NULL;
+	char    *pos, *start, *end;
+	char     buf[3072];
+	uint64_t base_addr;
+	size_t   byte_read;
+	size_t   file_size = 0;
+	FILE    *fp;
+
+	if (lib_path == NULL)
+		return NULL;
+
+	fp = fopen("/proc/self/maps", "r");
+	if (!fp) {
+		perror("fopen");
+		return NULL;
+	}
+
+	/* Read until EOF and count bytes */
+	while ((byte_read = fread(buf, 1, sizeof(buf), fp)) > 0) {
+		file_size += byte_read;
+	}
+
+	read_buff_map = malloc(file_size);
+	if (read_buff_map == NULL) {
+		perror("malloc");
+		return NULL;
+	}
+	fseek(fp, 0, SEEK_SET);
+	byte_read = fread(read_buff_map, 1, file_size, fp);
+	if (byte_read != file_size) {
+		perror("fread");
+		fclose(fp);
+		goto err;
+	}
+	fclose(fp);
+
+	/* need to find the offset of lib path in the line */
+	pos = strstr(read_buff_map, "[stack]");
+	if (pos == NULL) {
+		printf("Failed to find section of stack.\n");
+		goto err;
+	}
+	/* look back for the first '\n', the end of last line */
+	for (i = 0; i < 128; i++) {
+		if (*(pos - i) == '\n') {
+			/* path_offset is the offset from the end of previous line to the beginning
+			 * of the lib path string in current line
+			 */
+			path_offset = i;
+			break;
+		}
+		if ((pos - i) < read_buff_map) {
+			break;
+		}
+	}
+	if (path_offset == 0) {
+		printf("Fail to determine path_offset in /proc/self/maps.\n");
+		goto err;
+	}
+
+	/* need to find the offset of lib path in the line */
+	pos = strstr(read_buff_map, mod_name);
+	if (pos == NULL) {
+		printf("Failed to find section for module %s.\n", mod_name);
+		goto err;
+	}
+	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + file_size);
+	if ((end - start + 1) >= PATH_MAX) {
+		printf("path is too long");
+		goto err;
+	}
+	*lib_path = strndup(start, end - start + 1);
+	if (*lib_path == NULL)
+		goto err;
+	(*lib_path)[end - start] = 0;
+
+	num_item = sscanf(start - path_offset, "%lx", &base_addr);
+	if (num_item != 1) {
+		printf("Fail to read module base address.\n");
+		goto err;
+	}
+
+	free(read_buff_map);
+	return (char *)base_addr;
+
+err:
+	free(read_buff_map);
+	return NULL;
+}
+
+int
+query_var_addr_size(const char *mod_name, const char *func_name, char **func_addr,
+		    const char *var_name, size_t *var_size, char **var_addr)
+{
+	int         fd, i, j, rc;
+	struct stat file_stat;
+	void       *map_start;
+	Elf64_Ehdr *header;
+	Elf64_Shdr *sections;
+	int         strtab_offset  = 0;
+	void       *symb_base_addr = NULL;
+	int         num_sym = 0, sym_rec_size = 0, sym_offset, rec_addr;
+	char       *sym_name;
+	long int    addr_var = 0;
+	char       *base_addr;
+	char       *lib_path;
+
+	if (mod_name == NULL || func_name == NULL || func_addr == NULL || var_size == NULL ||
+	    var_addr == NULL)
+		return EINVAL;
+
+	base_addr = module_base_addr(mod_name, &lib_path);
+	if (base_addr == NULL)
+		return ENODATA;
+
+	rc = stat(lib_path, &file_stat);
+	if (rc == -1) {
+		printf("Fail to query stat of file %s", lib_path);
+		return errno;
+	}
+
+	fd = open(lib_path, O_RDONLY);
+	if (fd == -1) {
+		printf("Fail to open file %s", lib_path);
+		return errno;
+	}
+
+	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	if ((long int)map_start == -1) {
+		close(fd);
+		printf("Fail to mmap file %s", lib_path);
+		return errno;
+	}
+
+	header   = (Elf64_Ehdr *)map_start;
+	sections = (Elf64_Shdr *)((char *)map_start + header->e_shoff);
+
+	for (i = 0; i < header->e_shnum; i++) {
+		if (sections[i].sh_type == SHT_SYMTAB) {
+			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
+			sym_rec_size   = sections[i].sh_entsize;
+			if (sections[i].sh_entsize == 0) {
+				printf("Unexpected entry size in ELF file");
+				goto err;
+			}
+			num_sym = sections[i].sh_size / sections[i].sh_entsize;
+
+			/* i should be larger than 0 here given sections[i].sh_type == SHT_SYMTAB.
+			 * The range was set from my experience with several shared libraries I
+			 * have tried so far. In case this range does not work, we could simply
+			 * extend the search to the full range of [0, header->e_shnum).
+			 */
+			for (j = max(i - 1, 0); j < header->e_shnum; j++) {
+				if (sections[j].sh_type == SHT_STRTAB) {
+					strtab_offset = (int)(sections[j].sh_offset);
+					break;
+				}
+			}
+			if (!strtab_offset) {
+				printf("Failed to find STRTAB section in elf file");
+				goto err;
+			}
+
+			for (j = 0; j < num_sym; j++) {
+				rec_addr   = sym_rec_size * j;
+				sym_offset = *((int *)(symb_base_addr + rec_addr)) & 0xFFFFFFFF;
+				sym_name   = (char *)(map_start + strtab_offset + sym_offset);
+				if (strcmp(sym_name, var_name) == 0) {
+					*var_size = *((size_t *)(symb_base_addr + rec_addr + 16));
+					addr_var  = *((long int *)(symb_base_addr + rec_addr + 8));
+				}
+				if ((*func_addr == 0) && (strcmp(sym_name, func_name) == 0)) {
+					*func_addr = base_addr +
+						     *((long int *)(symb_base_addr + rec_addr + 8));
+				}
+				if (addr_var && *func_addr) {
+					break;
+				}
+			}
+		}
+	}
+
+	munmap(map_start, file_stat.st_size);
+	close(fd);
+
+	if ((*func_addr == NULL) || (!addr_var))
+		/* the address of the variable or reference function is not found */
+		return ENODATA;
+
+	*var_addr = (char *)((long int)base_addr + addr_var);
+	free(lib_path);
+
+	return 0;
+
+err:
+	munmap(map_start, file_stat.st_size);
+	close(fd);
+	return ENODATA;
 }
