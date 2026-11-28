@@ -3512,7 +3512,7 @@ tier_reserve_nr(struct umem_cache *cache, unsigned int tier)
 	case UMEM_RSRV_TIER_DKEY:
 		rsrv_nr += cache->ca_soemb_tier_reservation_pages;
 		/* fallthrough */
-	case UMEM_RSRV_TIER_TX:
+	case UMEM_RSRV_TIER_NORSRV:
 		break;
 	default:
 		D_ASSERT(0);
@@ -3523,17 +3523,15 @@ tier_reserve_nr(struct umem_cache *cache, unsigned int tier)
 }
 
 /*
- * Grab a free page for E-page mapping triggered by umem_cache_map(). The caller waits in the
- * TFIFO of @tier, which must match the stage it is in: UMEM_RSRV_TIER_OBJ for a new object
- * allocation outside of a transaction (tx), where the caller must not have pinned any pages
- * for the new object; UMEM_RSRV_TIER_TX for a caller which may already hold pinned pages.
+ * Grab a free page for E-page mapping triggered by umem_cache_map(). No extra page is
+ * reserved for the mapping, so the caller waits in the UMEM_RSRV_TIER_NORSRV tier.
  */
 static int
-cache_grab_page(struct umem_cache *cache, unsigned int tier)
+cache_grab_page(struct umem_cache *cache)
 {
 	int rc = 0, retry_cnt = 0;
 
-	cache_tfifo_enter(cache, tier);
+	cache_tfifo_enter(cache, UMEM_RSRV_TIER_NORSRV);
 
 	while (cache->ca_pgs_stats[UMEM_PG_STATS_FREE] < 1) {
 		/* Evict unused E page if any */
@@ -3545,7 +3543,7 @@ cache_grab_page(struct umem_cache *cache, unsigned int tier)
 				rc = 0;
 		} else if (!d_list_empty(&cache->ca_pgs_pinned)) {
 			/* Wait for pinned page being unpinned */
-			cache_tfifo_wait(cache, tier);
+			cache_tfifo_wait(cache, UMEM_RSRV_TIER_NORSRV);
 		} else {
 			rc = -DER_INVAL;
 			DL_ERROR(rc, "Grab page failed.");
@@ -3562,7 +3560,7 @@ cache_grab_page(struct umem_cache *cache, unsigned int tier)
 			break;
 	}
 
-	cache_tfifo_exit(cache, tier);
+	cache_tfifo_exit(cache, UMEM_RSRV_TIER_NORSRV);
 	return rc;
 }
 
@@ -3572,7 +3570,7 @@ cache_grab_page(struct umem_cache *cache, unsigned int tier)
  * If a page is already mapped, check and update the evictability status.
  */
 static int
-cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, unsigned int tier)
+cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 {
 	struct umem_page_info   *pinfo;
 	uint32_t		 pg_id;
@@ -3607,7 +3605,7 @@ retry:
 
 		if (is_id_evictable(cache, pg_id)) {
 			if (!grab_page) {
-				rc = cache_grab_page(cache, tier);
+				rc = cache_grab_page(cache);
 				if (rc)
 					return rc;
 
@@ -3924,8 +3922,7 @@ umem_cache_post_replay(struct umem_store *store)
 }
 
 int
-umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
-	       unsigned int tier)
+umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr)
 {
 	struct umem_cache	*cache = store->cache;
 	uint32_t		 in_pages[UMEM_PAGES_ON_STACK], *out_pages;
@@ -3935,7 +3932,7 @@ umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int ra
 	if (rc)
 		return rc;
 
-	rc = cache_map_pages(cache, out_pages, page_nr, tier);
+	rc = cache_map_pages(cache, out_pages, page_nr);
 	if (rc)
 		DL_ERROR(rc, "Map page failed.");
 

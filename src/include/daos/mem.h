@@ -428,7 +428,7 @@ struct umem_cache_range {
 };
 
 enum {
-	UMEM_RSRV_TIER_TX = 0,
+	UMEM_RSRV_TIER_NORSRV = 0,
 	UMEM_RSRV_TIER_DKEY,
 	UMEM_RSRV_TIER_OBJ,
 	UMEM_RSRV_TIER_NE,
@@ -443,15 +443,13 @@ enum {
  * \param[in]	store		The umem store
  * \param[in]	ranges		Ranges to be mapped
  * \param[in]	range_nr	Number of ranges
- * \param[in]	tier		Tier of TFIFO to wait in when mapping an evictable page
  *
  * \return	0		: On success
  *		-DER_BUSY	: Not enough free pages
  *		-ve		: Errors
  */
 int
-umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
-	       unsigned int tier);
+umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr);
 
 /** Load & map MD pages in specified range to memory pages.
  *

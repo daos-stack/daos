@@ -1472,7 +1472,7 @@ heap_mark_zone_unused(struct palloc_heap *heap, uint32_t zone_id)
 	rg.cr_off = GET_ZONE_OFFSET(zone_id);
 	rg.cr_size =
 	    ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE : heap->size - rg.cr_off;
-	rc = umem_cache_map(heap->layout_info.store, &rg, 1, UMEM_RSRV_TIER_TX);
+	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
 	if (rc != 0) {
 		rc = daos_der2errno(rc);
 		ERR("Failed to remap zone %d in umem cache as unused rc=%d\n", zone_id, rc);
@@ -1547,7 +1547,7 @@ heap_populate_bucket(struct palloc_heap *heap, struct bucket *bucket)
 	rg.cr_off = GET_ZONE_OFFSET(zone_id);
 	rg.cr_size =
 	    ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE : heap->size - rg.cr_off;
-	rc = umem_cache_map(heap->layout_info.store, &rg, 1, UMEM_RSRV_TIER_TX);
+	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
 	if (rc != 0) {
 		rc = daos_der2errno(rc);
 		ERR("Failed to map zone %d to umem cache rc=%d\n", zone_id, rc);
@@ -2054,7 +2054,7 @@ heap_zone_load(struct palloc_heap *heap, uint32_t zid)
 	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
 			 ? ZONE_MAX_SIZE
 			 : (store->stor_size - rg.cr_off);
-	rc         = umem_cache_load(store, &rg, 1, UMEM_RSRV_TIER_TX);
+	rc         = umem_cache_load(store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 	if (rc) {
 		D_ERROR("Failed to load pages to umem cache");
 		return daos_der2errno(rc);
@@ -2270,7 +2270,7 @@ heap_init(void *heap_start, uint64_t umem_cache_size, struct umem_store *store)
 }
 
 static inline int
-heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id, unsigned int tier)
+heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 {
 	uint32_t                zone_id;
 	struct umem_cache_range rg = {0};
@@ -2316,7 +2316,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id, unsigned int
 	rg.cr_size =
 	    ((heap->size - rg.cr_off) > ZONE_MAX_SIZE) ? ZONE_MAX_SIZE : heap->size - rg.cr_off;
 
-	rc = umem_cache_map(heap->layout_info.store, &rg, 1, tier);
+	rc = umem_cache_map(heap->layout_info.store, &rg, 1);
 	if (rc != 0) {
 		ERR("Failed to map zone %u to umem cache\n", zone_id);
 		errno = daos_der2errno(rc);
@@ -2334,7 +2334,7 @@ heap_create_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id, unsigned int
 	memset(z, 0, rg.cr_size);
 
 	/* Mapped above without a yield: this only adds a reference and never waits */
-	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, tier, &pin_handle);
+	rc = umem_cache_pin(heap->layout_info.store, &rg, 1, UMEM_RSRV_TIER_NORSRV, &pin_handle);
 	if (rc) {
 		errno = daos_der2errno(rc);
 		goto error;
@@ -2384,12 +2384,9 @@ out:
  *	runtime, either from the evictable MB pool or by creating a new one.
  *	Shared core used by both the active evictable MB selection and the
  *	active SOEMB promotion. May return NULL under memory pressure.
- *	@tier is the umem cache TFIFO tier to wait in if a new MB has to be
- *	created: UMEM_RSRV_TIER_OBJ for the active evictable MB selection,
- *	UMEM_RSRV_TIER_TX for the SOEMB promotion.
  */
 static struct mbrt *
-heap_evictable_mb_pick(struct palloc_heap *heap, unsigned int tier)
+heap_evictable_mb_pick(struct palloc_heap *heap)
 {
 	struct mbrt *mb;
 	uint32_t     mb_id = 0;
@@ -2400,7 +2397,7 @@ retry:
 	if (mb)
 		return mb;
 
-	ret = heap_create_evictable_mb(heap, &mb_id, tier);
+	ret = heap_create_evictable_mb(heap, &mb_id);
 	if (ret >= 0) {
 		if (ret)
 			goto retry;
@@ -2428,7 +2425,7 @@ heap_get_evictable_mb(struct palloc_heap *heap, uint32_t *mb_id)
 	}
 	heap->rt->mb_pressure = 0;
 
-	mb = heap_evictable_mb_pick(heap, UMEM_RSRV_TIER_OBJ);
+	mb = heap_evictable_mb_pick(heap);
 	if (mb == NULL) {
 		D_ERROR("failed to get an active evictable MB");
 		*mb_id = 0;
@@ -2500,7 +2497,7 @@ heap_soemb_active_set(struct palloc_heap *heap)
 		if (smbrt->svec[i].mb != NULL)
 			continue;
 
-		mb = heap_evictable_mb_pick(heap, UMEM_RSRV_TIER_TX);
+		mb = heap_evictable_mb_pick(heap);
 		if (mb == NULL) {
 			D_ERROR("failed to pick an evictable mb as soemb");
 			break;
@@ -2512,7 +2509,7 @@ heap_soemb_active_set(struct palloc_heap *heap)
 		pin        = NULL;
 
 		mb->is_soe_mb = true;
-		rc            = umem_cache_pin(store, &rg, 1, UMEM_RSRV_TIER_TX, &pin);
+		rc            = umem_cache_pin(store, &rg, 1, UMEM_RSRV_TIER_NORSRV, &pin);
 		if (rc) {
 			mb->is_soe_mb = false;
 			mbrt_qbs_insertmb(&heap->rt->emb_qbs, mb);

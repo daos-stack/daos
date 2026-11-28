@@ -439,7 +439,7 @@ dav_wal_replay_heap_off2ptr(dav_obj_t *dav_hdl, uint64_t off)
 	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
 			 ? ZONE_MAX_SIZE
 			 : (store->stor_size - rg.cr_off);
-	rc         = umem_cache_load(store, &rg, 1, UMEM_RSRV_TIER_TX);
+	rc         = umem_cache_load(store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 	if (rc) {
 		D_ERROR("Failed to load pages to umem cache");
 		errno = daos_der2errno(rc);

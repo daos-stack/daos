@@ -694,7 +694,7 @@ test_p2_basic(void **state)
 	/* Load single page */
 	rg.cr_off	= cache->ca_base_off;
 	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
-	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 1);
 	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store, cache->ca_base_off), cache->ca_base);
@@ -702,26 +702,26 @@ test_p2_basic(void **state)
 	/* Map single non-evictable page */
 	rg.cr_off	= cache->ca_base_off + 1 * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
-	rc              = umem_cache_map(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_TX);
+	rc              = umem_cache_map(&arg->ta_store, &rg, 1);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 2);
 	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store,
 				cache->ca_base_off + UMEM_CACHE_PAGE_SZ),
 			 cache->ca_base + UMEM_CACHE_PAGE_SZ);
 
-	/* Map single evictable page, it enters the TFIFO of the tier given by caller */
+	/* Map single evictable page, it enters the TFIFO of the no-reserve tier */
 	tfifo_last_tier = UMEM_RSRV_TIER_MAX;
 	rg.cr_off       = cache->ca_base_off + (PAGE_NUM_MAX_NE + 3) * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size      = UMEM_CACHE_PAGE_SZ;
-	rc              = umem_cache_map(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_TX);
+	rc              = umem_cache_map(&arg->ta_store, &rg, 1);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(tfifo_last_tier, UMEM_RSRV_TIER_TX);
+	assert_int_equal(tfifo_last_tier, UMEM_RSRV_TIER_NORSRV);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 2);
 
 	/* Load multiple pages */
 	rg.cr_off	= cache->ca_base_off + (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= 3 * UMEM_CACHE_PAGE_SZ;
-	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 3);
 
@@ -774,14 +774,14 @@ test_p2_evict(void **state)
 	/* Load all non-evictable pages */
 	rg.cr_off	= cache->ca_base_off;
 	rg.cr_size	= PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
-	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], PAGE_NUM_MAX_NE);
 
 	/* Load more pages to fill the cache */
 	rg.cr_off	= cache->ca_base_off + PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= (PAGE_NUM_MEM - PAGE_NUM_MAX_NE) * UMEM_CACHE_PAGE_SZ;
-	rc              = umem_cache_load(&arg->ta_store, &rg, 1, 0);
+	rc              = umem_cache_load(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], PAGE_NUM_MAX_NE);
 
@@ -911,7 +911,7 @@ test_p2_evict_chkpt_race(void **state)
 	rg.cr_size = UMEM_CACHE_PAGE_SZ;
 	for (i = 0; i < PAGE_NUM_MEM; i++) {
 		rg.cr_off = cache->ca_base_off + i * UMEM_CACHE_PAGE_SZ;
-		rc        = umem_cache_load(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_TX);
+		rc        = umem_cache_load(&arg->ta_store, &rg, 1, UMEM_RSRV_TIER_NORSRV);
 		assert_rc_equal(rc, 0);
 	}
 
@@ -978,9 +978,9 @@ test_p2_pin_max_ceil(void **state)
 		if (cases[i].constraints.max_ne_pages != PAGE_NUM_MEM)
 			rg.cr_off += cases[i].constraints.max_ne_pages * UMEM_CACHE_PAGE_SZ;
 
-		/* TX maps the range first; later tiers must still count mapped pages. */
-		for (tier = UMEM_RSRV_TIER_TX; tier <= UMEM_RSRV_TIER_OBJ; tier++) {
-			reserve = tier == UMEM_RSRV_TIER_TX
+		/* NORSRV maps the range first; later tiers must still count mapped pages. */
+		for (tier = UMEM_RSRV_TIER_NORSRV; tier <= UMEM_RSRV_TIER_OBJ; tier++) {
+			reserve = tier == UMEM_RSRV_TIER_NORSRV
 				      ? 0
 				      : cases[i].constraints.soemb_tier_reservation_pages;
 			limit   = cases[i].ceiling > reserve ? cases[i].ceiling - reserve : 0;
