@@ -1,0 +1,30 @@
+# The controller and both roles need a shared DAOS_TEST_SHARED_DIR (or HOME).
+# launch.py replaces the host counts with assigned nodes for a two-node run.
+ENV:
+  default:
+    - D_LOG_MASK: "INFO"
+    - D_INTERFACE: "eth0"
+env_D_PROVIDER: !mux
+  # Add provider variants here without changing the reconnect protocol or scenario.
+  ofi_tcp:
+    D_PROVIDER: "ofi+tcp"
+hosts: !mux
+  hosts_1:
+    config: two_node
+    test_servers: 1
+    test_clients: 1
+timeout: 600
+tests: !mux
+  rpc_reconnect:
+    name: rpc_reconnect
+    test_servers_bin: crt_launch
+    # Reuse this exact command on restart to retain the group name and launch port.
+    test_servers_arg: "-e test_rpc_reconnect_server --name rpc_reconnect_group"
+    test_servers_env: ""
+    test_servers_ppn: "1"
+    test_clients_bin: test_rpc_reconnect_client
+    # Success targets are aggregated over eight sender threads on one context.
+    # The controller adds unique --status_file and server --pid_file paths at runtime.
+    test_clients_arg: "--attach_to rpc_reconnect_group --threads 8 --pre_restart_successes 100 --post_restart_successes 100"
+    test_clients_env: ""
+    test_clients_ppn: "1"
