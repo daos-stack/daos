@@ -2387,6 +2387,8 @@ update:
 
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, entryp, csum_bufp);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_VOS_EVT_TX_ABORT))
+		rc = -DER_NOMEM;
 
 	/* No need for evt_ent_array_fini as there will be no allocations
 	 * with 1 entry in the list
@@ -3824,6 +3826,8 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	 */
 	if (rc == -DER_NONEXIST)
 		rc = 0;
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_VOS_EVT_TX_ABORT))
+		rc = -DER_NOMEM;
 
 out:
 	/* No need for evt_ent_array_fini as there will be no allocations
