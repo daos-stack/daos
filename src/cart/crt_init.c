@@ -757,6 +757,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_GOTO(unlock, rc = -DER_INVAL);
 		}
 	} else if (strchr(provider, ',') != NULL) {
+		if (thread_mode_single) {
+			D_ERROR("Single-thread mode is incompatible with multiple providers\n");
+			D_GOTO(unlock, rc = -DER_INVAL);
+		}
+
 		D_STRNDUP(provider_str, provider, CRT_ENV_STR_MAX_SIZE);
 		if (provider_str == NULL)
 			D_GOTO(unlock, rc = -DER_NOMEM);

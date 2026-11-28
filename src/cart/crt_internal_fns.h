@@ -55,6 +55,13 @@ crt_is_service()
 	return crt_gdata.cg_server;
 }
 
+static inline uint32_t
+crt_bulk_provider_index(bool primary)
+{
+	/* A secondary-only client's sole local provider is primary locally. */
+	return primary && crt_gdata.cg_provider_is_primary ? 0 : 1;
+}
+
 static inline void
 crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 		  struct crt_bulk_desc *bulk_desc)

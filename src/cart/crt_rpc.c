@@ -1219,8 +1219,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 
 	/* For a secondary provider round-robin between all available remote contexts */
 	if (!crt_gdata.cg_provider_is_primary) {
-
-		prov_data = &crt_gdata.cg_prov_gdata_secondary[0];
+		prov_data = &crt_gdata.cg_prov_gdata_primary;
 
 		D_MUTEX_LOCK(&prov_data->cpg_mutex);
 		prov_data->cpg_last_remote_tag++;

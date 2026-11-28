@@ -108,6 +108,9 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_GOTO(out, rc = -DER_NOMEM);
 	ret_hdl->refcount = 1;
 
+	/* TODO: currently only 1 secondary provider is supported */
+	ret_hdl->prov_idx = crt_bulk_provider_index(ctx->cc_primary);
+
 	quota_rc = get_quota_resource(crt_ctx, CRT_QUOTA_BULKS);
 	if (quota_rc == -DER_QUOTA_LIMIT) {
 		int i;
@@ -153,6 +156,27 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 out:
 	if (rc == 0 && bulk_hdl)
 		*bulk_hdl = ret_hdl;
+	return rc;
+}
+
+int
+crt_bulk_get_provider_index(crt_bulk_t crt_bulk, uint32_t *ret_idx)
+{
+	struct crt_bulk *bulk = crt_bulk;
+	int              rc   = 0;
+
+	if (bulk == NULL) {
+		D_ERROR("bulk is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (ret_idx == NULL) {
+		D_ERROR("ret_idx is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*ret_idx = bulk->prov_idx;
+out:
 	return rc;
 }
 
@@ -305,7 +329,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	if (crt_bulk_desc_expired(bulk_desc))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
 
-	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, false);
+	rc = crt_hg_bulk_transfer(bulk_desc->bd_rpc->cr_ctx, bulk_desc, verify_complete_cb,
+				  complete_cb, arg, opid, false);
 	if (rc != 0)
 		DL_ERROR(rc, "crt_hg_bulk_transfer() failed; origin=%s",
 			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
@@ -317,7 +342,23 @@ int
 crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		       crt_bulk_opid_t *opid)
 {
+	if (!crt_bulk_desc_valid(bulk_desc))
+		return -DER_INVAL;
+
+	return crt_bulk_bind_transfer_ctx(bulk_desc->bd_rpc->cr_ctx, bulk_desc, complete_cb, arg,
+					  opid);
+}
+
+int
+crt_bulk_bind_transfer_ctx(crt_context_t ctx, struct crt_bulk_desc *bulk_desc,
+			   crt_bulk_cb_t complete_cb, void *arg, crt_bulk_opid_t *opid)
+{
 	int rc = 0;
+
+	if (ctx == CRT_CONTEXT_NULL) {
+		D_ERROR("Invalid null bulk transfer context\n");
+		return -DER_INVAL;
+	}
 
 	if (!crt_bulk_desc_valid(bulk_desc)) {
 		D_ERROR("invalid parameter, bulk_desc not valid.\n");
@@ -327,7 +368,7 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_c
 	if (crt_bulk_desc_expired(bulk_desc))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
 
-	rc = crt_hg_bulk_transfer(bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
+	rc = crt_hg_bulk_transfer(ctx, bulk_desc, verify_complete_cb, complete_cb, arg, opid, true);
 	if (rc != 0)
 		DL_ERROR(rc, "crt_hg_bulk_transfer() failed; origin=%s",
 			 crt_req_origin_addr_get(bulk_desc->bd_rpc));
