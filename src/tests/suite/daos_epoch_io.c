@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -340,7 +341,7 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 	int rc = 0;
 
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
-	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+	rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 				  op->ae_arg.ua_rank, -1);
 	assert_success(rc);
 	test_rebuild_wait(&arg, 1);
@@ -355,13 +356,13 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 
 	if (op->ae_arg.ua_tgt == -1) {
 		print_message("exclude rank %u\n", op->ae_arg.ua_rank);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+		rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 				      op->ae_arg.ua_rank, -1);
 		assert_success(rc);
 	} else {
 		print_message("exclude rank %u target %d\n",
 			       op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+		rc = ctl_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 				      op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 		assert_success(rc);
 	}

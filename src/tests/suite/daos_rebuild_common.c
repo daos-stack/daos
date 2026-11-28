@@ -60,8 +60,8 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	}
 
 	for (i = 0; i < arg_cnt; i++) {
-		rc = dmg_pool_exclude(args[i]->dmg_config, args[i]->pool.pool_uuid,
-				      args[i]->group, rank, tgt_idx);
+		rc = ctl_pool_exclude(args[i]->dmg_config, args[i]->pool.pool_uuid, args[i]->group,
+				      rank, tgt_idx);
 		print_message("dmg pool exclude rank %u tgt_idx=%d " DF_UUID ", rc=%d\n", rank,
 			      tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
 		assert_success(rc);
@@ -83,7 +83,7 @@ rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed) {
-			rc = dmg_pool_reintegrate(args[i]->dmg_config, args[i]->pool.pool_uuid,
+			rc = ctl_pool_reintegrate(args[i]->dmg_config, args[i]->pool.pool_uuid,
 						  args[i]->group, rank, tgt_idx);
 			print_message("dmg pool reintegrate rank %u tgt_idx=%d " DF_UUID
 				      ", rc=%d\n",
@@ -103,7 +103,7 @@ rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed) {
-			rc = dmg_pool_extend(args[i]->dmg_config, args[i]->pool.pool_uuid,
+			rc = ctl_pool_extend(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					     args[i]->group, &rank, 1);
 			print_message("dmg pool extend rank %u " DF_UUID ", rc=%d\n", rank,
 				      DP_UUID(args[i]->pool.pool_uuid), rc);
@@ -122,7 +122,7 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed) {
-			rc = dmg_pool_drain(args[i]->dmg_config, args[i]->pool.pool_uuid,
+			rc = ctl_pool_drain(args[i]->dmg_config, args[i]->pool.pool_uuid,
 					    args[i]->group, rank, tgt_idx);
 			print_message("dmg pool drain rank %u tgt_idx=%d " DF_UUID ", rc=%d\n",
 				      rank, tgt_idx, DP_UUID(args[i]->pool.pool_uuid), rc);
@@ -452,9 +452,8 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 		int i;
 
 		for (i = 0; i < nr; i++) {
-			rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid,
-						  arg->group, failed_rank,
-						  failed_tgts ? failed_tgts[i] : -1);
+			rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+						  failed_rank, failed_tgts ? failed_tgts[i] : -1);
 			assert_success(rc);
 		}
 	}
@@ -1258,7 +1257,7 @@ rebuild_stop_with_dmg_internal(const char *cfg, const uuid_t uuid, const char *g
 {
 	int rc;
 
-	rc = dmg_pool_rebuild_stop(cfg, uuid, grp, force);
+	rc = ctl_pool_rebuild_stop(cfg, uuid, grp, force);
 	print_message("dmg pool rebuild stop " DF_UUID ", force=%d, rc=%d\n", DP_UUID(uuid), force,
 		      rc);
 	return rc;
@@ -1309,7 +1308,7 @@ rebuild_start_with_dmg(void *data)
 	test_arg_t *arg = data;
 	int         rc;
 
-	rc = dmg_pool_rebuild_start(arg->dmg_config, arg->pool.pool_uuid, arg->group);
+	rc = ctl_pool_rebuild_start(arg->dmg_config, arg->pool.pool_uuid, arg->group);
 	print_message("dmg pool rebuild start " DF_UUID ", rc=%d\n", DP_UUID(arg->pool.pool_uuid),
 		      rc);
 	assert_rc_equal(rc, 0);

@@ -1,7 +1,10 @@
 #!/bin/bash
 
-if [ "$USE_VALGRIND" = "memcheck" ]; then VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
-          --suppressions=${VALGRIND_SUPP} --error-exitcode=42 --xml=yes \
+if [ "$USE_VALGRIND" = "memcheck" ]; then
+    supp_args="--suppressions=${VALGRIND_SUPP}"
+    [ -n "${VALGRIND_GO_SUPP:-}" ] && supp_args="${supp_args} --suppressions=${VALGRIND_GO_SUPP}"
+    VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
+          ${supp_args} --error-exitcode=42 --xml=yes \
           --xml-file=unit-test-evt_ctl-%p.memcheck.xml"
 elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
     VCMD="valgrind --tool=pmemcheck "

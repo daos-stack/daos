@@ -83,7 +83,7 @@ ir_rank_restart(test_arg_t *arg, d_rank_t rank, uint64_t fail_loc)
 
 	print_message("IR: restarting rank %d\n", rank);
 
-	rc = dmg_system_start_rank(arg->dmg_config, rank);
+	rc = ctl_system_start_rank(arg->dmg_config, rank);
 	if (rc != 0) {
 		print_message("IR: fail to restart rank %d: " DF_RC "\n", rank, DP_RC(rc));
 		return rc;
@@ -120,7 +120,7 @@ ir_rank_reint(test_arg_t *arg, d_rank_t rank, bool restart)
 
 	print_message("IR: reintegrating rank %d\n", rank);
 
-	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
+	rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group, rank, -1);
 	if (rc != 0)
 		print_message("IR: fail to reintegrate rank %d: " DF_RC "\n", rank, DP_RC(rc));
 	else

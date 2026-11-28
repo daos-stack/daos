@@ -269,7 +269,7 @@ extend_cb_internal(void *arg)
 		/* Extend another rank during extend */
 		print_message("extend pool " DF_UUID " rank %u\n",
 			      DP_UUID(test_arg->pool.pool_uuid), cb_arg->rank);
-		rc = dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
+		rc = ctl_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
 				     test_arg->group, &cb_arg->rank, 1);
 		assert_int_equal(rc, 0);
 	}

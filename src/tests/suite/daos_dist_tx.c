@@ -3108,7 +3108,7 @@ dtx_wait_rank_state(test_arg_t *arg, d_rank_t rank, const char *expected, int ti
 	int  i;
 
 	for (i = 0; i < timeout; i++) {
-		rc = dmg_system_query_rank_state(dmg_config_file, rank, state, sizeof(state));
+		rc = ctl_system_query_rank_state(dmg_config_file, rank, state, sizeof(state));
 		if (rc == 0 && strcmp(state, expected) == 0) {
 			print_message("Rank %u is %s after %d seconds\n", rank, expected, i);
 			return 0;
@@ -3136,7 +3136,7 @@ dtx_restart_rank(test_arg_t *arg, d_rank_t rank)
 
 	print_message("Killing the rank %u (pool map version %u) ...\n", rank, map_ver);
 
-	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	rc = ctl_system_stop_rank(dmg_config_file, rank, true);
 	assert_rc_equal(rc, 0);
 
 	rc = dtx_wait_rank_state(arg, rank, "stopped", 60);
@@ -3144,7 +3144,7 @@ dtx_restart_rank(test_arg_t *arg, d_rank_t rank)
 
 	print_message("Restarting the rank %u before it is excluded from the pool...\n", rank);
 
-	rc = dmg_system_start_rank(dmg_config_file, rank);
+	rc = ctl_system_start_rank(dmg_config_file, rank);
 	assert_rc_equal(rc, 0);
 
 	rc = dtx_wait_rank_state(arg, rank, "joined", 120);
@@ -3367,7 +3367,7 @@ dtx_leader_switch(void **state, daos_oclass_id_t oc, daos_iod_type_t type, bool 
 		test_rebuild_wait(&arg, 1);
 
 		print_message("Reintegrate rank %d ...\n", kill_rank);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+		rc = ctl_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  kill_rank, -1);
 		assert_success(rc);
 		test_rebuild_wait(&arg, 1);

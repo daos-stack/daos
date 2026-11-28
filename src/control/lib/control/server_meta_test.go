@@ -1,5 +1,6 @@
 //
 // (C) Copyright 2020-2024 Intel Corporation.
+// (C) Copyright 2026 Hewlett Packard Enterprise Development LP
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -849,6 +850,25 @@ func TestControl_SmdManage(t *testing.T) {
 				}
 				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_SmdInfo_String(t *testing.T) {
+	for name, tc := range map[string]struct {
+		si     *SmdInfo
+		expStr string
+	}{
+		"nil": {
+			expStr: "<nil>",
+		},
+		"empty": {
+			si:     &SmdInfo{},
+			expStr: "[Devices: [], Pools: map[]]",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expStr, tc.si.String(), "unexpected string")
 		})
 	}
 }

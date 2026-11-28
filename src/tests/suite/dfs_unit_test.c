@@ -2766,12 +2766,12 @@ dfs_test_multiple_pools(void **state)
 	char			str1[37], str2[37];
 	int			rc;
 
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
 			     128 * 1024 * 1024, 0, NULL, arg->pool.svc, uuid1);
 	assert_rc_equal(rc, 0);
 	uuid_unparse_lower(uuid1, str1);
 
-	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+	rc = ctl_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
 			     128 * 1024 * 1024, 0, NULL, arg->pool.svc, uuid2);
 	assert_rc_equal(rc, 0);
 	uuid_unparse_lower(uuid2, str2);
@@ -2813,9 +2813,9 @@ dfs_test_multiple_pools(void **state)
 	rc = dfs_fini();
 	assert_int_equal(rc, 0);
 
-	rc = dmg_pool_destroy(dmg_config_file, uuid1, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid1, arg->group, 1);
 	assert_rc_equal(rc, 0);
-	rc = dmg_pool_destroy(dmg_config_file, uuid2, arg->group, 1);
+	rc = ctl_pool_destroy(dmg_config_file, uuid2, arg->group, 1);
 	assert_rc_equal(rc, 0);
 }
 

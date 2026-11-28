@@ -4000,7 +4000,7 @@ co_op_dup_timing(void **state)
 	cprop->dpp_entries[0].dpe_val  = 8191;
 
 	/* Reduce engine logging since we're about to start timing operations. */
-	rc = dmg_server_set_logmasks(arg->dmg_config, "ERR" /* masks */, NULL /* streams */,
+	rc = ctl_server_set_logmasks(arg->dmg_config, "ERR" /* masks */, NULL /* streams */,
 				     NULL /* subsystems */);
 	assert_success(rc);
 
@@ -4141,7 +4141,7 @@ co_op_dup_timing(void **state)
 		      ((double)t_fp_loop[2] / (double)t_fp_loop[0] - 1.0) * 100.0);
 
 	/* Restore engine logging after timing operations have concluded. */
-	rc = dmg_server_set_logmasks(arg->dmg_config, NULL /* masks */, NULL /* streams */,
+	rc = ctl_server_set_logmasks(arg->dmg_config, NULL /* masks */, NULL /* streams */,
 				     NULL /* subsystems */);
 	assert_success(rc);
 

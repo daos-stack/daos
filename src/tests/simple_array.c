@@ -1,5 +1,6 @@
 /**
  * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2026 Hewlett Packard Enterprise Development LP
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -105,23 +106,19 @@ pool_create(void)
 
 	/**
 	 * allocate list of service nodes, returned as output parameter of
-	 * dmg_pool_create() and used to connect
+	 * ctl_pool_create() and used to connect
 	 */
 
 	/** create pool over all the storage targets */
 	svcl.rl_nr = 3;
 	D_ALLOC_ARRAY(svcl.rl_ranks, svcl.rl_nr);
 	ASSERT(svcl.rl_ranks);
-	rc = dmg_pool_create(NULL /* config file */,
-			     geteuid() /* user owner */,
-			     getegid() /* group owner */,
-			     DSS_PSETID /* daos server process set ID */,
-			     NULL /* list of targets, NULL = all */,
-			     10ULL << 30 /* target SCM size, 10G */,
-			     40ULL << 30 /* target NVMe size, 40G */,
-			     NULL /* pool props */,
-			     &svcl /* pool service nodes */,
-			     pool_uuid /* the uuid of the pool created */);
+	rc = ctl_pool_create(
+	    NULL /* config file */, geteuid() /* user owner */, getegid() /* group owner */,
+	    DSS_PSETID /* daos server process set ID */, NULL /* list of targets, NULL = all */,
+	    10ULL << 30 /* target SCM size, 10G */, 40ULL << 30 /* target NVMe size, 40G */,
+	    NULL /* pool props */, &svcl /* pool service nodes */,
+	    pool_uuid /* the uuid of the pool created */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
 }
 
@@ -131,7 +128,7 @@ pool_destroy(void)
 	int	rc;
 
 	/** destroy the pool created in pool_create */
-	rc = dmg_pool_destroy(NULL, pool_uuid, DSS_PSETID, 1 /* force */);
+	rc = ctl_pool_destroy(NULL, pool_uuid, DSS_PSETID, 1 /* force */);
 	ASSERT(rc == 0, "pool destroy failed with %d", rc);
 	D_FREE(svcl.rl_ranks);
 }
